@@ -5,24 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#1a1a2e">
-<title>MHD Karlovy Vary</title>
+<meta name="theme-color" content="#0c1024">
+<title>Jedeme MHD</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #0f0f1a;
-  --bg2: #1a1a2e;
-  --bg3: #252545;
-  --accent: #e94560;
-  --accent2: #0f3460;
-  --text: #eaeaea;
-  --text2: #9999aa;
-  --green: #00d68f;
-  --orange: #ff9f43;
-  --blue: #4fc3f7;
+  /* Core palette - blue/indigo */
+  --bg: #0a0e1a;
+  --bg2: #111628;
+  --bg3: #1a2040;
+  --bg4: #232a4a;
+
+  /* Accent blues - 15% brighter */
+  --blue1: #4d7df7;
+  --blue2: #6e9bfa;
+  --blue3: #9dc2ff;
+  --indigo: #7578f4;
+  --indigo-soft: #949df9;
+  --violet: #8f70f3;
+
+  /* Status colors */
+  --urgent: #e94560;       /* < 15 min - růžovo-červená */
+  --warning: #f59e42;      /* < 30 min - oranžová */
+  --green: #34d399;        /* > 30 min */
+  --green-dim: rgba(52,211,153,0.12);
+
+  /* Text */
+  --text: #e8ecf4;
+  --text2: #8892b0;
+  --text3: #5a6380;
+
+  /* Misc */
   --radius: 14px;
-  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --shadow: 0 4px 24px rgba(0,0,0,0.5);
+
+  /* Mode backgrounds for header */
+  --mode-now-bg: #131e3e;
+  --mode-custom-bg: #1c1235;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -36,55 +56,82 @@ body {
   overflow-x: hidden;
 }
 
+/* ===== HEADER ===== */
 .header {
-  background: linear-gradient(135deg, var(--bg2), var(--accent2));
-  padding: 20px 16px 16px;
+  padding: 18px 16px 14px;
   position: sticky;
   top: 0;
   z-index: 100;
-  border-bottom: 1px solid rgba(233,69,96,0.3);
+  border-bottom: 1px solid rgba(99,102,241,0.2);
+  transition: background 0.4s;
+  text-align: center;
+}
+
+.header.mode-now {
+  background: var(--mode-now-bg);
+}
+
+.header.mode-custom {
+  background: var(--mode-now-bg);
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.header-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
 }
 
 .header h1 {
-  font-size: 1.3rem;
+  font-size: 1.25rem;
   font-weight: 800;
-  letter-spacing: 0.5px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  letter-spacing: 0.3px;
+  color: var(--text);
 }
 
-.header h1 .bus-icon { font-size: 1.5rem; }
-
-.header .subtitle {
-  font-size: 0.75rem;
-  color: var(--text2);
-  margin-top: 2px;
-}
-
-.day-indicator {
+.status-bar {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   margin-top: 8px;
   padding: 4px 12px;
-  background: rgba(233,69,96,0.15);
-  border: 1px solid rgba(233,69,96,0.3);
   border-radius: 20px;
-  font-size: 0.75rem;
-  color: var(--accent);
+  font-size: 0.975rem;
   font-weight: 600;
+  transition: all 0.4s;
 }
 
-.day-indicator .dot {
-  width: 6px; height: 6px;
-  background: var(--green);
+.status-bar.mode-now {
+  background: rgba(77,125,247,0.12);
+  border: 1px solid rgba(77,125,247,0.25);
+  color: var(--blue3);
+}
+
+.status-bar.mode-custom {
+  background: rgba(143,112,243,0.12);
+  border: 1px solid rgba(143,112,243,0.25);
+  color: var(--blue3);
+}
+
+.status-bar .dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
+}
+
+.status-bar.mode-now .dot {
+  background: #e94560;
   animation: pulse 2s infinite;
 }
 
-.day-indicator .dot.custom {
-  background: var(--orange);
+.status-bar.mode-custom .dot {
+  background: rgba(143,112,243,0.6);
   animation: none;
 }
 
@@ -93,13 +140,22 @@ body {
   50% { opacity: 0.3; }
 }
 
+/* ===== TABS ===== */
 .tabs {
   display: flex;
-  background: var(--bg2);
   border-bottom: 1px solid var(--bg3);
   position: sticky;
-  top: 82px;
+  top: 80px;
   z-index: 99;
+  transition: background 0.4s;
+}
+
+.tabs.mode-now {
+  background: var(--mode-now-bg);
+}
+
+.tabs.mode-custom {
+  background: var(--mode-now-bg);
 }
 
 .tab {
@@ -108,7 +164,7 @@ body {
   text-align: center;
   font-size: 0.8rem;
   font-weight: 700;
-  color: var(--text2);
+  color: var(--text3);
   border: none;
   background: none;
   cursor: pointer;
@@ -118,10 +174,16 @@ body {
 }
 
 .tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--blue2);
+  border-bottom-color: var(--blue1);
 }
 
+.tabs.mode-custom .tab.active {
+  color: var(--indigo-soft);
+  border-bottom-color: var(--violet);
+}
+
+/* ===== CONTENT ===== */
 .content {
   padding: 12px;
   padding-bottom: 80px;
@@ -131,10 +193,16 @@ body {
 .time-toggle {
   background: var(--bg2);
   border-radius: var(--radius);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   overflow: hidden;
   border: 1px solid var(--bg3);
   box-shadow: var(--shadow);
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.time-toggle.violet {
+  background: #151030;
+  border-color: rgba(143,112,243,0.18);
 }
 
 .time-toggle-header {
@@ -143,34 +211,48 @@ body {
 
 .time-toggle-btn {
   flex: 1;
-  padding: 10px 12px;
+  padding: 14px 12px;
   border: none;
   background: none;
-  color: var(--text2);
+  color: var(--text3);
   font-family: inherit;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.25s;
+  transition: all 0.3s;
   position: relative;
+  letter-spacing: 0.3px;
 }
 
-.time-toggle-btn.active {
-  color: var(--text);
-  background: rgba(233,69,96,0.1);
+.time-toggle-btn.active-now {
+  color: var(--blue2);
+  background: rgba(59,108,245,0.08);
 }
 
-.time-toggle-btn.active::after {
+.time-toggle-btn.active-now::after {
   content: '';
   position: absolute;
   bottom: 0;
-  left: 20%; right: 20%;
+  left: 15%; right: 15%;
   height: 2px;
-  background: var(--accent);
+  background: var(--blue1);
   border-radius: 2px;
 }
 
-.time-toggle-btn .icon { margin-right: 6px; }
+.time-toggle-btn.active-custom {
+  color: var(--indigo-soft);
+  background: rgba(124,91,240,0.08);
+}
+
+.time-toggle-btn.active-custom::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 15%; right: 15%;
+  height: 2px;
+  background: var(--violet);
+  border-radius: 2px;
+}
 
 .custom-time-picker {
   padding: 10px 14px 14px;
@@ -204,7 +286,7 @@ body {
 
 .custom-time-row input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--violet);
 }
 
 .custom-time-info {
@@ -220,15 +302,15 @@ body {
 .custom-time-info .badge {
   display: inline-block;
   padding: 2px 8px;
-  background: rgba(255,159,67,0.15);
-  border: 1px solid rgba(255,159,67,0.3);
+  background: rgba(124,91,240,0.15);
+  border: 1px solid rgba(124,91,240,0.3);
   border-radius: 10px;
-  color: var(--orange);
+  color: var(--indigo-soft);
   font-weight: 600;
   font-size: 0.7rem;
 }
 
-/* ===== DEPARTURE CARDS ===== */
+/* ===== ROUTE CARDS ===== */
 .route-card {
   background: var(--bg2);
   border-radius: var(--radius);
@@ -236,19 +318,26 @@ body {
   overflow: hidden;
   border: 1px solid var(--bg3);
   box-shadow: var(--shadow);
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.route-card.violet {
+  background: #151030;
+  border-color: rgba(143,112,243,0.18);
 }
 
 .route-header {
   display: flex;
   align-items: center;
-  padding: 12px 14px;
-  gap: 10px;
+  padding: 14px 14px;
+  gap: 12px;
   border-bottom: 1px solid var(--bg3);
   cursor: pointer;
 }
 
 .line-badge {
-  min-width: 44px; height: 44px;
+  min-width: 46px;
+  height: 46px;
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -259,25 +348,27 @@ body {
   color: #fff;
 }
 
-.line-3 { background: linear-gradient(135deg, #e94560, #c23152); }
-.line-13 { background: linear-gradient(135deg, #0f3460, #16498a); }
-.line-15 { background: linear-gradient(135deg, #00d68f, #00a86b); }
-.line-night { background: linear-gradient(135deg, #6c5ce7, #4a3db5); }
+/* Line badges - solid, cool-toned, readable */
+.line-3 { background: #8b2d42; }
+.line-13 { background: #1e4080; }
+.line-15 { background: #1a7a5a; }
+.line-night { background: #4a3590; }
 
 .route-info { flex: 1; }
 
 .route-info .from-to {
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.2px;
 }
 
 .route-info .travel-time {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   color: var(--text2);
-  margin-top: 2px;
+  margin-top: 5px;
 }
 
-.route-info .travel-time span { color: var(--blue); }
+.route-info .travel-time span { color: var(--blue3); }
 
 .departures-list { padding: 10px 14px; }
 
@@ -285,7 +376,7 @@ body {
   display: flex;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
 }
 
 .departure-row:last-child { border-bottom: none; }
@@ -300,18 +391,30 @@ body {
 
 .dep-countdown {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
   margin-left: auto;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 8px;
-  min-width: 70px;
+  min-width: 80px;
   text-align: center;
 }
 
-.dep-countdown.soon { background: rgba(233,69,96,0.15); color: var(--accent); }
-.dep-countdown.normal { background: rgba(0,214,143,0.1); color: var(--green); }
-.dep-countdown.later { background: rgba(79,195,247,0.1); color: var(--blue); }
+/* Countdown colors based on urgency */
+.dep-countdown.urgent {
+  background: rgba(233,69,96,0.15);
+  color: var(--urgent);
+}
+
+.dep-countdown.warning {
+  background: rgba(245,158,66,0.12);
+  color: var(--warning);
+}
+
+.dep-countdown.normal {
+  background: rgba(52,211,153,0.08);
+  color: var(--green);
+}
 
 .dep-notes {
   font-size: 0.65rem;
@@ -331,15 +434,19 @@ body {
 .no-more {
   text-align: center;
   color: var(--text2);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   padding: 16px;
 }
 
 .departure-row.next {
-  background: rgba(233,69,96,0.08);
+  background: rgba(77,125,247,0.06);
   margin: 0 -14px;
   padding: 8px 14px;
   border-radius: 8px;
+}
+
+.departure-row.next.violet {
+  background: rgba(143,112,243,0.08);
 }
 
 /* ===== TIMETABLE ===== */
@@ -363,7 +470,7 @@ body {
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239999aa' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238892b0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
 }
@@ -373,6 +480,12 @@ body {
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--bg3);
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.timetable-grid.violet {
+  background: #151030;
+  border-color: rgba(143,112,243,0.18);
 }
 
 .timetable-row {
@@ -389,8 +502,8 @@ body {
   font-weight: 700;
   font-size: 0.95rem;
   text-align: center;
-  background: rgba(233,69,96,0.08);
-  color: var(--accent);
+  background: rgba(59,108,245,0.06);
+  color: var(--blue2);
 }
 
 .timetable-minutes {
@@ -405,10 +518,33 @@ body {
 }
 
 .timetable-minutes .min { cursor: default; }
-.timetable-minutes .min.has-note { color: var(--orange); position: relative; }
 
-.timetable-row.current-hour { background: rgba(0,214,143,0.06); }
-.timetable-row.current-hour .timetable-hour { color: var(--green); background: rgba(0,214,143,0.12); }
+.timetable-minutes .min.has-note {
+  color: var(--warning);
+  position: relative;
+}
+
+.timetable-row.current-hour { background: rgba(77,125,247,0.10); }
+
+.timetable-row.current-hour .timetable-hour {
+  color: var(--blue3);
+  background: rgba(77,125,247,0.22);
+}
+
+/* Violet timetable variants for non-"Dnes" day types */
+.timetable-grid.violet .timetable-hour {
+  background: rgba(143,112,243,0.06);
+  color: var(--indigo-soft);
+}
+
+.timetable-grid.violet .timetable-row.current-hour {
+  background: rgba(143,112,243,0.10);
+}
+
+.timetable-grid.violet .timetable-row.current-hour .timetable-hour {
+  color: #c4b5fd;
+  background: rgba(143,112,243,0.22);
+}
 
 /* ===== SETTINGS ===== */
 .settings-section {
@@ -424,14 +560,14 @@ body {
   font-weight: 700;
   font-size: 0.9rem;
   border-bottom: 1px solid var(--bg3);
-  color: var(--accent);
+  color: var(--blue2);
 }
 
 .settings-item {
   display: flex;
   align-items: center;
   padding: 12px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
   gap: 10px;
 }
 
@@ -441,7 +577,7 @@ body {
 
 .legend {
   padding: 10px 14px;
-  background: rgba(255,159,67,0.06);
+  background: rgba(245,158,66,0.04);
   border-top: 1px solid var(--bg3);
 }
 
@@ -452,7 +588,7 @@ body {
 }
 
 .legend-item span {
-  color: var(--orange);
+  color: var(--warning);
   font-weight: 700;
   font-family: 'JetBrains Mono', monospace;
 }
@@ -461,7 +597,7 @@ body {
   display: block;
   text-align: center;
   padding: 10px;
-  color: var(--blue);
+  color: var(--blue3);
   font-size: 0.75rem;
   text-decoration: none;
   margin-top: 8px;
@@ -469,24 +605,34 @@ body {
 
 @media (min-width: 600px) {
   .content { max-width: 480px; margin: 0 auto; }
-  .header { text-align: center; }
   .tabs { max-width: 480px; margin: 0 auto; }
 }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <h1><span class="bus-icon">🚌</span> MHD Karlovy Vary</h1>
-  <div class="subtitle">Odjezdy z mých zastávek</div>
-  <div class="day-indicator">
+<div class="header mode-now" id="header">
+  <div class="header-top">
+    <!-- Stylized bus/transit SVG icon in blue tones -->
+    <svg class="header-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="4" width="24" height="20" rx="5" fill="#1a2856" stroke="#3b6cf5" stroke-width="1.5"/>
+      <rect x="7" y="7" width="8" height="7" rx="2" fill="#3b6cf5" opacity="0.4"/>
+      <rect x="17" y="7" width="8" height="7" rx="2" fill="#3b6cf5" opacity="0.4"/>
+      <rect x="7" y="17" width="18" height="3" rx="1.5" fill="#3b6cf5" opacity="0.2"/>
+      <circle cx="10" cy="27" r="2.5" fill="#1a2856" stroke="#5b8af7" stroke-width="1"/>
+      <circle cx="22" cy="27" r="2.5" fill="#1a2856" stroke="#5b8af7" stroke-width="1"/>
+      <rect x="13" y="2" width="6" height="3" rx="1.5" fill="#3b6cf5" opacity="0.3"/>
+    </svg>
+    <h1>Jedeme MHD</h1>
+  </div>
+  <div class="status-bar mode-now" id="statusBar">
     <span class="dot" id="statusDot"></span>
     <span id="dayType"></span>
     <span id="currentTime"></span>
   </div>
 </div>
 
-<div class="tabs">
+<div class="tabs mode-now" id="tabBar">
   <button class="tab active" onclick="showTab('departures')">Odjezdy</button>
   <button class="tab" onclick="showTab('timetable')">Jízdní řády</button>
   <button class="tab" onclick="showTab('settings')">Nastavení</button>
@@ -542,12 +688,7 @@ const DATA = {
   ],
 
   holidays: ["1-1","1-2","5-1","5-8","7-5","7-6","9-28","10-28","11-17","12-24","12-25","12-26"],
-
-  holidayPeriods: [
-    { from: "07-01", to: "08-31" },
-    { from: "12-27", to: "12-31" }
-  ],
-
+  holidayPeriods: [{ from: "07-01", to: "08-31" },{ from: "12-27", to: "12-31" }],
   notes: {
     "S": "pokračuje do Staré Kysibelské",
     "š": "školní spoj",
@@ -557,9 +698,6 @@ const DATA = {
   }
 };
 
-// ============================================================
-// STATE
-// ============================================================
 let currentTab = 'departures';
 let useCustomTime = false;
 let customDate = '';
@@ -568,9 +706,7 @@ let customTime = '';
 function getRealNow() { return new Date(); }
 
 function getNow() {
-  if (useCustomTime && customDate && customTime) {
-    return new Date(customDate + 'T' + customTime);
-  }
+  if (useCustomTime && customDate && customTime) return new Date(customDate + 'T' + customTime);
   return getRealNow();
 }
 
@@ -590,7 +726,7 @@ function getDayType(date) {
 function getDayTypeLabel(type) {
   switch(type) {
     case 'workday': return 'Pracovní den';
-    case 'holiday': return 'Prázdniny / svátky (prac. den)';
+    case 'holiday': return 'Prázdniny / svátky';
     case 'weekend': return 'Víkend / svátek';
   }
 }
@@ -639,9 +775,9 @@ function formatCountdown(diff) {
 }
 
 function countdownClass(diff) {
-  if (diff <= 5) return 'soon';
-  if (diff <= 20) return 'normal';
-  return 'later';
+  if (diff <= 15) return 'urgent';
+  if (diff <= 30) return 'warning';
+  return 'normal';
 }
 
 function formatCzechDate(date) {
@@ -651,8 +787,20 @@ function formatCzechDate(date) {
 }
 
 // ============================================================
-// TIME MODE
+// MODE SWITCHING
 // ============================================================
+function updateModeClasses() {
+  const modeClass = useCustomTime ? 'mode-custom' : 'mode-now';
+  const removeClass = useCustomTime ? 'mode-now' : 'mode-custom';
+
+  document.getElementById('header').classList.remove(removeClass);
+  document.getElementById('header').classList.add(modeClass);
+  document.getElementById('statusBar').classList.remove(removeClass);
+  document.getElementById('statusBar').classList.add(modeClass);
+  document.getElementById('tabBar').classList.remove(removeClass);
+  document.getElementById('tabBar').classList.add(modeClass);
+}
+
 function setTimeMode(mode) {
   useCustomTime = (mode === 'custom');
   if (!useCustomTime) {
@@ -663,6 +811,7 @@ function setTimeMode(mode) {
     customDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     customTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   }
+  updateModeClasses();
   render();
 }
 
@@ -679,18 +828,15 @@ function onCustomTimeChange(val) {
 }
 
 function updateClockForMode() {
-  const dot = document.getElementById('statusDot');
   if (useCustomTime && customDate && customTime) {
     const sim = getNow();
     const dayType = getDayType(sim);
     document.getElementById('dayType').textContent = getDayTypeLabel(dayType);
     document.getElementById('currentTime').textContent = '· ' + formatCzechDate(sim) + ' ' + formatTime(sim.getHours(), sim.getMinutes());
-    if (dot) dot.classList.add('custom');
   } else {
     const realNow = getRealNow();
     document.getElementById('dayType').textContent = getDayTypeLabel(getDayType(realNow));
     document.getElementById('currentTime').textContent = '· ' + formatTime(realNow.getHours(), realNow.getMinutes());
-    if (dot) dot.classList.remove('custom');
   }
 }
 
@@ -716,11 +862,11 @@ function render() {
 function renderDepartures() {
   let html = '';
 
-  // Time toggle
-  html += `<div class="time-toggle">`;
+  const vClass = useCustomTime ? ' violet' : '';
+  html += `<div class="time-toggle${vClass}">`;
   html += `<div class="time-toggle-header">`;
-  html += `<button class="time-toggle-btn ${!useCustomTime ? 'active' : ''}" onclick="setTimeMode('now')"><span class="icon">⏱</span> Teď</button>`;
-  html += `<button class="time-toggle-btn ${useCustomTime ? 'active' : ''}" onclick="setTimeMode('custom')"><span class="icon">📅</span> Jiné datum a čas</button>`;
+  html += `<button class="time-toggle-btn ${!useCustomTime ? 'active-now' : ''}" onclick="setTimeMode('now')">Teď</button>`;
+  html += `<button class="time-toggle-btn ${useCustomTime ? 'active-custom' : ''}" onclick="setTimeMode('custom')">Jindy</button>`;
   html += `</div>`;
   html += `<div class="custom-time-picker ${useCustomTime ? 'visible' : ''}">`;
   html += `<div class="custom-time-row">`;
@@ -747,30 +893,31 @@ function renderDepartures() {
 function renderDepartureCards() {
   const now = getNow();
   const dayType = getDayType(now);
+  const vClass = useCustomTime ? ' violet' : '';
   let html = '';
 
   for (const route of DATA.routes) {
     const deps = getUpcomingDepartures(route, dayType, now);
-    html += `<div class="route-card">`;
+    html += `<div class="route-card${vClass}">`;
     html += `<div class="route-header" onclick="window.open('${route.dpkvUrl}','_blank')">`;
     html += `<div class="line-badge ${route.colorClass}">${route.line}</div>`;
     html += `<div class="route-info">`;
     html += `<div class="from-to">${route.from} → ${route.to}</div>`;
     html += `<div class="travel-time">Doba jízdy: <span>${route.travelMinutes} min</span></div>`;
     html += `</div>`;
-    html += `<svg width="16" height="16" fill="none" stroke="#666" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>`;
+    html += `<svg width="16" height="16" fill="none" stroke="#5a6380" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>`;
     html += `</div>`;
     html += `<div class="departures-list">`;
 
     if (deps.length === 0) {
-      html += `<div class="no-more">V tomto čase žádné spoje</div>`;
+      html += `<div class="no-more">V daném čase ani kolo</div>`;
     } else {
       deps.forEach((dep, i) => {
         const isNext = i === 0;
-        html += `<div class="departure-row ${isNext ? 'next' : ''}">`;
+        html += `<div class="departure-row ${isNext ? 'next' + vClass : ''}">`;
         html += `<div class="dep-time">${formatTime(dep.hour, dep.minute)}</div>`;
         if (dep.noteLetters) {
-          html += `<div class="dep-notes" title="${dep.notes}"><sup style="color:var(--orange)">${dep.noteLetters}</sup></div>`;
+          html += `<div class="dep-notes" title="${dep.notes}"><sup style="color:var(--warning)">${dep.noteLetters}</sup></div>`;
         }
         html += `<div class="dep-arrival">→ ${formatTime(dep.arrivalH, dep.arrivalM)}</div>`;
         html += `<div class="dep-countdown ${countdownClass(dep.diff)}">${formatCountdown(dep.diff)}</div>`;
@@ -808,10 +955,12 @@ function renderTimetable() {
   const route = DATA.routes[routeIdx];
   const deps = route.departures[showDayType] || {};
 
-  html += `<div style="margin-bottom:8px;font-size:0.75rem;color:var(--text2)">`;
-  html += `Doba jízdy ${route.from} → ${route.to}: <strong style="color:var(--blue)">${route.travelMinutes} min</strong></div>`;
+  const ttViolet = dtVal !== 'auto' ? ' violet' : '';
 
-  html += `<div class="timetable-grid">`;
+  html += `<div style="margin-bottom:8px;font-size:0.8rem;color:var(--text2)">`;
+  html += `Doba jízdy ${route.from} → ${route.to}: <strong style="color:var(--blue3)">${route.travelMinutes} min</strong></div>`;
+
+  html += `<div class="timetable-grid${ttViolet}">`;
   for (let h = 4; h <= 24; h++) {
     const hour = h % 24;
     const minutes = deps[hour] || [];
@@ -821,7 +970,7 @@ function renderTimetable() {
     html += `<div class="timetable-hour">${hour}</div>`;
     html += `<div class="timetable-minutes">`;
     if (minutes.length === 0) {
-      html += `<span style="color:var(--text2);font-size:0.75rem">—</span>`;
+      html += `<span style="color:var(--text3);font-size:0.75rem">—</span>`;
     } else {
       minutes.forEach(m => {
         const letters = getNoteLetters(m);
@@ -872,10 +1021,10 @@ function renderSettings() {
   html += `<div class="settings-title">Jak přidat / změnit linku</div>`;
   html += `<div style="padding:14px;font-size:0.8rem;color:var(--text2);line-height:1.6">`;
   html += `<p style="margin-bottom:10px">Tato aplikace čte data ze souboru, který si snadno upravíte:</p>`;
-  html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">1.</strong> Otevřete soubor <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">mhd-kv.html</code> v textovém editoru</p>`;
+  html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">1.</strong> Otevřete soubor <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">index.html</code> v textovém editoru</p>`;
   html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">2.</strong> Najděte sekci <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">DATA.routes</code></p>`;
   html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">3.</strong> Zkopírujte existující blok linky a upravte číslo, zastávky, URL a časy</p>`;
-  html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">4.</strong> Časy najdete na stránce DPKV: <a href="https://www.dpkv.cz/cz/jizdni-rady/denni-linky/" target="_blank" style="color:var(--blue)">dpkv.cz → Jízdní řády</a></p>`;
+  html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">4.</strong> Časy najdete na stránce DPKV: <a href="https://www.dpkv.cz/cz/jizdni-rady/denni-linky/" target="_blank" style="color:var(--blue3)">dpkv.cz → Jízdní řády</a></p>`;
   html += `<p><strong style="color:var(--text)">5.</strong> Klikněte na zastávku – otevře se HTM stránka s časy</p>`;
   html += `</div></div>`;
 
@@ -885,7 +1034,7 @@ function renderSettings() {
   html += `<p>MHD KV – osobní jízdní řád</p>`;
   html += `<p>Data: Dopravní podnik Karlovy Vary (dpkv.cz)</p>`;
   html += `<p>Platnost dat: od 15.12.2025</p>`;
-  html += `<p style="margin-top:8px"><a href="https://www.dpkv.cz" target="_blank" style="color:var(--blue)">www.dpkv.cz</a> · <a href="https://dopravniportal.dpkv.cz" target="_blank" style="color:var(--blue)">Dopravní portál</a></p>`;
+  html += `<p style="margin-top:8px"><a href="https://www.dpkv.cz" target="_blank" style="color:var(--blue3)">www.dpkv.cz</a> · <a href="https://dopravniportal.dpkv.cz" target="_blank" style="color:var(--blue3)">Dopravní portál</a></p>`;
   html += `</div></div>`;
 
   document.getElementById('content').innerHTML = html;
@@ -901,6 +1050,7 @@ function tick() {
   }
 }
 
+updateModeClasses();
 updateClockForMode();
 render();
 setInterval(tick, 60000); // refresh každou minutu
