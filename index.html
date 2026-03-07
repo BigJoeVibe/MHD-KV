@@ -345,13 +345,15 @@ body {
   font-family: 'JetBrains Mono', monospace;
   font-weight: 700;
   font-size: 1.2rem;
-  color: #fff;
 }
 
 /* Line badges - solid, cool-toned, readable */
-.line-3 { background: #8b2d42; }
-.line-13 { background: #1e4080; }
+.line-badge span { color: #fff; }
+.line-3 { background: #1e4080; }
+.line-13 { background: #8b2d42; }
 .line-15 { background: #1a7a5a; }
+.line-51 { background: #111111; border: 1px solid #333; }
+.line-51 span { color: #f0728a; }
 .line-night { background: #4a3590; }
 
 .route-info { flex: 1; }
@@ -684,6 +686,41 @@ const DATA = {
         holiday: {5:["07S","31S","55"],6:["19","43"],7:["07","31","56"],8:["14","54"],9:["34"],10:["14","54"],11:["14","54"],12:["14","34"],13:["13","31","43"],14:["07","31","55"],15:["19","43"],16:["07","31","56"],17:["26","41"],18:["14","54"],19:["34"],20:["11S","31","54"],21:["15","40"],22:["08"]},
         weekend: {6:["35"],7:["13","33"],8:["15","45"],9:["35"],10:["05","55"],11:["25"],12:["15","45"],13:["35"],14:["05","55"],15:["25"],16:["15","45"],17:["35"],18:["05","55"],19:["30"],20:["38"],21:["15","40"],22:["08"]}
       }
+    },
+    {
+      id: "line51_okruzni_trznice",
+      line: "51",
+      from: "Okružní",
+      to: "Tržnice",
+      travelMinutes: 12,
+      colorClass: "line-51",
+      dpkvUrl: "https://www.dpkv.cz/_data/n-51/51103.htm",
+      // Noční linka – data z dpkv.cz/_data/n-51/51103.htm
+      departures: {
+        workday: {
+          22: ["46"],
+          23: ["26"],
+          1: ["16"],
+          3: ["06"],
+          4: ["06","46"]
+        },
+        holiday: {
+          22: ["46"],
+          23: ["26"],
+          1: ["16"],
+          3: ["06"],
+          4: ["06","46"]
+        },
+        weekend: {
+          22: ["46"],
+          23: ["26"],
+          1: ["16"],
+          3: ["26"],
+          4: ["46"],
+          5: ["26"],
+          6: ["01"]
+        }
+      }
     }
   ],
 
@@ -742,24 +779,39 @@ function getUpcomingDepartures(route, dayType, now, count = 6) {
   const deps = route.departures[dayType] || {};
   const currentH = now.getHours();
   const currentM = now.getMinutes();
+  const nowMin = currentH * 60 + currentM;
   const results = [];
+
+  // Build flat list of all departures with normalized minutes
+  // Hours 0-6 can mean "next day" for night routes if we're currently past 18:00
+  const allDeps = [];
   for (let h = 0; h < 24; h++) {
     const hourDeps = deps[h] || [];
     for (const minStr of hourDeps) {
       const m = parseMinute(minStr);
-      const totalMin = h * 60 + m;
-      const nowMin = currentH * 60 + currentM;
-      const diff = totalMin - nowMin;
-      if (diff >= -1) {
-        results.push({
-          hour: h, minute: m, minuteStr: minStr, diff,
-          notes: getNotes(minStr),
-          noteLetters: getNoteLetters(minStr),
-          arrivalH: Math.floor((totalMin + route.travelMinutes) / 60) % 24,
-          arrivalM: (totalMin + route.travelMinutes) % 60
-        });
+      let totalMin = h * 60 + m;
+      // If it's evening (after 18:00) and this departure is early morning (before 7:00),
+      // treat it as next-day (add 24h)
+      if (nowMin >= 1080 && h < 7) {
+        totalMin += 1440;
       }
-      if (results.length >= count) break;
+      allDeps.push({ hour: h, minute: m, minuteStr: minStr, totalMin });
+    }
+  }
+
+  // Sort by normalized time
+  allDeps.sort((a, b) => a.totalMin - b.totalMin);
+
+  for (const dep of allDeps) {
+    const diff = dep.totalMin - nowMin;
+    if (diff >= -1) {
+      results.push({
+        hour: dep.hour, minute: dep.minute, minuteStr: dep.minuteStr, diff,
+        notes: getNotes(dep.minuteStr),
+        noteLetters: getNoteLetters(dep.minuteStr),
+        arrivalH: Math.floor((dep.hour * 60 + dep.minute + route.travelMinutes) / 60) % 24,
+        arrivalM: (dep.hour * 60 + dep.minute + route.travelMinutes) % 60
+      });
     }
     if (results.length >= count) break;
   }
@@ -900,7 +952,7 @@ function renderDepartureCards() {
     const deps = getUpcomingDepartures(route, dayType, now);
     html += `<div class="route-card${vClass}">`;
     html += `<div class="route-header" onclick="window.open('${route.dpkvUrl}','_blank')">`;
-    html += `<div class="line-badge ${route.colorClass}">${route.line}</div>`;
+    html += `<div class="line-badge ${route.colorClass}"><span>${route.line}</span></div>`;
     html += `<div class="route-info">`;
     html += `<div class="from-to">${route.from} → ${route.to}</div>`;
     html += `<div class="travel-time">Doba jízdy: <span>${route.travelMinutes} min</span></div>`;
@@ -1011,7 +1063,7 @@ function renderSettings() {
   html += `<div class="settings-title">Moje sledované linky</div>`;
   DATA.routes.forEach(r => {
     html += `<div class="settings-item">`;
-    html += `<div class="line-badge ${r.colorClass}" style="min-width:36px;height:36px;font-size:1rem;border-radius:8px">${r.line}</div>`;
+    html += `<div class="line-badge ${r.colorClass}" style="min-width:36px;height:36px;font-size:1rem;border-radius:8px"><span>${r.line}</span></div>`;
     html += `<div class="label">${r.from} → ${r.to}<br><span style="font-size:0.7rem;color:var(--text2)">Jízda ${r.travelMinutes} min</span></div>`;
     html += `</div>`;
   });
