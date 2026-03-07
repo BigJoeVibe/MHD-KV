@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a1a2e">
+<title>MHD Karlovy Vary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f0f1a;
+  --bg2: #1a1a2e;
+  --bg3: #252545;
+  --accent: #e94560;
+  --accent2: #0f3460;
+  --text: #eaeaea;
+  --text2: #9999aa;
+  --green: #00d68f;
+  --orange: #ff9f43;
+  --blue: #4fc3f7;
+  --radius: 14px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Nunito', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+.header {
+  background: linear-gradient(135deg, var(--bg2), var(--accent2));
+  padding: 20px 16px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid rgba(233,69,96,0.3);
+}
+
+.header h1 {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header h1 .bus-icon { font-size: 1.5rem; }
+
+.header .subtitle {
+  font-size: 0.75rem;
+  color: var(--text2);
+  margin-top: 2px;
+}
+
+.day-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px 12px;
+  background: rgba(233,69,96,0.15);
+  border: 1px solid rgba(233,69,96,0.3);
+  border-radius: 20px;
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.day-indicator .dot {
+  width: 6px; height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.day-indicator .dot.custom {
+  background: var(--orange);
+  animation: none;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.tabs {
+  display: flex;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--bg3);
+  position: sticky;
+  top: 82px;
+  z-index: 99;
+}
+
+.tab {
+  flex: 1;
+  padding: 12px 8px;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text2);
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-bottom: 3px solid transparent;
+  font-family: inherit;
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.content {
+  padding: 12px;
+  padding-bottom: 80px;
+}
+
+/* ===== TIME TOGGLE ===== */
+.time-toggle {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid var(--bg3);
+  box-shadow: var(--shadow);
+}
+
+.time-toggle-header {
+  display: flex;
+}
+
+.time-toggle-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  color: var(--text2);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s;
+  position: relative;
+}
+
+.time-toggle-btn.active {
+  color: var(--text);
+  background: rgba(233,69,96,0.1);
+}
+
+.time-toggle-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%; right: 20%;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.time-toggle-btn .icon { margin-right: 6px; }
+
+.custom-time-picker {
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--bg3);
+  display: none;
+}
+
+.custom-time-picker.visible { display: block; }
+
+.custom-time-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.custom-time-row input[type="date"],
+.custom-time-row input[type="time"] {
+  flex: 1;
+  min-width: 120px;
+  padding: 9px 12px;
+  background: var(--bg);
+  border: 1px solid var(--bg3);
+  color: var(--text);
+  border-radius: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  -webkit-appearance: none;
+  color-scheme: dark;
+}
+
+.custom-time-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.custom-time-info {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.custom-time-info .badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(255,159,67,0.15);
+  border: 1px solid rgba(255,159,67,0.3);
+  border-radius: 10px;
+  color: var(--orange);
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
+/* ===== DEPARTURE CARDS ===== */
+.route-card {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid var(--bg3);
+  box-shadow: var(--shadow);
+}
+
+.route-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  gap: 10px;
+  border-bottom: 1px solid var(--bg3);
+  cursor: pointer;
+}
+
+.line-badge {
+  min-width: 44px; height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: #fff;
+}
+
+.line-3 { background: linear-gradient(135deg, #e94560, #c23152); }
+.line-13 { background: linear-gradient(135deg, #0f3460, #16498a); }
+.line-15 { background: linear-gradient(135deg, #00d68f, #00a86b); }
+.line-night { background: linear-gradient(135deg, #6c5ce7, #4a3db5); }
+
+.route-info { flex: 1; }
+
+.route-info .from-to {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.route-info .travel-time {
+  font-size: 0.7rem;
+  color: var(--text2);
+  margin-top: 2px;
+}
+
+.route-info .travel-time span { color: var(--blue); }
+
+.departures-list { padding: 10px 14px; }
+
+.departure-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.departure-row:last-child { border-bottom: none; }
+
+.dep-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  min-width: 60px;
+  color: var(--text);
+}
+
+.dep-countdown {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 8px;
+  min-width: 70px;
+  text-align: center;
+}
+
+.dep-countdown.soon { background: rgba(233,69,96,0.15); color: var(--accent); }
+.dep-countdown.normal { background: rgba(0,214,143,0.1); color: var(--green); }
+.dep-countdown.later { background: rgba(79,195,247,0.1); color: var(--blue); }
+
+.dep-notes {
+  font-size: 0.65rem;
+  color: var(--text2);
+  margin-left: 8px;
+  max-width: 100px;
+}
+
+.dep-arrival {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--text2);
+  margin-left: 12px;
+  min-width: 55px;
+}
+
+.no-more {
+  text-align: center;
+  color: var(--text2);
+  font-size: 0.8rem;
+  padding: 16px;
+}
+
+.departure-row.next {
+  background: rgba(233,69,96,0.08);
+  margin: 0 -14px;
+  padding: 8px 14px;
+  border-radius: 8px;
+}
+
+/* ===== TIMETABLE ===== */
+.timetable-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.timetable-selector select {
+  flex: 1;
+  min-width: 120px;
+  padding: 10px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  color: var(--text);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239999aa' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.timetable-grid {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--bg3);
+}
+
+.timetable-row {
+  display: flex;
+  border-bottom: 1px solid var(--bg3);
+}
+
+.timetable-row:last-child { border-bottom: none; }
+
+.timetable-hour {
+  min-width: 44px;
+  padding: 10px 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: center;
+  background: rgba(233,69,96,0.08);
+  color: var(--accent);
+}
+
+.timetable-minutes {
+  flex: 1;
+  padding: 10px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.timetable-minutes .min { cursor: default; }
+.timetable-minutes .min.has-note { color: var(--orange); position: relative; }
+
+.timetable-row.current-hour { background: rgba(0,214,143,0.06); }
+.timetable-row.current-hour .timetable-hour { color: var(--green); background: rgba(0,214,143,0.12); }
+
+/* ===== SETTINGS ===== */
+.settings-section {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid var(--bg3);
+}
+
+.settings-title {
+  padding: 14px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--bg3);
+  color: var(--accent);
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  gap: 10px;
+}
+
+.settings-item:last-child { border-bottom: none; }
+.settings-item .label { flex: 1; font-size: 0.85rem; }
+.settings-item .value { font-size: 0.8rem; color: var(--text2); }
+
+.legend {
+  padding: 10px 14px;
+  background: rgba(255,159,67,0.06);
+  border-top: 1px solid var(--bg3);
+}
+
+.legend-item {
+  font-size: 0.7rem;
+  color: var(--text2);
+  margin-bottom: 2px;
+}
+
+.legend-item span {
+  color: var(--orange);
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.dpkv-link {
+  display: block;
+  text-align: center;
+  padding: 10px;
+  color: var(--blue);
+  font-size: 0.75rem;
+  text-decoration: none;
+  margin-top: 8px;
+}
+
+@media (min-width: 600px) {
+  .content { max-width: 480px; margin: 0 auto; }
+  .header { text-align: center; }
+  .tabs { max-width: 480px; margin: 0 auto; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span class="bus-icon">🚌</span> MHD Karlovy Vary</h1>
+  <div class="subtitle">Odjezdy z mých zastávek</div>
+  <div class="day-indicator">
+    <span class="dot" id="statusDot"></span>
+    <span id="dayType"></span>
+    <span id="currentTime"></span>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('departures')">Odjezdy</button>
+  <button class="tab" onclick="showTab('timetable')">Jízdní řády</button>
+  <button class="tab" onclick="showTab('settings')">Nastavení</button>
+</div>
+
+<div class="content" id="content"></div>
+
+<script>
+const DATA = {
+  routes: [
+    {
+      id: "line3_borova_trznice",
+      line: "3",
+      from: "Borová",
+      to: "Tržnice",
+      travelMinutes: 11,
+      colorClass: "line-3",
+      dpkvUrl: "https://www.dpkv.cz/_data/d-3/3103.htm",
+      departures: {
+        workday: {5:["18","42"],6:["06","30","54"],7:["18","45"],8:["12","49"],9:["29"],10:["09","49"],11:["49"],12:["29"],13:["09","27","51"],14:["15","39"],15:["03","27","51"],16:["15","39"],17:["09","24"],18:["00","20","50"],19:["20","50"],20:["20"],21:["02"]},
+        holiday: {7:["30"],8:["48"],9:[],10:["08"],11:["28"],12:["48"],13:[],14:["08"],15:["28"],16:["48"],17:[],18:["08"],19:["28"]},
+        weekend: {6:["46"],7:["24","44"],8:["26","56"],9:["46"],10:["16"],11:["06","36"],12:["26","56"],13:["46"],14:["16"],15:["06","36"],16:["26","56"],17:["46"],18:["16"],19:["06","41"],20:["49"]}
+      }
+    },
+    {
+      id: "line13_okruzni_trznice",
+      line: "13",
+      from: "Okružní",
+      to: "Tržnice",
+      travelMinutes: 14,
+      colorClass: "line-13",
+      dpkvUrl: "https://www.dpkv.cz/_data/d-13/13004.htm",
+      departures: {
+        workday: {5:["15","39"],6:["03","27","51"],7:["15","39"],8:["03","39"],9:["19"],10:["19"],11:["19"],12:["19"],13:["19"],14:["03","27","51"],15:["15","39"],16:["03","27","51"],17:["21","51"],18:["21"],19:["01","31"],20:["01","31"],21:["10"]},
+        holiday: {6:["51"],7:["39"],8:["39"],9:["39"],10:["39"],11:["39"],12:["39"],13:["39"],14:["39"],15:["39"],16:["39"],17:["39"],18:["39"],19:["39"]},
+        weekend: {7:["09"],8:["09"],9:["09"],10:["09"],11:["09"],12:["09"],13:["09"],14:["09"],15:["09"],16:["09"],17:["09"],18:["09"],19:["09"],20:["29"]}
+      }
+    },
+    {
+      id: "line15_okruzni_trznice",
+      line: "15",
+      from: "Okružní",
+      to: "Tržnice",
+      travelMinutes: 12,
+      colorClass: "line-15",
+      dpkvUrl: "https://www.dpkv.cz/_data/d-15/15103.htm",
+      departures: {
+        workday: {5:["07S","31S","55"],6:["19","43S"],7:["07","23šP","31","56S"],8:["15","43","58"],9:["28","43"],10:["13","43","58"],11:["28","58"],12:["13","43","56"],13:["19S","43"],14:["07","31","55"],15:["19","43"],16:["07","31","56"],17:["26","41"],18:["11","41","56S"],19:["11","41"],20:["11S","31","54"],21:["15","40"],22:["08"]},
+        holiday: {5:["07S","31S","55"],6:["19","43"],7:["07","31","56"],8:["14","54"],9:["34"],10:["14","54"],11:["14","54"],12:["14","34"],13:["13","31","43"],14:["07","31","55"],15:["19","43"],16:["07","31","56"],17:["26","41"],18:["14","54"],19:["34"],20:["11S","31","54"],21:["15","40"],22:["08"]},
+        weekend: {6:["35"],7:["13","33"],8:["15","45"],9:["35"],10:["05","55"],11:["25"],12:["15","45"],13:["35"],14:["05","55"],15:["25"],16:["15","45"],17:["35"],18:["05","55"],19:["30"],20:["38"],21:["15","40"],22:["08"]}
+      }
+    }
+  ],
+
+  holidays: ["1-1","1-2","5-1","5-8","7-5","7-6","9-28","10-28","11-17","12-24","12-25","12-26"],
+
+  holidayPeriods: [
+    { from: "07-01", to: "08-31" },
+    { from: "12-27", to: "12-31" }
+  ],
+
+  notes: {
+    "S": "pokračuje do Staré Kysibelské",
+    "š": "školní spoj",
+    "P": "jede přímo, nestaví v zast. Slavie",
+    "D": "pokračuje jako linka 6 směr Doubí",
+    "L": "končí v zast. Lidická"
+  }
+};
+
+// ============================================================
+// STATE
+// ============================================================
+let currentTab = 'departures';
+let useCustomTime = false;
+let customDate = '';
+let customTime = '';
+
+function getRealNow() { return new Date(); }
+
+function getNow() {
+  if (useCustomTime && customDate && customTime) {
+    return new Date(customDate + 'T' + customTime);
+  }
+  return getRealNow();
+}
+
+function getDayType(date) {
+  const day = date.getDay();
+  const month = date.getMonth() + 1;
+  const dayOfMonth = date.getDate();
+  const dateStr = `${month}-${dayOfMonth}`;
+  if (day === 0 || day === 6 || DATA.holidays.includes(dateStr)) return 'weekend';
+  const mmdd = `${String(month).padStart(2,'0')}-${String(dayOfMonth).padStart(2,'0')}`;
+  for (const p of DATA.holidayPeriods) {
+    if (mmdd >= p.from && mmdd <= p.to) return 'holiday';
+  }
+  return 'workday';
+}
+
+function getDayTypeLabel(type) {
+  switch(type) {
+    case 'workday': return 'Pracovní den';
+    case 'holiday': return 'Prázdniny / svátky (prac. den)';
+    case 'weekend': return 'Víkend / svátek';
+  }
+}
+
+function parseMinute(minStr) { return parseInt(minStr.replace(/[^0-9]/g, ''), 10); }
+function getNotes(minStr) {
+  const letters = minStr.replace(/[0-9]/g, '');
+  return letters ? letters.split('').map(l => DATA.notes[l] || l).join(', ') : '';
+}
+function getNoteLetters(minStr) { return minStr.replace(/[0-9]/g, ''); }
+
+function getUpcomingDepartures(route, dayType, now, count = 6) {
+  const deps = route.departures[dayType] || {};
+  const currentH = now.getHours();
+  const currentM = now.getMinutes();
+  const results = [];
+  for (let h = 0; h < 24; h++) {
+    const hourDeps = deps[h] || [];
+    for (const minStr of hourDeps) {
+      const m = parseMinute(minStr);
+      const totalMin = h * 60 + m;
+      const nowMin = currentH * 60 + currentM;
+      const diff = totalMin - nowMin;
+      if (diff >= -1) {
+        results.push({
+          hour: h, minute: m, minuteStr: minStr, diff,
+          notes: getNotes(minStr),
+          noteLetters: getNoteLetters(minStr),
+          arrivalH: Math.floor((totalMin + route.travelMinutes) / 60) % 24,
+          arrivalM: (totalMin + route.travelMinutes) % 60
+        });
+      }
+      if (results.length >= count) break;
+    }
+    if (results.length >= count) break;
+  }
+  return results;
+}
+
+function formatTime(h, m) { return `${h}:${String(m).padStart(2, '0')}`; }
+
+function formatCountdown(diff) {
+  if (diff <= 0) return 'TEĎ';
+  if (diff < 60) return `za ${diff} min`;
+  return `za ${Math.floor(diff/60)}h ${diff%60}m`;
+}
+
+function countdownClass(diff) {
+  if (diff <= 5) return 'soon';
+  if (diff <= 20) return 'normal';
+  return 'later';
+}
+
+function formatCzechDate(date) {
+  const days = ['neděle','pondělí','úterý','středa','čtvrtek','pátek','sobota'];
+  const months = ['ledna','února','března','dubna','května','června','července','srpna','září','října','listopadu','prosince'];
+  return `${days[date.getDay()]} ${date.getDate()}. ${months[date.getMonth()]}`;
+}
+
+// ============================================================
+// TIME MODE
+// ============================================================
+function setTimeMode(mode) {
+  useCustomTime = (mode === 'custom');
+  if (!useCustomTime) {
+    customDate = '';
+    customTime = '';
+  } else {
+    const now = getRealNow();
+    customDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    customTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  }
+  render();
+}
+
+function onCustomDateChange(val) {
+  customDate = val;
+  renderDepartureCards();
+  updateClockForMode();
+}
+
+function onCustomTimeChange(val) {
+  customTime = val;
+  renderDepartureCards();
+  updateClockForMode();
+}
+
+function updateClockForMode() {
+  const dot = document.getElementById('statusDot');
+  if (useCustomTime && customDate && customTime) {
+    const sim = getNow();
+    const dayType = getDayType(sim);
+    document.getElementById('dayType').textContent = getDayTypeLabel(dayType);
+    document.getElementById('currentTime').textContent = '· ' + formatCzechDate(sim) + ' ' + formatTime(sim.getHours(), sim.getMinutes());
+    if (dot) dot.classList.add('custom');
+  } else {
+    const realNow = getRealNow();
+    document.getElementById('dayType').textContent = getDayTypeLabel(getDayType(realNow));
+    document.getElementById('currentTime').textContent = '· ' + formatTime(realNow.getHours(), realNow.getMinutes());
+    if (dot) dot.classList.remove('custom');
+  }
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function showTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab')[['departures','timetable','settings'].indexOf(tab)].classList.add('active');
+  render();
+}
+
+function render() {
+  switch(currentTab) {
+    case 'departures': renderDepartures(); break;
+    case 'timetable': renderTimetable(); break;
+    case 'settings': renderSettings(); break;
+  }
+  updateClockForMode();
+}
+
+function renderDepartures() {
+  let html = '';
+
+  // Time toggle
+  html += `<div class="time-toggle">`;
+  html += `<div class="time-toggle-header">`;
+  html += `<button class="time-toggle-btn ${!useCustomTime ? 'active' : ''}" onclick="setTimeMode('now')"><span class="icon">⏱</span> Teď</button>`;
+  html += `<button class="time-toggle-btn ${useCustomTime ? 'active' : ''}" onclick="setTimeMode('custom')"><span class="icon">📅</span> Jiné datum a čas</button>`;
+  html += `</div>`;
+  html += `<div class="custom-time-picker ${useCustomTime ? 'visible' : ''}">`;
+  html += `<div class="custom-time-row">`;
+  html += `<input type="date" id="customDate" value="${customDate}" onchange="onCustomDateChange(this.value)">`;
+  html += `<input type="time" id="customTime" value="${customTime}" onchange="onCustomTimeChange(this.value)">`;
+  html += `</div>`;
+
+  if (useCustomTime && customDate && customTime) {
+    const simDate = new Date(customDate + 'T' + customTime);
+    const simDayType = getDayType(simDate);
+    html += `<div class="custom-time-info">`;
+    html += `<span class="badge">${getDayTypeLabel(simDayType)}</span>`;
+    html += `<span>${formatCzechDate(simDate)}</span>`;
+    html += `</div>`;
+  }
+
+  html += `</div></div>`;
+  html += `<div id="departure-cards"></div>`;
+
+  document.getElementById('content').innerHTML = html;
+  renderDepartureCards();
+}
+
+function renderDepartureCards() {
+  const now = getNow();
+  const dayType = getDayType(now);
+  let html = '';
+
+  for (const route of DATA.routes) {
+    const deps = getUpcomingDepartures(route, dayType, now);
+    html += `<div class="route-card">`;
+    html += `<div class="route-header" onclick="window.open('${route.dpkvUrl}','_blank')">`;
+    html += `<div class="line-badge ${route.colorClass}">${route.line}</div>`;
+    html += `<div class="route-info">`;
+    html += `<div class="from-to">${route.from} → ${route.to}</div>`;
+    html += `<div class="travel-time">Doba jízdy: <span>${route.travelMinutes} min</span></div>`;
+    html += `</div>`;
+    html += `<svg width="16" height="16" fill="none" stroke="#666" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>`;
+    html += `</div>`;
+    html += `<div class="departures-list">`;
+
+    if (deps.length === 0) {
+      html += `<div class="no-more">V tomto čase žádné spoje</div>`;
+    } else {
+      deps.forEach((dep, i) => {
+        const isNext = i === 0;
+        html += `<div class="departure-row ${isNext ? 'next' : ''}">`;
+        html += `<div class="dep-time">${formatTime(dep.hour, dep.minute)}</div>`;
+        if (dep.noteLetters) {
+          html += `<div class="dep-notes" title="${dep.notes}"><sup style="color:var(--orange)">${dep.noteLetters}</sup></div>`;
+        }
+        html += `<div class="dep-arrival">→ ${formatTime(dep.arrivalH, dep.arrivalM)}</div>`;
+        html += `<div class="dep-countdown ${countdownClass(dep.diff)}">${formatCountdown(dep.diff)}</div>`;
+        html += `</div>`;
+      });
+    }
+    html += `</div></div>`;
+  }
+
+  const container = document.getElementById('departure-cards');
+  if (container) container.innerHTML = html;
+}
+
+function renderTimetable() {
+  const now = getNow();
+  const dayType = getDayType(now);
+  const currentH = now.getHours();
+
+  let html = `<div class="timetable-selector">`;
+  html += `<select id="tt-route" onchange="renderTimetable()">`;
+  DATA.routes.forEach((r, i) => {
+    html += `<option value="${i}">Linka ${r.line}: ${r.from} → ${r.to}</option>`;
+  });
+  html += `</select>`;
+  html += `<select id="tt-daytype" onchange="renderTimetable()">`;
+  html += `<option value="auto" ${!document.getElementById('tt-daytype') || document.getElementById('tt-daytype').value === 'auto' ? 'selected' : ''}>Dnes (${getDayTypeLabel(dayType)})</option>`;
+  html += `<option value="workday">Pracovní den</option>`;
+  html += `<option value="holiday">Prázdniny</option>`;
+  html += `<option value="weekend">Víkend / svátek</option>`;
+  html += `</select></div>`;
+
+  const routeIdx = document.getElementById('tt-route') ? parseInt(document.getElementById('tt-route').value) : 0;
+  const dtVal = document.getElementById('tt-daytype') ? document.getElementById('tt-daytype').value : 'auto';
+  const showDayType = dtVal === 'auto' ? dayType : dtVal;
+  const route = DATA.routes[routeIdx];
+  const deps = route.departures[showDayType] || {};
+
+  html += `<div style="margin-bottom:8px;font-size:0.75rem;color:var(--text2)">`;
+  html += `Doba jízdy ${route.from} → ${route.to}: <strong style="color:var(--blue)">${route.travelMinutes} min</strong></div>`;
+
+  html += `<div class="timetable-grid">`;
+  for (let h = 4; h <= 24; h++) {
+    const hour = h % 24;
+    const minutes = deps[hour] || [];
+    if (minutes.length === 0 && (hour < 5 || hour > 22)) continue;
+    const isCurrent = hour === currentH && dtVal === 'auto';
+    html += `<div class="timetable-row ${isCurrent ? 'current-hour' : ''}">`;
+    html += `<div class="timetable-hour">${hour}</div>`;
+    html += `<div class="timetable-minutes">`;
+    if (minutes.length === 0) {
+      html += `<span style="color:var(--text2);font-size:0.75rem">—</span>`;
+    } else {
+      minutes.forEach(m => {
+        const letters = getNoteLetters(m);
+        const hasNote = letters.length > 0;
+        html += `<span class="min ${hasNote ? 'has-note' : ''}" title="${hasNote ? getNotes(m) : ''}">${m}</span>`;
+      });
+    }
+    html += `</div></div>`;
+  }
+  html += `</div>`;
+
+  const allNotes = new Set();
+  for (const dt of Object.values(route.departures)) {
+    for (const mins of Object.values(dt)) {
+      for (const m of mins) {
+        const l = getNoteLetters(m);
+        if (l) l.split('').forEach(c => allNotes.add(c));
+      }
+    }
+  }
+  if (allNotes.size > 0) {
+    html += `<div class="legend" style="margin-top:8px;border-radius:var(--radius)">`;
+    allNotes.forEach(n => {
+      html += `<div class="legend-item"><span>${n}</span> – ${DATA.notes[n] || '?'}</div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<a class="dpkv-link" href="${route.dpkvUrl}" target="_blank">Zobrazit na webu DPKV ↗</a>`;
+  document.getElementById('content').innerHTML = html;
+  if (document.getElementById('tt-route')) document.getElementById('tt-route').value = routeIdx;
+  if (document.getElementById('tt-daytype')) document.getElementById('tt-daytype').value = dtVal;
+}
+
+function renderSettings() {
+  let html = '';
+  html += `<div class="settings-section">`;
+  html += `<div class="settings-title">Moje sledované linky</div>`;
+  DATA.routes.forEach(r => {
+    html += `<div class="settings-item">`;
+    html += `<div class="line-badge ${r.colorClass}" style="min-width:36px;height:36px;font-size:1rem;border-radius:8px">${r.line}</div>`;
+    html += `<div class="label">${r.from} → ${r.to}<br><span style="font-size:0.7rem;color:var(--text2)">Jízda ${r.travelMinutes} min</span></div>`;
+    html += `</div>`;
+  });
+  html += `</div>`;
+
+  html += `<div class="settings-section">`;
+  html += `<div class="settings-title">Jak přidat / změnit linku</div>`;
+  html += `<div style="padding:14px;font-size:0.8rem;color:var(--text2);line-height:1.6">`;
+  html += `<p style="margin-bottom:10px">Tato aplikace čte data ze souboru, který si snadno upravíte:</p>`;
+  html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">1.</strong> Otevřete soubor <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">mhd-kv.html</code> v textovém editoru</p>`;
+  html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">2.</strong> Najděte sekci <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">DATA.routes</code></p>`;
+  html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">3.</strong> Zkopírujte existující blok linky a upravte číslo, zastávky, URL a časy</p>`;
+  html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">4.</strong> Časy najdete na stránce DPKV: <a href="https://www.dpkv.cz/cz/jizdni-rady/denni-linky/" target="_blank" style="color:var(--blue)">dpkv.cz → Jízdní řády</a></p>`;
+  html += `<p><strong style="color:var(--text)">5.</strong> Klikněte na zastávku – otevře se HTM stránka s časy</p>`;
+  html += `</div></div>`;
+
+  html += `<div class="settings-section">`;
+  html += `<div class="settings-title">O aplikaci</div>`;
+  html += `<div style="padding:14px;font-size:0.8rem;color:var(--text2);line-height:1.6">`;
+  html += `<p>MHD KV – osobní jízdní řád</p>`;
+  html += `<p>Data: Dopravní podnik Karlovy Vary (dpkv.cz)</p>`;
+  html += `<p>Platnost dat: od 15.12.2025</p>`;
+  html += `<p style="margin-top:8px"><a href="https://www.dpkv.cz" target="_blank" style="color:var(--blue)">www.dpkv.cz</a> · <a href="https://dopravniportal.dpkv.cz" target="_blank" style="color:var(--blue)">Dopravní portál</a></p>`;
+  html += `</div></div>`;
+
+  document.getElementById('content').innerHTML = html;
+}
+
+// ============================================================
+// CLOCK & AUTO-REFRESH
+// ============================================================
+function tick() {
+  updateClockForMode();
+  if (currentTab === 'departures' && !useCustomTime) {
+    renderDepartureCards();
+  }
+}
+
+updateClockForMode();
+render();
+setInterval(tick, 60000); // refresh každou minutu
+</script>
+</body>
+</html>
