@@ -11,36 +11,25 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
-  /* Core palette - blue/indigo */
   --bg: #0a0e1a;
   --bg2: #111628;
   --bg3: #1a2040;
   --bg4: #232a4a;
-
-  /* Accent blues - 15% brighter */
   --blue1: #4d7df7;
   --blue2: #6e9bfa;
   --blue3: #9dc2ff;
   --indigo: #7578f4;
   --indigo-soft: #949df9;
   --violet: #8f70f3;
-
-  /* Status colors */
-  --urgent: #e94560;       /* < 15 min - růžovo-červená */
-  --warning: #f59e42;      /* < 30 min - oranžová */
-  --green: #34d399;        /* > 30 min */
+  --urgent: #e94560;
+  --warning: #f59e42;
+  --green: #34d399;
   --green-dim: rgba(52,211,153,0.12);
-
-  /* Text */
   --text: #e8ecf4;
   --text2: #8892b0;
   --text3: #5a6380;
-
-  /* Misc */
   --radius: 14px;
   --shadow: 0 4px 24px rgba(0,0,0,0.5);
-
-  /* Mode backgrounds for header */
   --mode-now-bg: #131e3e;
   --mode-custom-bg: #1c1235;
 }
@@ -66,14 +55,8 @@ body {
   transition: background 0.4s;
   text-align: center;
 }
-
-.header.mode-now {
-  background: var(--mode-now-bg);
-}
-
-.header.mode-custom {
-  background: var(--mode-now-bg);
-}
+.header.mode-now { background: var(--mode-now-bg); }
+.header.mode-custom { background: var(--mode-now-bg); }
 
 .header-top {
   display: flex;
@@ -81,19 +64,8 @@ body {
   gap: 10px;
   justify-content: center;
 }
-
-.header-icon {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-}
-
-.header h1 {
-  font-size: 1.25rem;
-  font-weight: 800;
-  letter-spacing: 0.3px;
-  color: var(--text);
-}
+.header-icon { width: 32px; height: 32px; flex-shrink: 0; }
+.header h1 { font-size: 1.25rem; font-weight: 800; letter-spacing: 0.3px; color: var(--text); }
 
 .status-bar {
   display: inline-flex;
@@ -102,38 +74,23 @@ body {
   margin-top: 8px;
   padding: 4px 12px;
   border-radius: 20px;
-  font-size: 0.975rem;
+  font-size: 1.05rem;
   font-weight: 600;
   transition: all 0.4s;
 }
-
 .status-bar.mode-now {
   background: rgba(77,125,247,0.12);
   border: 1px solid rgba(77,125,247,0.25);
   color: var(--blue3);
 }
-
 .status-bar.mode-custom {
   background: rgba(143,112,243,0.12);
   border: 1px solid rgba(143,112,243,0.25);
   color: var(--blue3);
 }
-
-.status-bar .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.status-bar.mode-now .dot {
-  background: #e94560;
-  animation: pulse 2s infinite;
-}
-
-.status-bar.mode-custom .dot {
-  background: rgba(143,112,243,0.6);
-  animation: none;
-}
+.status-bar .dot { width: 6px; height: 6px; border-radius: 50%; }
+.status-bar.mode-now .dot { background: #e94560; animation: pulse 2s infinite; }
+.status-bar.mode-custom .dot { background: rgba(143,112,243,0.6); animation: none; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -149,14 +106,8 @@ body {
   z-index: 99;
   transition: background 0.4s;
 }
-
-.tabs.mode-now {
-  background: var(--mode-now-bg);
-}
-
-.tabs.mode-custom {
-  background: var(--mode-now-bg);
-}
+.tabs.mode-now { background: var(--mode-now-bg); }
+.tabs.mode-custom { background: var(--mode-now-bg); }
 
 .tab {
   flex: 1;
@@ -172,22 +123,11 @@ body {
   border-bottom: 3px solid transparent;
   font-family: inherit;
 }
-
-.tab.active {
-  color: var(--blue2);
-  border-bottom-color: var(--blue1);
-}
-
-.tabs.mode-custom .tab.active {
-  color: var(--indigo-soft);
-  border-bottom-color: var(--violet);
-}
+.tab.active { color: var(--blue2); border-bottom-color: var(--blue1); }
+.tabs.mode-custom .tab.active { color: var(--indigo-soft); border-bottom-color: var(--violet); }
 
 /* ===== CONTENT ===== */
-.content {
-  padding: 12px;
-  padding-bottom: 80px;
-}
+.content { padding: 12px; padding-bottom: 80px; }
 
 /* ===== TIME TOGGLE ===== */
 .time-toggle {
@@ -199,15 +139,9 @@ body {
   box-shadow: var(--shadow);
   transition: background 0.3s, border-color 0.3s;
 }
+.time-toggle.violet { background: #151030; border-color: rgba(143,112,243,0.18); }
 
-.time-toggle.violet {
-  background: #151030;
-  border-color: rgba(143,112,243,0.18);
-}
-
-.time-toggle-header {
-  display: flex;
-}
+.time-toggle-header { display: flex; }
 
 .time-toggle-btn {
   flex: 1;
@@ -223,52 +157,29 @@ body {
   position: relative;
   letter-spacing: 0.3px;
 }
-
-.time-toggle-btn.active-now {
-  color: var(--blue2);
-  background: rgba(59,108,245,0.08);
-}
-
+.time-toggle-btn.active-now { color: var(--blue2); background: rgba(59,108,245,0.08); }
 .time-toggle-btn.active-now::after {
   content: '';
   position: absolute;
-  bottom: 0;
-  left: 15%; right: 15%;
+  bottom: 0; left: 15%; right: 15%;
   height: 2px;
   background: var(--blue1);
   border-radius: 2px;
 }
-
-.time-toggle-btn.active-custom {
-  color: var(--indigo-soft);
-  background: rgba(124,91,240,0.08);
-}
-
+.time-toggle-btn.active-custom { color: var(--indigo-soft); background: rgba(124,91,240,0.08); }
 .time-toggle-btn.active-custom::after {
   content: '';
   position: absolute;
-  bottom: 0;
-  left: 15%; right: 15%;
+  bottom: 0; left: 15%; right: 15%;
   height: 2px;
   background: var(--violet);
   border-radius: 2px;
 }
 
-.custom-time-picker {
-  padding: 10px 14px 14px;
-  border-top: 1px solid var(--bg3);
-  display: none;
-}
-
+.custom-time-picker { padding: 10px 14px 14px; border-top: 1px solid var(--bg3); display: none; }
 .custom-time-picker.visible { display: block; }
 
-.custom-time-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
+.custom-time-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .custom-time-row input[type="date"],
 .custom-time-row input[type="time"] {
   flex: 1;
@@ -283,11 +194,7 @@ body {
   -webkit-appearance: none;
   color-scheme: dark;
 }
-
-.custom-time-row input:focus {
-  outline: none;
-  border-color: var(--violet);
-}
+.custom-time-row input:focus { outline: none; border-color: var(--violet); }
 
 .custom-time-info {
   margin-top: 8px;
@@ -298,7 +205,6 @@ body {
   gap: 6px;
   flex-wrap: wrap;
 }
-
 .custom-time-info .badge {
   display: inline-block;
   padding: 2px 8px;
@@ -320,16 +226,12 @@ body {
   box-shadow: var(--shadow);
   transition: background 0.3s, border-color 0.3s;
 }
-
-.route-card.violet {
-  background: #151030;
-  border-color: rgba(143,112,243,0.18);
-}
+.route-card.violet { background: #151030; border-color: rgba(143,112,243,0.18); }
 
 .route-header {
   display: flex;
   align-items: center;
-  padding: 14px 14px;
+  padding: 14px;
   gap: 12px;
   border-bottom: 1px solid var(--bg3);
   cursor: pointer;
@@ -345,32 +247,21 @@ body {
   font-family: 'JetBrains Mono', monospace;
   font-weight: 700;
   font-size: 1.2rem;
+  flex-shrink: 0;
 }
-
-/* Line badges - solid, cool-toned, readable */
 .line-badge span { color: #fff; }
-.line-3 { background: #1e4080; }
+.line-3  { background: #1e4080; }
+.line-9  { background: #7a4b10; }
 .line-13 { background: #8b2d42; }
 .line-15 { background: #1a7a5a; }
 .line-51 { background: #111111; border: 1px solid #333; }
 .line-51 span { color: #f0728a; }
-.line-night { background: #4a3590; }
 
-.route-info { flex: 1; }
-
-.route-info .from-to {
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: 0.2px;
-}
-
-.route-info .travel-time {
-  font-size: 0.8rem;
-  color: var(--text2);
-  margin-top: 5px;
-}
-
+.route-info { flex: 1; min-width: 0; }
+.route-info .from-to { font-size: 1.26rem; font-weight: 800; letter-spacing: 0.2px; }
+.route-info .travel-time { font-size: 0.78rem; color: var(--text2); margin-top: 4px; }
 .route-info .travel-time span { color: var(--blue3); }
+.route-warning { font-size: 0.72rem; color: var(--warning); margin-top: 3px; font-weight: 700; }
 
 .departures-list { padding: 10px 14px; }
 
@@ -380,8 +271,10 @@ body {
   padding: 8px 0;
   border-bottom: 1px solid rgba(255,255,255,0.03);
 }
-
 .departure-row:last-child { border-bottom: none; }
+
+.departure-row.next { background: rgba(77,125,247,0.06); margin: 0 -14px; padding: 8px 14px; border-radius: 8px; }
+.departure-row.next.violet { background: rgba(143,112,243,0.08); }
 
 .dep-time {
   font-family: 'JetBrains Mono', monospace;
@@ -390,7 +283,14 @@ body {
   min-width: 60px;
   color: var(--text);
 }
-
+.dep-notes { font-size: 0.65rem; color: var(--text2); margin-left: 6px; }
+.dep-arrival {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--text2);
+  margin-left: 10px;
+  min-width: 55px;
+}
 .dep-countdown {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.95rem;
@@ -401,64 +301,19 @@ body {
   min-width: 80px;
   text-align: center;
 }
+.dep-countdown.urgent  { background: rgba(233,69,96,0.15);  color: var(--urgent); }
+.dep-countdown.warning { background: rgba(245,158,66,0.12); color: var(--warning); }
+.dep-countdown.normal  { background: rgba(52,211,153,0.08); color: var(--green); }
 
-/* Countdown colors based on urgency */
-.dep-countdown.urgent {
-  background: rgba(233,69,96,0.15);
-  color: var(--urgent);
-}
+.no-more { text-align: center; color: var(--text2); font-size: 0.85rem; padding: 16px; }
 
-.dep-countdown.warning {
-  background: rgba(245,158,66,0.12);
-  color: var(--warning);
-}
-
-.dep-countdown.normal {
-  background: rgba(52,211,153,0.08);
-  color: var(--green);
-}
-
-.dep-notes {
-  font-size: 0.65rem;
-  color: var(--text2);
-  margin-left: 8px;
-  max-width: 100px;
-}
-
-.dep-arrival {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.75rem;
-  color: var(--text2);
-  margin-left: 12px;
-  min-width: 55px;
-}
-
-.no-more {
-  text-align: center;
-  color: var(--text2);
-  font-size: 0.85rem;
-  padding: 16px;
-}
-
-.departure-row.next {
-  background: rgba(77,125,247,0.06);
-  margin: 0 -14px;
-  padding: 8px 14px;
-  border-radius: 8px;
-}
-
-.departure-row.next.violet {
-  background: rgba(143,112,243,0.08);
-}
+/* Legenda v departure kartě */
+.dep-legend { padding: 8px 14px 12px; border-top: 1px solid rgba(255,255,255,0.05); }
+.dep-legend-item { font-size: 0.88rem; color: var(--text2); margin-top: 2px; }
+.dep-legend-item span { color: var(--warning); font-weight: 700; font-family: 'JetBrains Mono', monospace; }
 
 /* ===== TIMETABLE ===== */
-.timetable-selector {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-
+.timetable-selector { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .timetable-selector select {
   flex: 1;
   min-width: 120px;
@@ -484,17 +339,9 @@ body {
   border: 1px solid var(--bg3);
   transition: background 0.3s, border-color 0.3s;
 }
+.timetable-grid.violet { background: #151030; border-color: rgba(143,112,243,0.18); }
 
-.timetable-grid.violet {
-  background: #151030;
-  border-color: rgba(143,112,243,0.18);
-}
-
-.timetable-row {
-  display: flex;
-  border-bottom: 1px solid var(--bg3);
-}
-
+.timetable-row { display: flex; border-bottom: 1px solid var(--bg3); }
 .timetable-row:last-child { border-bottom: none; }
 
 .timetable-hour {
@@ -507,7 +354,6 @@ body {
   background: rgba(59,108,245,0.06);
   color: var(--blue2);
 }
-
 .timetable-minutes {
   flex: 1;
   padding: 10px 12px;
@@ -518,35 +364,13 @@ body {
   gap: 6px 10px;
   align-items: center;
 }
-
 .timetable-minutes .min { cursor: default; }
-
-.timetable-minutes .min.has-note {
-  color: var(--warning);
-  position: relative;
-}
-
+.timetable-minutes .min.has-note { color: var(--warning); }
 .timetable-row.current-hour { background: rgba(77,125,247,0.10); }
-
-.timetable-row.current-hour .timetable-hour {
-  color: var(--blue3);
-  background: rgba(77,125,247,0.22);
-}
-
-/* Violet timetable variants for non-"Dnes" day types */
-.timetable-grid.violet .timetable-hour {
-  background: rgba(143,112,243,0.06);
-  color: var(--indigo-soft);
-}
-
-.timetable-grid.violet .timetable-row.current-hour {
-  background: rgba(143,112,243,0.10);
-}
-
-.timetable-grid.violet .timetable-row.current-hour .timetable-hour {
-  color: #c4b5fd;
-  background: rgba(143,112,243,0.22);
-}
+.timetable-row.current-hour .timetable-hour { color: var(--blue3); background: rgba(77,125,247,0.22); }
+.timetable-grid.violet .timetable-hour { background: rgba(143,112,243,0.06); color: var(--indigo-soft); }
+.timetable-grid.violet .timetable-row.current-hour { background: rgba(143,112,243,0.10); }
+.timetable-grid.violet .timetable-row.current-hour .timetable-hour { color: #c4b5fd; background: rgba(143,112,243,0.22); }
 
 /* ===== SETTINGS ===== */
 .settings-section {
@@ -556,58 +380,23 @@ body {
   overflow: hidden;
   border: 1px solid var(--bg3);
 }
-
-.settings-title {
-  padding: 14px;
-  font-weight: 700;
-  font-size: 0.9rem;
-  border-bottom: 1px solid var(--bg3);
-  color: var(--blue2);
-}
-
-.settings-item {
-  display: flex;
-  align-items: center;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-  gap: 10px;
-}
-
+.settings-title { padding: 14px; font-weight: 700; font-size: 0.9rem; border-bottom: 1px solid var(--bg3); color: var(--blue2); }
+.settings-item { display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); gap: 10px; }
 .settings-item:last-child { border-bottom: none; }
 .settings-item .label { flex: 1; font-size: 0.85rem; }
 .settings-item .value { font-size: 0.8rem; color: var(--text2); }
 
-.legend {
-  padding: 10px 14px;
-  background: rgba(245,158,66,0.04);
-  border-top: 1px solid var(--bg3);
-}
+/* Legenda v timetable */
+.legend { padding: 10px 14px; background: rgba(245,158,66,0.04); border-top: 1px solid var(--bg3); }
+.legend-item { font-size: 0.91rem; color: var(--text2); margin-bottom: 2px; }
+.legend-item span { color: var(--warning); font-weight: 700; font-family: 'JetBrains Mono', monospace; }
 
-.legend-item {
-  font-size: 0.7rem;
-  color: var(--text2);
-  margin-bottom: 2px;
-}
-
-.legend-item span {
-  color: var(--warning);
-  font-weight: 700;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.dpkv-link {
-  display: block;
-  text-align: center;
-  padding: 10px;
-  color: var(--blue3);
-  font-size: 0.75rem;
-  text-decoration: none;
-  margin-top: 8px;
-}
+.dpkv-link { display: block; text-align: center; padding: 10px; color: var(--blue3); font-size: 0.75rem; text-decoration: none; margin-top: 8px; }
 
 @media (min-width: 600px) {
   .content { max-width: 480px; margin: 0 auto; }
   .tabs { max-width: 480px; margin: 0 auto; }
+  .header { max-width: 480px; margin: 0 auto; }
 }
 </style>
 </head>
@@ -615,7 +404,6 @@ body {
 
 <div class="header mode-now" id="header">
   <div class="header-top">
-    <!-- Stylized bus/transit SVG icon in blue tones -->
     <svg class="header-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="4" y="4" width="24" height="20" rx="5" fill="#1a2856" stroke="#3b6cf5" stroke-width="1.5"/>
       <rect x="7" y="7" width="8" height="7" rx="2" fill="#3b6cf5" opacity="0.4"/>
@@ -643,174 +431,280 @@ body {
 <div class="content" id="content"></div>
 
 <script>
+// ============================================================
+// DATA
+// ============================================================
 const DATA = {
   routes: [
     {
-      id: "line3_borova_trznice",
+      id: "line3_kratka",
       line: "3",
-      from: "Borová",
+      from: "Krátká",
       to: "Tržnice",
-      travelMinutes: 11,
+      travelMinutes: 13,
       colorClass: "line-3",
-      dpkvUrl: "https://www.dpkv.cz/_data/d-3/3103.htm",
+      validFrom: "1.12.2025",
+      dpkvUrl: "https://www.dpkv.cz/_data/d-3/",
+      warnings: [],
+      notes: { "L": "jede jen do zastávky Lidická" },
       departures: {
-        workday: {5:["18","42"],6:["06","30","54"],7:["18","45"],8:["12","49"],9:["29"],10:["09","49"],11:["49"],12:["29"],13:["09","27","51"],14:["15","39"],15:["03","27","51"],16:["15","39"],17:["09","24"],18:["00","20","50"],19:["20","50"],20:["20"],21:["02"]},
-        holiday: {7:["30"],8:["48"],9:[],10:["08"],11:["28"],12:["48"],13:[],14:["08"],15:["28"],16:["48"],17:[],18:["08"],19:["28"]},
-        weekend: {6:["46"],7:["24","44"],8:["26","56"],9:["46"],10:["16"],11:["06","36"],12:["26","56"],13:["46"],14:["16"],15:["06","36"],16:["26","56"],17:["46"],18:["16"],19:["06","41"],20:["49"]}
+        workday: {
+          5:["42"],6:["06","30","54L"],7:["16L","42"],8:["27"],9:["12","57"],
+          10:["27"],11:["12","42"],12:["27"],13:["08","30","54"],14:["18","42"],
+          15:["06","30","54"],16:["18","42"],17:["10","55"],18:["25"],19:["25","55L"]
+        },
+        workday_holiday: {
+          5:["42"],6:["06","30","54"],7:["16","42"],8:["33"],9:["13","53"],
+          10:["33"],11:["33"],12:["53"],13:["54"],14:["18","42"],
+          15:["06","30","54"],16:["18","42"],17:["10","55"],18:["33"],19:["13","53L"]
+        },
+        weekend: {
+          7:["54"],9:["09"],10:["29"],11:["49"],13:["09"],
+          14:["29"],15:["49"],17:["09"],18:["29"],20:["04"]
+        }
       }
     },
     {
-      id: "line13_okruzni_trznice",
+      id: "line9_kratka",
+      line: "9",
+      from: "Krátká",
+      to: "Tržnice",
+      travelMinutes: 15,
+      colorClass: "line-9",
+      validFrom: "9.3.2026",
+      dpkvUrl: "https://www.dpkv.cz/_data/d-9a/",
+      warnings: [{text: "Výluka do 30.6.2026", validUntil: "2026-06-30"}],
+      notes: {
+        "L": "jede přes zastávku Letná – Dykova",
+        "X": "nejede přes zastávky Na Kopečku, Počernická a Stará Role sídliště",
+        "A": "jede jen do zastávky Stará Role, pokračuje jako linka 15"
+      },
+      departures: {
+        workday: {
+          5:["21"],6:["21"],7:["16"],8:["27"],10:["18"],12:["18"],
+          13:["45"],15:["10"],16:["10"],17:["10"],18:["10"],19:["30"],
+          20:["33X"],22:["02A"]
+        },
+        workday_holiday: null,
+        weekend: {
+          8:["40"],10:["37"],12:["40"],14:["37X"],16:["37"],18:["40"]
+        }
+      }
+    },
+    {
+      id: "line13_okruzni",
       line: "13",
       from: "Okružní",
       to: "Tržnice",
-      travelMinutes: 14,
+      travelMinutes: 13,
       colorClass: "line-13",
+      validFrom: "9.3.2026",
       dpkvUrl: "https://www.dpkv.cz/_data/d-13/13004.htm",
+      warnings: [],
+      notes: {
+        "D": "z Horního nádraží pokračuje jako linka 11 směr Divadelní náměstí",
+        "T": "jede jen do zastávky Tržnice"
+      },
       departures: {
-        workday: {5:["15","39"],6:["03","27","51"],7:["15","39"],8:["03","39"],9:["19"],10:["19"],11:["19"],12:["19"],13:["19"],14:["03","27","51"],15:["15","39"],16:["03","27","51"],17:["21","51"],18:["21"],19:["01","31"],20:["01","31"],21:["10"]},
-        holiday: {6:["51"],7:["39"],8:["39"],9:["39"],10:["39"],11:["39"],12:["39"],13:["39"],14:["39"],15:["39"],16:["39"],17:["39"],18:["39"],19:["39"]},
-        weekend: {7:["09"],8:["09"],9:["09"],10:["09"],11:["09"],12:["09"],13:["09"],14:["09"],15:["09"],16:["09"],17:["09"],18:["09"],19:["09"],20:["29"]}
+        workday: {
+          5:["18D","42"],6:["06D","30","54D"],7:["18","42"],8:["10","40"],
+          9:["10","40D"],10:["10","40"],11:["10","40D"],12:["10","40"],
+          13:["06","30","54D"],14:["18","42D"],15:["08","30","54"],16:["18","42D"],
+          17:["10","40"],18:["10","40D"],19:["10","42D"],20:["22"],21:["02","37T"],22:["12T"]
+        },
+        workday_holiday: {
+          5:["18D","42"],6:["06D","30","54D"],7:["18","42"],8:["22"],
+          9:["02","42D"],10:["22"],11:["04","42D"],12:["22"],
+          13:["02","30","54D"],14:["18","42D"],15:["08","30","54"],16:["18","42D"],
+          17:["10","42"],18:["22D"],19:["04","42D"],20:["22"],21:["02","37T"],22:["12T"]
+        },
+        weekend: {
+          6:["22D"],7:["02","42"],8:["22"],9:["02","42D"],10:["22"],
+          11:["02","42"],12:["22"],13:["02","42D"],14:["22"],15:["02","42D"],
+          16:["22"],17:["02","42D"],18:["22"],19:["02","42D"],20:["22"],
+          21:["02","37T"],22:["12T"]
+        }
       }
     },
     {
-      id: "line15_okruzni_trznice",
+      id: "line15_okruzni",
       line: "15",
       from: "Okružní",
       to: "Tržnice",
       travelMinutes: 12,
       colorClass: "line-15",
+      validFrom: "1.12.2025",
       dpkvUrl: "https://www.dpkv.cz/_data/d-15/15103.htm",
+      warnings: [],
+      notes: {
+        "S": "z Lidické pokračuje do zastávky Stará Kysibelská",
+        "s": "školní spoj",
+        "P": "jede přímo, nestaví v zastávce Slavie"
+      },
       departures: {
-        workday: {5:["07S","31S","55"],6:["19","43S"],7:["07","23šP","31","56S"],8:["15","43","58"],9:["28","43"],10:["13","43","58"],11:["28","58"],12:["13","43","56"],13:["19S","43"],14:["07","31","55"],15:["19","43"],16:["07","31","56"],17:["26","41"],18:["11","41","56S"],19:["11","41"],20:["11S","31","54"],21:["15","40"],22:["08"]},
-        holiday: {5:["07S","31S","55"],6:["19","43"],7:["07","31","56"],8:["14","54"],9:["34"],10:["14","54"],11:["14","54"],12:["14","34"],13:["13","31","43"],14:["07","31","55"],15:["19","43"],16:["07","31","56"],17:["26","41"],18:["14","54"],19:["34"],20:["11S","31","54"],21:["15","40"],22:["08"]},
-        weekend: {6:["35"],7:["13","33"],8:["15","45"],9:["35"],10:["05","55"],11:["25"],12:["15","45"],13:["35"],14:["05","55"],15:["25"],16:["15","45"],17:["35"],18:["05","55"],19:["30"],20:["38"],21:["15","40"],22:["08"]}
+        workday: {
+          5:["07S","31S","55"],6:["19","43S"],7:["07","23sP","31","56S"],
+          8:["15","43","58"],9:["28","43"],10:["13","43","58"],11:["28","58"],
+          12:["13","43","56"],13:["19S","43"],14:["07","31","55"],15:["19","43"],
+          16:["07","31","56"],17:["26","41"],18:["11","41","56S"],19:["11","41"],
+          20:["11S","31","54"],21:["15","40"],22:["08"]
+        },
+        workday_holiday: {
+          5:["07S","31S","55"],6:["19","43"],7:["07","31","56"],8:["14","54"],
+          9:["34"],10:["14","54"],11:["14","54"],12:["14","34"],
+          13:["13","31","43"],14:["07","31","55"],15:["19","43"],16:["07","31","56"],
+          17:["26","41"],18:["14","54"],19:["34"],20:["11S","31","54"],21:["15","40"],22:["08"]
+        },
+        weekend: {
+          6:["35"],7:["13","33"],8:["15","45"],9:["35"],10:["05","55"],
+          11:["25"],12:["15","45"],13:["35"],14:["05","55"],15:["25"],
+          16:["15","45"],17:["35"],18:["05","55"],19:["30"],20:["38"],21:["15","40"],22:["08"]
+        }
       }
     },
     {
-      id: "line51_okruzni_trznice",
+      id: "line51_okruzni",
       line: "51",
       from: "Okružní",
       to: "Tržnice",
       travelMinutes: 12,
       colorClass: "line-51",
+      validFrom: "1.1.2025",
       dpkvUrl: "https://www.dpkv.cz/_data/n-51/51103.htm",
-      // Noční linka – data z dpkv.cz/_data/n-51/51103.htm
+      warnings: [],
+      notes: {},
       departures: {
-        workday: {
-          22: ["46"],
-          23: ["26"],
-          1: ["16"],
-          3: ["06"],
-          4: ["06","46"]
+        workday:         {22:["46"],23:["26"],1:["16"],3:["06"],4:["06","46"]},
+        workday_holiday: {22:["46"],23:["26"],1:["16"],3:["06"],4:["06","46"]},
+        weekend:         {22:["46"],23:["26"],1:["16"],3:["26"],4:["46"],5:["26"],6:["01"]},
+        xmas_night: {
+          18:["26"],19:["26"],20:["26"],21:["26"],22:["26"],23:["26"],
+          1:["16"],3:["26"],4:["26"],5:["26"],6:["25"],7:["25"],
+          8:["25"],9:["25"],10:["23"],11:["03","43"]
         },
-        holiday: {
-          22: ["46"],
-          23: ["26"],
-          1: ["16"],
-          3: ["06"],
-          4: ["06","46"]
-        },
-        weekend: {
-          22: ["46"],
-          23: ["26"],
-          1: ["16"],
-          3: ["26"],
-          4: ["46"],
-          5: ["26"],
-          6: ["01"]
+        nye_night: {
+          21:["26"],22:["26"],23:["26"],
+          1:["16"],3:["26"],4:["26"],5:["26"],6:["25"],7:["25"],
+          8:["25"],9:["25"],10:["23"],11:["03","43"]
         }
       }
     }
   ],
-
   holidays: ["1-1","1-2","5-1","5-8","7-5","7-6","9-28","10-28","11-17","12-24","12-25","12-26"],
-  holidayPeriods: [{ from: "07-01", to: "08-31" },{ from: "12-27", to: "12-31" }],
-  notes: {
-    "S": "pokračuje do Staré Kysibelské",
-    "š": "školní spoj",
-    "P": "jede přímo, nestaví v zast. Slavie",
-    "D": "pokračuje jako linka 6 směr Doubí",
-    "L": "končí v zast. Lidická"
-  }
+  holidayPeriods: [
+    { from: "07-01", to: "08-31" },
+    { from: "12-27", to: "12-31" }
+  ]
 };
 
+// ============================================================
+// STATE
+// ============================================================
 let currentTab = 'departures';
 let useCustomTime = false;
 let customDate = '';
 let customTime = '';
 
 function getRealNow() { return new Date(); }
-
 function getNow() {
   if (useCustomTime && customDate && customTime) return new Date(customDate + 'T' + customTime);
   return getRealNow();
 }
 
+// ============================================================
+// DAY TYPE
+// ============================================================
 function getDayType(date) {
-  const day = date.getDay();
-  const month = date.getMonth() + 1;
-  const dayOfMonth = date.getDate();
-  const dateStr = `${month}-${dayOfMonth}`;
-  if (day === 0 || day === 6 || DATA.holidays.includes(dateStr)) return 'weekend';
-  const mmdd = `${String(month).padStart(2,'0')}-${String(dayOfMonth).padStart(2,'0')}`;
-  for (const p of DATA.holidayPeriods) {
-    if (mmdd >= p.from && mmdd <= p.to) return 'holiday';
-  }
+  const mo = date.getMonth() + 1, d = date.getDate(),
+        h  = date.getHours(),    wd = date.getDay();
+  if (mo === 12 && d === 31 && h >= 22) return 'nye_night';
+  if (mo ===  1 && d ===  1 && h <  13) return 'nye_night';
+  if (mo === 12 && d === 24 && h >= 18) return 'xmas_night';
+  if (mo === 12 && d === 25 && h <  13) return 'xmas_night';
+  if (wd === 0 || wd === 6 || DATA.holidays.includes(`${mo}-${d}`)) return 'weekend';
+  const mmdd = `${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  for (const p of DATA.holidayPeriods) if (mmdd >= p.from && mmdd <= p.to) return 'workday_holiday';
   return 'workday';
 }
 
+function getEffectiveDayType(route, dayType) {
+  const deps = route.departures[dayType];
+  if (deps && Object.keys(deps).length > 0) return dayType;
+  const fallback = { xmas_night:'weekend', nye_night:'weekend', workday_holiday:'workday' };
+  const fb = fallback[dayType];
+  if (fb && route.departures[fb]) return fb;
+  return 'workday';
+}
+
+function getActiveWarnings(route, now) {
+  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  return (route.warnings || []).filter(w => !w.validUntil || w.validUntil >= today);
+}
+
 function getDayTypeLabel(type) {
-  switch(type) {
-    case 'workday': return 'Pracovní den';
-    case 'holiday': return 'Prázdniny / svátky';
-    case 'weekend': return 'Víkend / svátek';
-  }
+  return {
+    workday:         'Pracovní den',
+    workday_holiday: 'Pracovní den – prázdniny',
+    weekend:         'Víkend / svátek',
+    xmas_night:      'Vánoce – noční provoz',
+    nye_night:       'Silvestr / Nový rok – noční provoz'
+  }[type] || type;
 }
 
-function parseMinute(minStr) { return parseInt(minStr.replace(/[^0-9]/g, ''), 10); }
-function getNotes(minStr) {
-  const letters = minStr.replace(/[0-9]/g, '');
-  return letters ? letters.split('').map(l => DATA.notes[l] || l).join(', ') : '';
-}
-function getNoteLetters(minStr) { return minStr.replace(/[0-9]/g, ''); }
+// ============================================================
+// HELPERS
+// ============================================================
+function parseMinute(s) { return parseInt(s.replace(/\D/g,''), 10); }
+function getNoteLetters(s) { return s.replace(/\d/g,''); }
+function formatTime(h, m) { return `${h}:${String(m).padStart(2,'0')}`; }
 
+function formatCountdown(diff) {
+  if (diff <= 0) return 'TEĎ';
+  if (diff < 60) return `za ${diff} min`;
+  return `za ${Math.floor(diff/60)}h ${diff%60}m`;
+}
+function countdownClass(diff) {
+  if (diff <= 15) return 'urgent';
+  if (diff <= 30) return 'warning';
+  return 'normal';
+}
+function formatCzechDate(date) {
+  const days   = ['neděle','pondělí','úterý','středa','čtvrtek','pátek','sobota'];
+  const months = ['ledna','února','března','dubna','května','června','července','srpna','září','října','listopadu','prosince'];
+  return `${days[date.getDay()]}, ${date.getDate()}. ${months[date.getMonth()]}`;
+}
+
+// ============================================================
+// DEPARTURE LOGIC
+// ============================================================
 function getUpcomingDepartures(route, dayType, now, count = 6) {
-  const deps = route.departures[dayType] || {};
-  const currentH = now.getHours();
-  const currentM = now.getMinutes();
-  const nowMin = currentH * 60 + currentM;
-  const results = [];
-
-  // Build flat list of all departures with normalized minutes
-  // Hours 0-6 can mean "next day" for night routes if we're currently past 18:00
+  const effType = getEffectiveDayType(route, dayType);
+  const deps = route.departures[effType] || {};
+  const nowMin = now.getHours() * 60 + now.getMinutes();
   const allDeps = [];
+
   for (let h = 0; h < 24; h++) {
     const hourDeps = deps[h] || [];
     for (const minStr of hourDeps) {
       const m = parseMinute(minStr);
       let totalMin = h * 60 + m;
-      // If it's evening (after 18:00) and this departure is early morning (before 7:00),
-      // treat it as next-day (add 24h)
-      if (nowMin >= 1080 && h < 7) {
-        totalMin += 1440;
-      }
-      allDeps.push({ hour: h, minute: m, minuteStr: minStr, totalMin });
+      if (nowMin >= 1080 && h < 7) totalMin += 1440;
+      if (nowMin < 420  && h >= 22) totalMin -= 1440;
+      allDeps.push({ h, m, minStr, totalMin });
     }
   }
-
-  // Sort by normalized time
   allDeps.sort((a, b) => a.totalMin - b.totalMin);
 
+  const results = [];
   for (const dep of allDeps) {
     const diff = dep.totalMin - nowMin;
     if (diff >= -1) {
+      const arrTotal = dep.h * 60 + dep.m + route.travelMinutes;
       results.push({
-        hour: dep.hour, minute: dep.minute, minuteStr: dep.minuteStr, diff,
-        notes: getNotes(dep.minuteStr),
-        noteLetters: getNoteLetters(dep.minuteStr),
-        arrivalH: Math.floor((dep.hour * 60 + dep.minute + route.travelMinutes) / 60) % 24,
-        arrivalM: (dep.hour * 60 + dep.minute + route.travelMinutes) % 60
+        hour: dep.h, minute: dep.m, minStr: dep.minStr, diff,
+        noteLetters: getNoteLetters(dep.minStr),
+        arrivalH: Math.floor(arrTotal / 60) % 24,
+        arrivalM: arrTotal % 60
       });
     }
     if (results.length >= count) break;
@@ -818,104 +712,51 @@ function getUpcomingDepartures(route, dayType, now, count = 6) {
   return results;
 }
 
-function formatTime(h, m) { return `${h}:${String(m).padStart(2, '0')}`; }
-
-function formatCountdown(diff) {
-  if (diff <= 0) return 'TEĎ';
-  if (diff < 60) return `za ${diff} min`;
-  return `za ${Math.floor(diff/60)}h ${diff%60}m`;
-}
-
-function countdownClass(diff) {
-  if (diff <= 15) return 'urgent';
-  if (diff <= 30) return 'warning';
-  return 'normal';
-}
-
-function formatCzechDate(date) {
-  const days = ['neděle','pondělí','úterý','středa','čtvrtek','pátek','sobota'];
-  const months = ['ledna','února','března','dubna','května','června','července','srpna','září','října','listopadu','prosince'];
-  return `${days[date.getDay()]} ${date.getDate()}. ${months[date.getMonth()]}`;
-}
-
 // ============================================================
-// MODE SWITCHING
+// MODE & HEADER
 // ============================================================
 function updateModeClasses() {
-  const modeClass = useCustomTime ? 'mode-custom' : 'mode-now';
-  const removeClass = useCustomTime ? 'mode-now' : 'mode-custom';
-
-  document.getElementById('header').classList.remove(removeClass);
-  document.getElementById('header').classList.add(modeClass);
-  document.getElementById('statusBar').classList.remove(removeClass);
-  document.getElementById('statusBar').classList.add(modeClass);
-  document.getElementById('tabBar').classList.remove(removeClass);
-  document.getElementById('tabBar').classList.add(modeClass);
-}
-
-function setTimeMode(mode) {
-  useCustomTime = (mode === 'custom');
-  if (!useCustomTime) {
-    customDate = '';
-    customTime = '';
-  } else {
-    const now = getRealNow();
-    customDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    customTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  }
-  updateModeClasses();
-  render();
-}
-
-function onCustomDateChange(val) {
-  customDate = val;
-  renderDepartureCards();
-  updateClockForMode();
-}
-
-function onCustomTimeChange(val) {
-  customTime = val;
-  renderDepartureCards();
-  updateClockForMode();
+  const add = useCustomTime ? 'mode-custom' : 'mode-now';
+  const rem = useCustomTime ? 'mode-now' : 'mode-custom';
+  ['header','statusBar','tabBar'].forEach(id => {
+    document.getElementById(id).classList.remove(rem);
+    document.getElementById(id).classList.add(add);
+  });
 }
 
 function updateClockForMode() {
-  if (useCustomTime && customDate && customTime) {
-    const sim = getNow();
-    const dayType = getDayType(sim);
-    document.getElementById('dayType').textContent = getDayTypeLabel(dayType);
-    document.getElementById('currentTime').textContent = '· ' + formatCzechDate(sim) + ' ' + formatTime(sim.getHours(), sim.getMinutes());
-  } else {
-    const realNow = getRealNow();
-    document.getElementById('dayType').textContent = getDayTypeLabel(getDayType(realNow));
-    document.getElementById('currentTime').textContent = '· ' + formatTime(realNow.getHours(), realNow.getMinutes());
-  }
+  const n = useCustomTime && customDate && customTime ? getNow() : getRealNow();
+  const statusText = formatCzechDate(n) + ' · ' + formatTime(n.getHours(), n.getMinutes());
+  document.getElementById('dayType').textContent = statusText;
+  document.getElementById('currentTime').textContent = '';
 }
 
 // ============================================================
-// RENDERING
+// TABS & RENDER
 // ============================================================
 function showTab(tab) {
   currentTab = tab;
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab')[['departures','timetable','settings'].indexOf(tab)].classList.add('active');
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['departures','timetable','settings'][i] === tab);
+  });
   render();
 }
 
 function render() {
-  switch(currentTab) {
-    case 'departures': renderDepartures(); break;
-    case 'timetable': renderTimetable(); break;
-    case 'settings': renderSettings(); break;
-  }
   updateClockForMode();
+  switch (currentTab) {
+    case 'departures': renderDepartures(); break;
+    case 'timetable':  renderTimetable();  break;
+    case 'settings':   renderSettings();   break;
+  }
 }
 
+// ============================================================
+// DEPARTURES
+// ============================================================
 function renderDepartures() {
-  let html = '';
-
   const vClass = useCustomTime ? ' violet' : '';
-  html += `<div class="time-toggle${vClass}">`;
+  let html = `<div class="time-toggle${vClass}">`;
   html += `<div class="time-toggle-header">`;
   html += `<button class="time-toggle-btn ${!useCustomTime ? 'active-now' : ''}" onclick="setTimeMode('now')">Teď</button>`;
   html += `<button class="time-toggle-btn ${useCustomTime ? 'active-custom' : ''}" onclick="setTimeMode('custom')">Jindy</button>`;
@@ -925,19 +766,12 @@ function renderDepartures() {
   html += `<input type="date" id="customDate" value="${customDate}" onchange="onCustomDateChange(this.value)">`;
   html += `<input type="time" id="customTime" value="${customTime}" onchange="onCustomTimeChange(this.value)">`;
   html += `</div>`;
-
   if (useCustomTime && customDate && customTime) {
-    const simDate = new Date(customDate + 'T' + customTime);
-    const simDayType = getDayType(simDate);
-    html += `<div class="custom-time-info">`;
-    html += `<span class="badge">${getDayTypeLabel(simDayType)}</span>`;
-    html += `<span>${formatCzechDate(simDate)}</span>`;
-    html += `</div>`;
+    const sim = getNow();
+    html += `<div class="custom-time-info"><span class="badge">${getDayTypeLabel(getDayType(sim))}</span><span>${formatCzechDate(sim)}</span></div>`;
   }
-
   html += `</div></div>`;
   html += `<div id="departure-cards"></div>`;
-
   document.getElementById('content').innerHTML = html;
   renderDepartureCards();
 }
@@ -950,43 +784,52 @@ function renderDepartureCards() {
 
   for (const route of DATA.routes) {
     const deps = getUpcomingDepartures(route, dayType, now);
+    const activeWarnings = getActiveWarnings(route, now);
     html += `<div class="route-card${vClass}">`;
     html += `<div class="route-header" onclick="window.open('${route.dpkvUrl}','_blank')">`;
     html += `<div class="line-badge ${route.colorClass}"><span>${route.line}</span></div>`;
     html += `<div class="route-info">`;
     html += `<div class="from-to">${route.from} → ${route.to}</div>`;
     html += `<div class="travel-time">Doba jízdy: <span>${route.travelMinutes} min</span></div>`;
+    if (activeWarnings.length > 0) html += `<div class="route-warning">⚠ ${activeWarnings[0].text}</div>`;
     html += `</div>`;
     html += `<svg width="16" height="16" fill="none" stroke="#5a6380" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>`;
     html += `</div>`;
     html += `<div class="departures-list">`;
-
     if (deps.length === 0) {
-      html += `<div class="no-more">V daném čase ani kolo</div>`;
+      html += `<div class="no-more">V daném čase žádné spoje.</div>`;
     } else {
       deps.forEach((dep, i) => {
         const isNext = i === 0;
-        html += `<div class="departure-row ${isNext ? 'next' + vClass : ''}">`;
+        html += `<div class="departure-row${isNext ? ' next' + vClass : ''}">`;
         html += `<div class="dep-time">${formatTime(dep.hour, dep.minute)}</div>`;
-        if (dep.noteLetters) {
-          html += `<div class="dep-notes" title="${dep.notes}"><sup style="color:var(--warning)">${dep.noteLetters}</sup></div>`;
-        }
+        if (dep.noteLetters) html += `<div class="dep-notes"><sup style="color:var(--warning)">${dep.noteLetters}</sup></div>`;
         html += `<div class="dep-arrival">→ ${formatTime(dep.arrivalH, dep.arrivalM)}</div>`;
         html += `<div class="dep-countdown ${countdownClass(dep.diff)}">${formatCountdown(dep.diff)}</div>`;
         html += `</div>`;
       });
+      // Legenda — jen použitá písmena
+      const usedLetters = [...new Set(deps.flatMap(d => d.noteLetters.split('')).filter(Boolean))];
+      const relevantNotes = usedLetters.filter(l => route.notes[l]);
+      if (relevantNotes.length > 0) {
+        html += `<div class="dep-legend">`;
+        for (const l of relevantNotes) html += `<div class="dep-legend-item"><span>${l}</span> – ${route.notes[l]}</div>`;
+        html += `</div>`;
+      }
     }
     html += `</div></div>`;
   }
-
-  const container = document.getElementById('departure-cards');
-  if (container) container.innerHTML = html;
+  document.getElementById('departure-cards').innerHTML = html;
 }
 
+// ============================================================
+// TIMETABLE
+// ============================================================
 function renderTimetable() {
   const now = getNow();
   const dayType = getDayType(now);
   const currentH = now.getHours();
+  const vClass = useCustomTime ? ' violet' : '';
 
   let html = `<div class="timetable-selector">`;
   html += `<select id="tt-route" onchange="renderTimetable()">`;
@@ -995,60 +838,57 @@ function renderTimetable() {
   });
   html += `</select>`;
   html += `<select id="tt-daytype" onchange="renderTimetable()">`;
-  html += `<option value="auto" ${!document.getElementById('tt-daytype') || document.getElementById('tt-daytype').value === 'auto' ? 'selected' : ''}>Dnes (${getDayTypeLabel(dayType)})</option>`;
+  html += `<option value="auto">Dnes (${getDayTypeLabel(dayType)})</option>`;
   html += `<option value="workday">Pracovní den</option>`;
-  html += `<option value="holiday">Prázdniny</option>`;
+  html += `<option value="workday_holiday">Pracovní den – prázdniny</option>`;
   html += `<option value="weekend">Víkend / svátek</option>`;
+  html += `<option value="xmas_night">Vánoce – noční provoz</option>`;
+  html += `<option value="nye_night">Silvestr / Nový rok – noční provoz</option>`;
   html += `</select></div>`;
 
   const routeIdx = document.getElementById('tt-route') ? parseInt(document.getElementById('tt-route').value) : 0;
   const dtVal = document.getElementById('tt-daytype') ? document.getElementById('tt-daytype').value : 'auto';
   const showDayType = dtVal === 'auto' ? dayType : dtVal;
   const route = DATA.routes[routeIdx];
-  const deps = route.departures[showDayType] || {};
-
-  const ttViolet = dtVal !== 'auto' ? ' violet' : '';
+  const effType = getEffectiveDayType(route, showDayType);
+  const deps = route.departures[effType] || {};
+  const ttViolet = dtVal !== 'auto' ? ' violet' : vClass;
 
   html += `<div style="margin-bottom:8px;font-size:0.8rem;color:var(--text2)">`;
-  html += `Doba jízdy ${route.from} → ${route.to}: <strong style="color:var(--blue3)">${route.travelMinutes} min</strong></div>`;
+  html += `Doba jízdy ${route.from} → ${route.to}: <strong style="color:var(--blue3)">${route.travelMinutes} min</strong>`;
+  if (dtVal !== 'auto' && effType !== showDayType) {
+    html += ` <span style="color:var(--warning);font-size:0.7rem">(zobrazeno: ${getDayTypeLabel(effType)})</span>`;
+  }
+  html += `</div>`;
 
   html += `<div class="timetable-grid${ttViolet}">`;
-  for (let h = 4; h <= 24; h++) {
-    const hour = h % 24;
-    const minutes = deps[hour] || [];
-    if (minutes.length === 0 && (hour < 5 || hour > 22)) continue;
-    const isCurrent = hour === currentH && dtVal === 'auto';
-    html += `<div class="timetable-row ${isCurrent ? 'current-hour' : ''}">`;
-    html += `<div class="timetable-hour">${hour}</div>`;
+  for (let h = 0; h < 24; h++) {
+    const minutes = deps[h] || [];
+    if (minutes.length === 0) continue;
+    const isCurrent = h === currentH && dtVal === 'auto';
+    html += `<div class="timetable-row${isCurrent ? ' current-hour' : ''}">`;
+    html += `<div class="timetable-hour">${h}</div>`;
     html += `<div class="timetable-minutes">`;
-    if (minutes.length === 0) {
-      html += `<span style="color:var(--text3);font-size:0.75rem">—</span>`;
-    } else {
-      minutes.forEach(m => {
-        const letters = getNoteLetters(m);
-        const hasNote = letters.length > 0;
-        html += `<span class="min ${hasNote ? 'has-note' : ''}" title="${hasNote ? getNotes(m) : ''}">${m}</span>`;
-      });
-    }
+    minutes.forEach(m => {
+      const hasNote = getNoteLetters(m).length > 0;
+      html += `<span class="min${hasNote ? ' has-note' : ''}">${m}</span>`;
+    });
     html += `</div></div>`;
   }
   html += `</div>`;
 
-  const allNotes = new Set();
-  for (const dt of Object.values(route.departures)) {
-    for (const mins of Object.values(dt)) {
-      for (const m of mins) {
-        const l = getNoteLetters(m);
-        if (l) l.split('').forEach(c => allNotes.add(c));
-      }
-    }
-  }
-  if (allNotes.size > 0) {
+  // Legenda
+  const allNotes = Object.keys(route.notes);
+  if (allNotes.length > 0) {
     html += `<div class="legend" style="margin-top:8px;border-radius:var(--radius)">`;
-    allNotes.forEach(n => {
-      html += `<div class="legend-item"><span>${n}</span> – ${DATA.notes[n] || '?'}</div>`;
-    });
+    for (const n of allNotes) html += `<div class="legend-item"><span>${n}</span> – ${route.notes[n]}</div>`;
     html += `</div>`;
+  }
+
+  // Výluky
+  const activeWarnings = getActiveWarnings(route, now);
+  for (const w of activeWarnings) {
+    html += `<div style="margin-top:8px;padding:8px 12px;background:rgba(245,158,66,0.08);border:1px solid rgba(245,158,66,0.2);border-radius:10px;font-size:0.78rem;color:var(--warning)">⚠ ${w.text}</div>`;
   }
 
   html += `<a class="dpkv-link" href="${route.dpkvUrl}" target="_blank">Zobrazit na webu DPKV ↗</a>`;
@@ -1057,55 +897,62 @@ function renderTimetable() {
   if (document.getElementById('tt-daytype')) document.getElementById('tt-daytype').value = dtVal;
 }
 
+// ============================================================
+// SETTINGS
+// ============================================================
 function renderSettings() {
-  let html = '';
-  html += `<div class="settings-section">`;
-  html += `<div class="settings-title">Moje sledované linky</div>`;
+  let html = `<div class="settings-section"><div class="settings-title">Sledované linky</div>`;
   DATA.routes.forEach(r => {
+    const warnings = getActiveWarnings(r, getRealNow());
     html += `<div class="settings-item">`;
     html += `<div class="line-badge ${r.colorClass}" style="min-width:36px;height:36px;font-size:1rem;border-radius:8px"><span>${r.line}</span></div>`;
-    html += `<div class="label">${r.from} → ${r.to}<br><span style="font-size:0.7rem;color:var(--text2)">Jízda ${r.travelMinutes} min</span></div>`;
+    html += `<div class="label">${r.from} → ${r.to}<br><span style="font-size:0.7rem;color:var(--text2)">Jízda ${r.travelMinutes} min · platí od ${r.validFrom}</span>`;
+    if (warnings.length > 0) html += `<br><span style="font-size:0.7rem;color:var(--warning)">⚠ ${warnings[0].text}</span>`;
+    html += `</div>`;
+    html += `<a href="${r.dpkvUrl}" target="_blank" style="color:var(--blue3);font-size:0.75rem">dpkv.cz ↗</a>`;
     html += `</div>`;
   });
   html += `</div>`;
 
-  html += `<div class="settings-section">`;
-  html += `<div class="settings-title">Jak přidat / změnit linku</div>`;
-  html += `<div style="padding:14px;font-size:0.8rem;color:var(--text2);line-height:1.6">`;
-  html += `<p style="margin-bottom:10px">Tato aplikace čte data ze souboru, který si snadno upravíte:</p>`;
-  html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">1.</strong> Otevřete soubor <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">index.html</code> v textovém editoru</p>`;
-  html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">2.</strong> Najděte sekci <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">DATA.routes</code></p>`;
-  html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">3.</strong> Zkopírujte existující blok linky a upravte číslo, zastávky, URL a časy</p>`;
-  html += `<p style="margin-bottom:8px"><strong style="color:var(--text)">4.</strong> Časy najdete na stránce DPKV: <a href="https://www.dpkv.cz/cz/jizdni-rady/denni-linky/" target="_blank" style="color:var(--blue3)">dpkv.cz → Jízdní řády</a></p>`;
-  html += `<p><strong style="color:var(--text)">5.</strong> Klikněte na zastávku – otevře se HTM stránka s časy</p>`;
-  html += `</div></div>`;
-
-  html += `<div class="settings-section">`;
-  html += `<div class="settings-title">O aplikaci</div>`;
-  html += `<div style="padding:14px;font-size:0.8rem;color:var(--text2);line-height:1.6">`;
-  html += `<p>MHD KV – osobní jízdní řád</p>`;
-  html += `<p>Data: Dopravní podnik Karlovy Vary (dpkv.cz)</p>`;
-  html += `<p>Platnost dat: od 15.12.2025</p>`;
-  html += `<p style="margin-top:8px"><a href="https://www.dpkv.cz" target="_blank" style="color:var(--blue3)">www.dpkv.cz</a> · <a href="https://dopravniportal.dpkv.cz" target="_blank" style="color:var(--blue3)">Dopravní portál</a></p>`;
+  html += `<div class="settings-section"><div class="settings-title">Verze dat</div>`;
+  html += `<div style="padding:14px;font-size:0.8rem;color:var(--text2);line-height:1.7">`;
+  html += `Data sestavena: <strong style="color:var(--text)">12.5.2026</strong><br>`;
+  html += `Zdroj: <a href="https://www.dpkv.cz" target="_blank" style="color:var(--blue3)">dpkv.cz ↗</a>`;
   html += `</div></div>`;
 
   document.getElementById('content').innerHTML = html;
 }
 
 // ============================================================
-// CLOCK & AUTO-REFRESH
+// TIME MODE
+// ============================================================
+function setTimeMode(mode) {
+  useCustomTime = (mode === 'custom');
+  if (useCustomTime) {
+    const n = getRealNow();
+    customDate = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+    customTime = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  } else {
+    customDate = ''; customTime = '';
+  }
+  updateModeClasses();
+  render();
+}
+function onCustomDateChange(v) { customDate = v; render(); }
+function onCustomTimeChange(v) { customTime = v; render(); }
+
+// ============================================================
+// TICK
 // ============================================================
 function tick() {
   updateClockForMode();
-  if (currentTab === 'departures' && !useCustomTime) {
-    renderDepartureCards();
-  }
+  if (currentTab === 'departures' && !useCustomTime) renderDepartureCards();
 }
 
 updateModeClasses();
 updateClockForMode();
 render();
-setInterval(tick, 60000); // refresh každou minutu
+setInterval(tick, 60000);
 </script>
 </body>
 </html>
