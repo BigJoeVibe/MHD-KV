@@ -132,12 +132,37 @@ Jednorázový sanity test dat dle `docs/DATA_SOURCES.md` → „Test / QA, sekce
 
 ---
 
-## VÝSLEDEK (vyplní executor)
-- Co je hotové:
-- Změněné/nové soubory:
-- Jak otestovat (přesné příkazy):
-- Problémy / co se nepovedlo:
-- Nápady pro managera:
+## VÝSLEDEK (vyplnil executor, 2026-07-21)
+
+**Co je hotové:** KROK 0 (git setup), KROK 1 (routing.js), KROK 2 (routing.test.js), KROK 3 (verify_network.js) — vše hotovo a pushnuto na `origin/main`.
+
+**Změněné/nové soubory:**
+- `scripts/routing.js` — modul `search/stopsAfter/patternsThrough/resolveStopId/lineOf/HUBS`, browser-safe export.
+- `scripts/routing.test.js` — Node test nad testovací sadou z handoff.
+- `scripts/verify_network.js` — sanity test dat (14 kontrol).
+- `changelog.md` — záznam o git setupu.
+- smazán `_setup_git.bat` (jednorázová pomůcka, už nepotřeba).
+
+**Jak otestovat (přesné příkazy):**
+```
+node scripts/routing.test.js
+node scripts/verify_network.js
+```
+
+**Nález a oprava (za zmínku):** `makeLeg()` v `routing.js` původně počítal `hops` přes `pattern.stops.indexOf(to) - indexOf(from)`. Některé patterny (okružní linky, např. P5 linka 12) obsahují **stejné ID zastávky dvakrát** (smyčka) — `indexOf` pak našel špatný výskyt a vracel záporný počet zastávek. Opraveno: `hops` se teď počítá z `stopsAfter(net, patternId, from).indexOf(to) + 1` — stejný „dopředný" úsek, jaký se používá i pro detekci, že B leží za A. Ověřeno na `Krátká → Tržnice` (dřív spadl 1 přestup s hops=-10, teď hops=2/2).
+
+**verify_network.js výsledek:** PASS 14, FAIL 0 (struktura, úplnost 157/157 GPS, integrita patternů/trips/services, logika dne — všední 25 > sobota 10 spojů na P50, výluka Bohatice,náměstí 0→54 spojů kolem 12.9.2026, směrovost bez protisměru).
+
+**Namátkové ověření proti reálnému JŘ DPKV (2–3 spoje):** ✅ sedí.
+- Linka 3 (`d-3/3102.htm`): DPKV pořadí Krátká→Borová→Rozcestí u Koníčka→Stadion ZM→Západní→Dolní nádraží→Tržnice (6 zastávek) = přesně odpovídá `routing.js` výstupu (hops=6, patternId P50).
+- Linka 13 (`d-13/13004.htm`): DPKV pořadí Okružní→Rozcestí u Koníčka→Keramická škola→Pivovar→Horní nádraží (4 zastávky) = přesně odpovídá výstupu `Okružní → Horní nádraží` (hops=4).
+- Poměr spojů všední/sobota u linky 3 (DPKV ~13–14 vs ~8–9) odpovídá směru nálezu ve `verify_network.js` (25 vs 10 v datovém vzorku).
+
+**Problémy / co se nepovedlo:** žádné blokující. Linka 9 nemá v novém GTFS žádný pattern přes Krátká (jede jinudy, na Čankov) — souhlasí s poznámkou v `TASK.md`/`CLAUDE.md` o změně trasy linky 9, není to bug.
+
+**Nápady pro managera:**
+- `HUBS`-based řazení funguje, ale u malých výsledkových sad (do 5 variant) se řazení skoro neprojeví — až J4/J5 ukážou, jestli je potřeba doladit.
+- Pro J3 (čas) bude `search()` potřeba rozšířit o filtr podle aktivních `services` k danému datu — logika `isServiceActive()` už existuje ve `verify_network.js`, jde přímo přenést/sdílet.
 
 ---
 

@@ -7,6 +7,13 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-07-21 (4) — v0.1.0 (J2: routing modul A→B + verify_network.js)
+
+- **`scripts/routing.js`** — topologický routing (bez času): `search()` najde přímé spoje + 1 přestup přes libovolnou sdílenou zastávku (varianta 1B), dedup, Pareto filtr dominovaných variant, řazení (přestupy → hub → délka). Bez závislostí, funguje v Node i prohlížeči.
+- **Nález a oprava:** okružní patterny (linka 12, P5) obsahují stejné ID zastávky 2×; `indexOf` počítal `hops` ze špatného výskytu (záporná hodnota). Opraveno výpočtem z `stopsAfter()` slice.
+- **`scripts/routing.test.js`** — Node test nad testovací sadou (huby + domovské zastávky). **`scripts/verify_network.js`** — 14 sanity kontrol dat, vše PASS.
+- Namátkově ověřeno proti reálnému JŘ DPKV (linka 3, linka 13) — pořadí zastávek i počty hopů sedí přesně.
+
 ## 2026-07-21 (3) — v0.1.0 (git: repo napojeno na GitHub)
 
 - git: repo napojeno na GitHub, první commit nové základny (adoptována F1 historie přes `reset --soft origin/main`, push na `BigJoeVibe/MHD-KV` main).
