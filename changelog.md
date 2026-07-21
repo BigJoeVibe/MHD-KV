@@ -7,6 +7,10 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-07-21 (3) — v0.1.0 (git: repo napojeno na GitHub)
+
+- git: repo napojeno na GitHub, první commit nové základny (adoptována F1 historie přes `reset --soft origin/main`, push na `BigJoeVibe/MHD-KV` main).
+
 ## 2026-07-21 — v0.1.0 (návrh J8: automatická obnova dat)
 
 - Rešerše zdrojů (dadof.ggu.cz, JrUtil): potvrzen JrUtil GTFS (má GPS, denně) jako hlavní; CIS MHD JDF (`portal.cisjr.cz/pub/draha/mestske/`) jako záložní/primární bez GPS.
