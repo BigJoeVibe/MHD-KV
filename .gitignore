@@ -1,0 +1,40 @@
+# Nikdy necommitovat: klíče, hesla, buildy, závislosti, zálohy.
+
+# Tajemství a konfigurace
+.env
+.env.*
+*.pem
+*.key
+secrets*
+
+# Závislosti
+node_modules/
+venv/
+__pycache__/
+
+# Buildy a výstupy
+dist/
+build/
+out/
+*.apk
+*.exe
+*.zip
+
+# IDE a OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Zálohy (lokální, mimo repo)
+_zalohy/
+MHD_test/
+*.bak
+
+# Syrová GTFS data (velká, mimo repo) — appka používá jen data/network.json
+# Obnova: stáhnout GTFS + node scripts/build_network.js (viz docs/DATA_SOURCES.md)
+data_raw/
+
+# Pomocné soubory jednorázového git setupu (necommitovat)
+_setup_git.bat
+_git_setup_log.txt
