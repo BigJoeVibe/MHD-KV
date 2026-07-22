@@ -138,3 +138,35 @@ Integrace času do `search()`: ke každé variantě z routingu dopočítat reál
 příjezdy a **garantovanou návaznost** přestupu (druhý spoj odjíždí po příjezdu prvního
 + min. rezerva). Použije helpery z `timetable.js`. Řeší témata 1–4 výše. Spec připraví
 manager po uzavření kroku C.
+
+---
+
+## VÝSLEDEK (vyplnil executor, 2026-07-22)
+
+**Co je hotové:** KROK C1 (`timetable.js`), KROK C2 (`timetable.test.js`), KROK C3 (rozšíření `verify_network.js`) — vše hotovo a pushnuto na `origin/main`. Krok B NEimplementován (jak bylo zadáno).
+
+**Změněné/nové soubory:**
+- `scripts/timetable.js` — `isServiceActive`, `activeServicesOn`, `patternDeparturesOn`, `nextDepartures`. Browser-safe export (`window.MHDTimetable`).
+- `scripts/timetable.test.js` — čitelný výpis pro Krátká/Tržnice/Horní nádraží (všední den 8:00+20:00, sobota 8:00+20:00) + linka 51 kolem půlnoci.
+- `scripts/verify_network.js` — přidána sekce „Časová vrstva (J3-lite)" (4 nové kontroly).
+
+**Jak otestovat (přesné příkazy):**
+```
+node scripts/timetable.test.js
+node scripts/verify_network.js
+```
+
+**Nález za zmínku (ne bug, ale důležité pro B i pro budoucí čtení dat):** `net.trips[patternId]` obsahuje buď `[startMin, serviceId]`, nebo `[startMin, serviceId, offs]` — 3. prvek je **vlastní `off` pole pro ten konkrétní spoj**, když se liší od šablony patternu (~45 % spojů, viz komentář v `build_network.js:85`). Handoff/spec to explicitně nezmiňoval — `nextDepartures` proto přednostně používá `trip[2]`, a jen když chybí, padá na `pattern.off`. Bez tohoto by časy sedly jen zhruba polovině spojů (ty se špičkovým/sedlovým rozvrhem by měly posunuté odjezdy o pár minut). **Stejnou logiku bude nutné použít i v kroku B.**
+
+**verify_network.js výsledek:** PASS 18, FAIL 0 (původních 14 + 4 nové: neprázdné pole odjezdů z Krátké, rostoucí časy, všední > sobota počet odjezdů, žádný záporný `depMin`).
+
+**Namátkové ověření proti reálnému JŘ DPKV (raw HTML, ne jen AI shrnutí stránky — shrnutí se u tabulek ukázalo nespolehlivé):**
+- **Linka 3, Krátká, všední den:** DPKV `d-3/3102.htm` uvádí odjezd v 8:27 (hodina 8, minuta „27"). `nextDepartures(net,'Krátká','20260202',480)` vrátil `08:27 linka 3 → Stará Kysibelská` — **přesná shoda**.
+- **Linka 51, Okružní, kolem půlnoci:** DPKV `n-51/51103.htm` (aktuální zastávka = Okružní) uvádí pro pracovní den: 22:46, 23:26, 1:16, 3:06 (směr Garáže MHD). `nextDepartures` vrátil `22:46`/`23:26`/`01:16`/`03:06` linka 51 → Garáže MHD — **přesná shoda ve všech 4 časech**, včetně správného zachycení přechodu přes půlnoc (23:26 → 01:16 bez ztráty pořadí).
+- Zastávka Krátká (o 1 minutu dřív než Okružní na téže trase) v mých datech vycházela konzistentně o 1 min dřív (01:15 vs Okružní 01:16) — sedí s pořadím zastávek v DPKV seznamu (Krátká je zastávka před Okružní).
+
+**Problémy / co se nepovedlo:** žádné blokující. `handoff.md` tentokrát neobsahoval prázdnou šablonu VÝSLEDEK — přidal jsem sekci na konec ve stejném formátu jako u J2.
+
+**Nápady pro managera:**
+- Nález o `trips[…][2]` (custom offs) je zásadní i pro krok B — až se bude řešit návaznost přestupu, počítat depMin/arrMin vždy přes stejnou (nyní opravenou) logiku, ne přes `pattern.off` natvrdo.
+- Otevřená témata 1–4 (předěl dne u přestupu, svátky/prázdniny, letní/zimní čas, min. čas na přestup) zůstávají nedotčená — čekají na spec kroku B.

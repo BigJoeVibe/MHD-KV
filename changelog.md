@@ -7,6 +7,13 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-07-22 — v0.1.0 (J3 KROK C: časová vrstva timetable.js)
+
+- **`scripts/timetable.js`** — `isServiceActive`/`activeServicesOn`/`patternDeparturesOn`/`nextDepartures`. Zatím **neintegrováno** do `routing.js` search() (to je KROK B).
+- **Nález:** ~45 % spojů má vlastní `off` (odchylné mezičasy špička/sedlo) jako 3. prvek v `trips[patternId]` — `nextDepartures` to musí použít místo šablony patternu, jinak by čas sedl jen pro ~55 % spojů. Ošetřeno.
+- **`scripts/timetable.test.js`** — čitelný výpis odjezdů (Krátká/Tržnice/Horní nádraží, všední/sobota, + linka 51 kolem půlnoci). **`verify_network.js`** rozšířen o 4 časové kontroly (neprázdné pole, rostoucí časy, všední > sobota, žádný záporný čas) — souhrn 18/18 PASS.
+- **Namátkově ověřeno proti reálnému JŘ DPKV (stažen raw HTML, ne jen shrnutí):** linka 3 Krátká 08:27 → Stará Kysibelská (přesná shoda); linka 51 Okružní 22:46/23:26/01:16/03:06 → Garáže MHD (přesná shoda ve všech 4 časech, včetně přechodu přes půlnoc).
+
 ## 2026-07-21 (4) — v0.1.0 (J2: routing modul A→B + verify_network.js)
 
 - **`scripts/routing.js`** — topologický routing (bez času): `search()` najde přímé spoje + 1 přestup přes libovolnou sdílenou zastávku (varianta 1B), dedup, Pareto filtr dominovaných variant, řazení (přestupy → hub → délka). Bez závislostí, funguje v Node i prohlížeči.
