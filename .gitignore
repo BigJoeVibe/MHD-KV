@@ -23,6 +23,7 @@ out/
 # IDE a OS
 .vscode/
 .idea/
+.claude/
 Thumbs.db
 .DS_Store
 

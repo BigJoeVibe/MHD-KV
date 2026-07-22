@@ -14,10 +14,12 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
 - **Repo (GitHub):** `BigJoeVibe/MHD-KV`, branch `main`
 - **Aktuální verze:** v0.1.0 (F1 komplet). Schéma: 0.x = vývojové/testovací
   verze; 1.0.0 přijde, až appka pokryje širší cíl (rozhodnuto 17. 7. 2026).
-- **Stav:** F1 běží na GitHub Pages. **Aktivní směr (od 19. 7. 2026): jádro vyhledávání A→B** nad novým
-  síťovým modelem z KV GTFS. **J1 (síťový model) HOTOVO** — `data/network.json` + `scripts/build_network.js`.
+- **Stav:** F1 běží na GitHub Pages. Repo napojené na GitHub, git dělá Claude Code (executor).
+  **Aktivní směr (od 19. 7. 2026): jádro vyhledávání A→B** nad síťovým modelem z KV GTFS.
+  **J1 (síťový model) HOTOVO** — `data/network.json` + `scripts/build_network.js`.
+  **J2 (routing A→B) HOTOVO 21.7.** — `scripts/routing.js` (+`routing.test.js`, `verify_network.js` 14/14). Zrevidováno, pushnuto.
   **J8 (auto-obnova dat) NAVRŽENO** (GitHub Actions) — viz `docs/DATA_SOURCES.md`.
-  Další: **J2 routing A→B**. Viz `handoff.md`, `TASK.md` (sekce TEĎ).
+  Další: **J3 — časová vrstva**. Viz `TASK.md` (sekce TEĎ); `handoff.md` je mezi úkoly uzavřená (spec J3 připraví manager po schválení).
 
 ## Dělba rolí
 
@@ -76,6 +78,12 @@ Práce běží přes dvě „Claude" plochy; sdílený kanál = **soubory v tét
   ve svém terminálu — commit i push po každém uzavřeném kroku. Cowork manager
   git nedělá (jen připraví commit message a spec). Detail: kod-jadro
   `references/git-a-verzovani.md`. Repo je přímo tato složka (žádný druhý klon).
+- ⚠️ **Cowork manager NIKDY nespouští git** (ani `git status`) v sandboxu nad
+  touto složkou — mount neumí smazat zámky a nechá stale `.git/index.lock`,
+  který pak blokuje commit. Když lock vznikne, Claude Code ho smaže:
+  `rm -f .git/index.lock` (Windows: `del .git\index.lock`) a pokračuje.
+- **Nezacommitované manager úpravy dokumentace** (TASK/CLAUDE/handoff/.gitignore
+  z 21.7. po J2) commitne příští běh executora spolu s J3.
 - **Commit vždy oba HTML soubory:** `index.html` + `index_raw.html`
   (+ `favicon.svg`, pokud se měnil).
 - Před větším zásahem záloha (kopie do `MHD_test/` nebo `_zalohy/`, obojí mimo repo).

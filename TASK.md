@@ -8,15 +8,15 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 | # | Úkol | Priorita | Stav | Pozn. |
 |---|------|----------|------|-------|
 | J1 | **Síťový model z KV GTFS** (stops + patterns + trips + services) | vysoká | ✅ HOTOVO 19.7. | `data/network.json` (62 KB gzip) + `scripts/build_network.js`. 23 linek, 157 zast./všechny GPS, 290 patternů |
-| J2 | **Routing A→B** (přímé + 1 přestup) v JS | vysoká | ⭐ TEĎ | prototyp v `proto_routing.py`; přidat řazení (min přestupů → čas) + filtr dominovaných variant; **směrové** (headsign u výsledku) |
-| J3 | **Časová vrstva** (nejbližší odjezd, čekání na přestup, půlnoc 51) | vysoká | čeká na J2 | aktivní dny přes `calendar`+`calendar_dates` (logika ověřena v buildu) |
+| J2 | **Routing A→B** (přímé + 1 přestup) v JS | vysoká | ✅ HOTOVO 21.7. | `scripts/routing.js` (+`routing.test.js`, `verify_network.js` 14/14 PASS). Směrové + headsign, dedup, Pareto filtr, huby v řazení. Zrevidováno managerem, pushnuto. |
+| J3 | **Časová vrstva** (nejbližší odjezd, čekání na přestup, půlnoc 51) | vysoká | ⭐ TEĎ | **postup C→B** (Joe 22.7.). `isServiceActive()` je ve `verify_network.js` → přenést do nového `scripts/timetable.js` |
 
-**J2 — podúkoly (návrh 2026-07-21):**
-- Modul routingu v JS nad `network.json`: helpery `stopsAfter(pattern, stop)`, `linesThrough(stop)`.
-- Přímé spoje (B leží za A ve stejném patternu) + 1 přestup přes uzel (huby: U koníčka, Tržnice, Stadion ZM, Horní nádraží).
-- Každý výsledek nese **konečnou (headsign)** každé nohy; **směrově** (ne protisměr).
-- Dedup + řazení (min. přestupů → délka) + filtr dominovaných variant. **Zatím bez času** (topologie); čas = J3.
-- **Test:** v Node proti `network.json` na hubech, namátkou proti JŘ DPKV.
+**J3 — postup (rozhodnuto 2026-07-22, C→B):**
+- **KROK C (teď, spec v `handoff.md`):** samostatný `scripts/timetable.js` (`nextDepartures` ze zastávky k datu/času, směrově, noční 51) + `timetable.test.js` + 2–3 kontroly ve `verify_network.js`. NEintegruje se do `search()`, ověří se proti reálnému JŘ.
+- **KROK B (příště):** integrace času do `search()` — reálná návaznost přestupu (dojezd + rezerva + odjezd 2. spoje). Řeší otevřená témata níže.
+- **Otevřená témata pro B (22.7.):** (1) předěl typu dne přes půlnoc u přestupu — aktivitu 2. nohy počítat k jejímu datu; (2) předěly svátek/prázdniny/víkend brát pro každou nohu zvlášť; (3) přechod letní/zimní čas (2×/rok, chybějící/dvojitá hodina kolem 02–03:00); (4) min. čas na přestup na uzlu — ✅ **3–5 min** (Joe 22.7.).
+
+**J2 — HOTOVO (2026-07-21):** `scripts/routing.js` (search + helpery, browser-safe), `routing.test.js`, `verify_network.js` (14/14 PASS). Nález+oprava: okružní patterny mají zastávku 2× → `indexOf` dával záporné `hops`, opraveno přes `stopsAfter`. Ověřeno proti JŘ DPKV (linka 3, 13). Detail v `handoff.md` → VÝSLEDEK.
 
 **Test zpracování dat (viz `docs/DATA_SOURCES.md` → Test / QA):**
 - `scripts/verify_network.js` = **jednorázový** sanity test po buildu (struktura, GPS, výluka Bohatice, směrovost). Doporučeno udělat spolu s J2.
@@ -50,6 +50,8 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 | ~~Varianty linek~~ | řešeno patterny+headsign (290 patternů) | ✅ v J1 |
 | Směrovost odjezdů | odjezd/výsledek vždy „směrem ke konečné" (jinak mix směrů) | do J2/J4 |
 | Přestup | čas na přestup / pěší dostupnost mezi označníky; huby: U koníčka, Tržnice, Stadion ZM, Horní nádraží | do J3/J5 |
+| Předěl typu dne u přestupu | přestup přes půlnoc → 2. noha jiný kalendářní den/typ dne (svátek/prázdniny/víkend); počítat aktivitu k datu každé nohy | do J3-B |
+| Letní/zimní čas | 2×/rok předěl (ne v III/X); kolem 02–03:00 chybějící/dvojitá hodina — ověřit dopad na `startMin` a nejbližší odjezd | do J3-B |
 | ~~.gitignore~~ | `data_raw/` NEcommitovat | ✅ přidáno 19.7. |
 | Mapa v UI | Leaflet = 1. externí závislost (poruší „no-dep") → rozhodnout | do J5 |
 | Stará appka | nechat F1 běžet, nebo přepsat na nový model? | do J7 |
