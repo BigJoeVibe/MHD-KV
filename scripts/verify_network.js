@@ -5,6 +5,7 @@
 const path = require("path");
 const net = require(path.join(__dirname, "..", "data", "network.json"));
 const { stopsAfter, resolveStopId } = require("./routing.js");
+const { nextDepartures } = require("./timetable.js");
 
 let passCount = 0;
 let failCount = 0;
@@ -169,6 +170,38 @@ if (directionOk) {
   pass("odjezdy z Kratke smer Trznice neobsahuji protismer v ramci jednoho patternu");
 } else {
   fail("nalezen pattern s Trznici pred i po Kratke (mozna smycka/duplicitni zaznam)");
+}
+
+// --- Casova vrstva (J3-lite) ---
+console.log("\n--- Casova vrstva (J3-lite) ---");
+const depsWorkday = nextDepartures(net, "Krátká", workdaySample, 0, { limit: 1000 });
+const depsSaturday = nextDepartures(net, "Krátká", saturdaySample, 0, { limit: 1000 });
+
+if (depsWorkday.length > 0) {
+  pass(`nextDepartures z Kratke (vsedni ${workdaySample}) vraci neprazdne pole (${depsWorkday.length} odjezdu)`);
+} else {
+  fail(`nextDepartures z Kratke (vsedni ${workdaySample}) vratilo prazdne pole`);
+}
+
+const isIncreasing = depsWorkday.every((r, i) => i === 0 || r.depMin >= depsWorkday[i - 1].depMin);
+if (isIncreasing) {
+  pass("casy z nextDepartures jsou rostouci (vzestupne serazene)");
+} else {
+  fail("casy z nextDepartures NEJSOU rostouci");
+}
+
+console.log(`INFO: Kratka odjezdu: vsedni ${workdaySample}=${depsWorkday.length}, sobota ${saturdaySample}=${depsSaturday.length}`);
+if (depsWorkday.length > depsSaturday.length) {
+  pass(`vsedni den ma vic odjezdu z Kratke nez sobota (${depsWorkday.length} > ${depsSaturday.length})`);
+} else {
+  fail(`vsedni den NEMA vic odjezdu z Kratke nez sobota (${depsWorkday.length} vs ${depsSaturday.length})`);
+}
+
+const noNegative = depsWorkday.every((r) => r.depMin >= 0) && depsSaturday.every((r) => r.depMin >= 0);
+if (noNegative) {
+  pass("zadny depMin neni zaporny");
+} else {
+  fail("nalezen zaporny depMin");
 }
 
 // --- Souhrn ---
