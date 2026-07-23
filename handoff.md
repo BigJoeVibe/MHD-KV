@@ -1,224 +1,134 @@
-# Handoff — EXECUTOR spec (J3 časová vrstva — KROK B: časové plánování spojení A→B)
+# Handoff — EXECUTOR spec (Zpevnění jádra — PŘEDÁVKA 1: H0 data-integrita + H1 routing + H2 řazení časem)
 
-> 🟢 **AKTIVNÍ ZADÁNÍ (manager, 2026-07-23).** KROK C je HOTOVÝ a pushnutý
-> (`timetable.js`, 18/18 PASS, ověřeno proti reálnému JŘ). Archiv C je v gitu
-> a v `changelog.md`.
-> **Teď KROK B:** nový modul `scripts/journey.js`, který nad topologickými trasami
-> ze `search()` (routing.js) dopočítá **reálné časy** a **garantovanou návaznost
-> přestupu**. Jádro je čistě výpočetní (bez UI). Zadávání polohy (mapa/GPS) a
-> oblíbené řeší J5/J6 — **teď se jich netýkáme**.
+> 🟢 **AKTIVNÍ ZADÁNÍ (manager, 2026-07-23).** J3 (časová vrstva) je HOTOVÉ a pushnuté
+> (`journey.js`, 20/20 PASS). Teď **zpevnění jádra před UI (J4)**. Archiv J3 je v gitu a `changelog.md`.
+> **Rozsah této předávky:** H0 (oprava chybějících GPS + zpřísnění kontroly), H1 (robustnost
+> routingu), H2 (řazení podle času, připravené pro UI filtry), H4 (testy).
+> **NEŘEŠÍ se tu:** pěší přestup 30–200 m ani směrové pozice označníků — to je nový epic **J9**
+> (viz `docs/ROADMAP.md`). Tady jen **propojení fakticky totožných zastávek (≤ 30 m)**.
 
-> **Předávka pro nižší CC (executor).** Manager připravil zadání; executor
-> implementuje kód dle bodů níže, **nedělá nic nad zadání**. Git děláš ty (executor).
+> **Předávka pro nižší CC (executor).** Manager připravil zadání; executor implementuje dle bodů
+> níže, **nedělá nic nad zadání**. Git děláš ty (executor). Malé kroky, kód jako **diff**,
+> commit + testovací příkaz po každém Hx.
 
 ## Jak začít
 1. „Použij skill **kod-jadro**."
-2. Přečti `CLAUDE.md` (Konvence — typy dne, linka 51), `TASK.md` (sekce TEĎ = J3),
-   `scripts/routing.js`, `scripts/timetable.js`, `docs/DATA_FORMAT.md`, tento soubor.
+2. Přečti `CLAUDE.md` (Konvence), `TASK.md` (sekce TEĎ), `scripts/routing.js`, `scripts/journey.js`,
+   `scripts/timetable.js`, `scripts/build_network.js`, `docs/DATA_SOURCES.md`, tento soubor.
 3. **Před prvním commitem:** v repu leží necommitnuté manager úpravy dokumentace
-   (`CLAUDE.md`, `TASK.md`, `handoff.md`). Commitni je spolu s prvním krokem B
-   (`docs: manager dokumentace + spec kroku B`), ať je repo čisté.
-4. Malé kroky, kód jako **diff**, jedna změna najednou. Po každém kroku commitni
-   a dej Joeovi testovací příkaz.
+   (`CLAUDE.md`, `TASK.md`, `handoff.md`, `docs/ROADMAP.md`). Commitni je s prvním krokem
+   (`docs: spec zpevnění jádra + epic J9`).
 
 ---
 
-## Klíčový předpoklad z KROKU C (NEZAPOMENOUT)
+## H0 — Data-integrita: chybějící GPS (proveď PRVNÍ, ostatní kroky na tom stojí)
 
-`net.trips[patternId]` je pole spojů, každý je `[startMin, serviceId]` **nebo**
-`[startMin, serviceId, offs]`. **~45 % spojů má 3. prvek `offs`** = vlastní pole
-mezičasů (špička/sedlo se liší od šablony patternu). **Čas na zastávce indexu `i`
-u konkrétního spoje se počítá vždy:**
+**Problém:** 7 zastávek má ve zdroji i v `network.json` souřadnice `0, 0` (chybějící GPS, ne validní
+poloha). `build_network.js` je bere jako `0` (protože `"0"` je truthy). `verify_network.js` to
+neodhalil — kontroloval jen přítomnost klíčů, ne nulu.
+
+### H0a — override souřadnic v `build_network.js`
+Přidej **ruční override** klíčovaný **zdrojovým `stop_id`** (`JDFS-…`, stabilní přes rebuildy — `S…`
+se přečíslovává!). Aplikuj ho při stavbě `stops[k]` (kolem řádku 90) — má přednost před `m.stop_lat/lon`.
+Souřadnice dodal Joe (mapy.cz, 2026-07-23):
 
 ```js
-const offs = trip[2] || pattern.off;   // trip[2] má přednost, fallback = šablona
-const timeAtStop = trip[0] + offs[i];  // minut od půlnoci
+// Ruční doplnění GPS pro zastávky, které zdroj (CIS/GTFS) nemá (0,0). Joe, 2026-07-23.
+// PROVIZORNÍ single-point na uzel — přesné směrové pozice řeší epic J9.
+const COORD_OVERRIDES = {
+  'JDFS-10020': [50.225355, 12.839125],  // Kpt.Jaroše — střed 2 označníků (~90 m od sebe)
+  'JDFS-14283': [50.239712, 12.889429],  // Mattoniho nábřeží — 2 MHD označníky (příměstský 3. bod → J9)
+  'JDFS-16310': [50.255920, 12.885421],  // Nádraží Dalovice
+  'JDFS-16311': [50.252510, 12.882424],  // Na Pasece
+  'JDFS-18345': [50.217823, 12.806296],  // Globus
+  'JDFS-32745': [50.226009, 12.823021],  // Tesco
+  'JDFS-36827': [50.219270, 12.880980],  // Lázně I (S155) = poloha totožné zastávky S116 (JDFS-6580)
+};
 ```
+Po úpravě **rebuild** `data/network.json` (`node scripts/build_network.js`) a commitni nový `network.json`
++ `build_network.js`. V commitu zkontrola: žádná zastávka nesmí mít `lat===0 || lon===0`.
 
-Bez tohoto by časy seděly jen ~polovině spojů. `timetable.js` to už dělá správně —
-v `journey.js` použij **stejnou** logiku (ideálně přes sdílený helper).
+### H0b — zpřísnit `verify_network.js`
+Kontrola GPS: `lat`/`lon` musí existovat **a nesmí být 0** (`lat===0||lon===0` → **FAIL**, vypiš které).
+Cíl: 157/157 s validní GPS, jinak build neprojde.
+
+**Commit H0**, testovací příkaz pro Joea: `node scripts/verify_network.js` (0 nul, vše PASS).
 
 ---
 
-## KROK B1 — `scripts/journey.js` (nový modul)
+## H1 — Routing robustnost (`scripts/routing.js`)
 
-**Cíl:** čistý JS modul (bez závislostí, Node i prohlížeč). Kombinuje topologii
-(`routing.js` `search`) a časy (`timetable.js`). Importuj z obou modulů, nic needupluj.
-**Jádro je deterministické:** dostane `date` + `nowMin` jako vstup, samo nečte
-systémový čas (to je věc UI v J4 — „teď" = UI dosadí aktuální datum a čas).
+### H1a — zrušit topologický Pareto filtr (o pořadí rozhoduje ČAS)
+Dnes `search()` filtruje varianty přes `filterDominated` na `(transfers, totalHops)` → zahodí přestupní
+variantu s víc zastávkami dřív, než se vůbec podívá na čas. To je špatně: **rychlejší spojení s přestupem
+se pak neukáže vedle pomalejšího přímého.** (Joe: rozhoduje celkový čas, ne počet zastávek/přestupů.)
+- **Odstraň krok `filterDominated`** ze `search()` (funkci můžeš nechat nevyužitou nebo smazat).
+- **Ponech dedup.** Řazení podle hubů v `search()` můžeš nechat (je jen sekundární), autoritu nad
+  pořadím přebírá `journey.js` (H2). Topologie teď vrací **všechny rozumné trasy**.
+- Pozn.: víc variant = víc práce pro `journey`, ale síť je malá (290 patternů) — dedup + limit to unesou.
 
-### Hlavní funkce
-```js
-planJourney(net, A, B, opts) → Itinerary[]
-```
-- `A`, `B` = ID nebo jméno zastávky (přes `resolveStopId`). **Směrově** — opačný směr
-  „ze stanice k mé pozici" = prostě prohodit `A` a `B` (jádro nic navíc neřeší).
-- `opts = { date: "YYYYMMDD", nowMin, minTransfer = 3, limit = 5, maxTransfers = 1 }`.
-  - `date` + `nowMin` (min od půlnoci) = okamžik, od kterého hledáme odjezdy.
-    Režim „nejbližší teď" i „konkrétní datum+čas" jsou pro jádro **totéž** — jen jiný
-    vstup (dosadí UI). Jádro je tím pádem plně testovatelné.
-  - `minTransfer` = min. rezerva na přestup v minutách. **Rozhodnuto (Joe): 3–5.**
-    Default **3**; nech jako parametr, ať jde zvednout na 5.
+### H1b — podpora 2 přestupů
+Rozšiř `search()` o `maxTransfers === 2` (řetěz A→T1→T2→B přes 2 různé uzly, každá noha jiná linka než
+sousední). **Default zůstává `maxTransfers = 1`**; 2 se zapíná parametrem (UI si o víc řekne přes „další
+možnosti"). Hlídej výkon a dedup.
 
-### Tvar výsledku (Itinerary)
-```js
-{
-  transfers: 0 | 1,
-  depMin,                 // odjezd 1. nohy (min od půlnoci; pro noční může být ≥1440)
-  arrMin,                 // příjezd do cíle (absolutní; pro přesah přes půlnoc ≥1440)
-  totalMin,               // arrMin − depMin = CELKOVÁ DÉLKA JÍZDY (vč. čekání na přestup)
-  legs: [
-    { line, headsign, patternId, from, to, depMin, arrMin, hops }
-  ],
-  transferStop,           // jen u transfers===1: ID uzlu přestupu
-  waitMin                 // jen u transfers===1: čekání na uzlu (depMin nohy2 − arrMin nohy1)
-}
-```
-Pro zobrazení: `HH:MM = Math.floor(m/60)%24 : m%60`. Pokud `arrMin ≥ 1440`
-(cíl až po půlnoci), UI si to označí „+1 den" — jádro jen vrací absolutní minuty.
+### H1c — správné zacházení se smyčkami (2× výskyt zastávky)
+Dnes se bere jen **první** výskyt zastávky v patternu (`stops.indexOf`). U okružních linek (zastávka 2×)
+to může minout platný nástup/přestup z druhého výskytu. Zobecni: helper vracející **všechny „dopředné
+úseky"** pro zastávku v patternu (jeden per výskyt) a použij je v přímém i přestupním hledání. Drž
+konzistenci `hops` (index-based) s `journey.js` (`legStopIndices`). Dobře otestuj.
 
-### Algoritmus
-1. **Topologie:** `variants = search(net, A, B, { maxTransfers })` — hotové trasy
-   (přímé + 1 přestup, směrové, s `headsign`). Indexy zastávek v patternu ber
-   konzistentně se `stopsAfter` (první „dopředný" výskyt), ne slepým `indexOf`
-   (okružní linky mají zastávku 2×).
-2. **Přímé varianty (transfers 0):** pro leg `(patternId, from→to)` projdi aktivní
-   spoje patternu k `date`; pro každý spoj s `depMin(from) ≥ nowMin` (viz noční
-   logika níže) spočti `arrMin(to)` ze **stejného** spoje. → Itinerary s 1 nohou.
-3. **Přestupní varianty (transfers 1):** leg1 `(p1, A→T)`, leg2 `(p2, T→B)`.
-   Pro každý aktivní spoj p1 s `depMin1 ≥ nowMin`:
-   - `arrT` = příjezd na uzel T (čas p1 na indexu T).
-   - **Určení dne 2. nohy (řeší otevřené téma 1 — POVINNÉ):** když `arrT ≥ 1440`
-     (dojezd až po půlnoci), 2. noha jede **následující kalendářní den** → aktivní
-     spoje p2 počítej k `date+1` a čas srovnávej v rámu toho dne (`arrT − 1440`).
-     Jinak stejný `date`.
-   - Najdi **nejbližší** aktivní spoj p2 s `depMin2 ≥ arrT + minTransfer` (v rámu
-     příslušného dne). Jeden nejbližší spoj na jeden odjezd p1 (ať se to nezvětví).
-   - `arrB` = příjezd do cíle (čas p2 na indexu B; pokud noha2 = další den, přičti
-     1440, ať `totalMin` sedí). `waitMin = depMin2 − arrT`. → Itinerary se 2 nohami.
-4. **Sesbírej, dedup** (klíč = linky + časy odjezdů nohou), **seřaď podle `depMin`
-   vzestupně** (= 2B: nejdřív nejbližší odjezd), při shodě podle `totalMin` (kratší
-   jízda dřív), pak podle `transfers`. Vrať prvních `limit`.
+### H1d — propojení fakticky totožných zastávek (≤ 30 m, „same-place")
+Některé fyzicky **stejné** zastávky jsou ve zdroji dvě ID (Lázně I: S116 pro linky 2/11/52 × S155 pro
+linku 20; Andělská Hora horní/dolní obec = varianty názvu). Přestup mezi nimi se dnes nenajde (různé ID).
+- Po H0 (opravené GPS!) spočti **skupiny co-located zastávek**: dvojice s haversine **≤ 30 m** *a*
+  shodným normalizovaným názvem (strip `Karlovy Vary,`, trim, lower, toleruj drobný překlep — u shody
+  názvu klidně povol i o něco víc než 30 m; u NEshodných názvů 30 m nepřekračuj).
+- V přestupním hledání ber uzel `T` a jeho co-located sourozence `T'` jako **stejné místo**:
+  leg1 dojede na `T`, leg2 může odjet z `T'`. Tohle je **jediná** forma „přestupu mezi jinými
+  označníky" v této předávce — bezpečná, protože jde o týž bod (žádné „kam jít").
+- **Pozor na pořadí:** skupiny počítej až nad opravenými daty (jinak by 7 nul u `0,0` bylo „všechno
+  na jednom místě"). Guard z H0b to pojistí.
+- Executor **vypíše seznam nalezených co-located skupin** do výstupu testu, ať to Joe očima zkontroluje
+  (nesmí tam být dvě různá místa).
 
-### Noční logika (linka 51, přesah přes půlnoc) — stejná jako v `timetable.js`
-Když `nowMin ≥ 1080` a odjezd spadá do noci (`depMin < 420`), počítej ho jako
-`depMin + 1440` (aby „po půlnoci" bylo správně za „před půlnocí"). Stejné pravidlo
-aplikuj i na `arrT`, `depMin2`, `arrB`.
-
-### Export
-```js
-module.exports = { planJourney };
-if (typeof window !== "undefined") window.MHDJourney = { planJourney };
-```
-
-### Co NESAHAT
-- **Neupravovat** `index_raw.html` / `index.html`, `routing.js`, `timetable.js`
-  (jen z nich importuj; když něco chybí jako export, přidej **jen** export, ne logiku).
-- Žádné závislosti, žádný `npm install`, žádná externí data. Žádné UI.
+**Commit každý pod-krok H1a–H1d zvlášť** + testovací příkaz.
 
 ---
 
-## KROK B2 — `scripts/journey.test.js` (Node test k B1)
+## H2 — `scripts/journey.js`: řazení podle času, připravené pro UI filtry
 
-Spustitelný `node scripts/journey.test.js`. Načte `../data/network.json`, zavolá
-`planJourney` a **čitelně vypíše** aspoň:
-- **1 přímé + 1 přestupní spojení** ve všední den v běžnou dobu (např.
-  `Krátká → Růžový vrch` — z routing testu víme, že je přes přestup;
-  a nějaké přímé, např. `Krátká → Tržnice`).
-- **1 scénář přes půlnoc** (linka 51, `nowMin` ~ 23:50) — ať se ověří přesah dne
-  a případně přestup s dojezdem po půlnoci.
+- **Přepínatelné řazení:** `opts.sort = 'departure' | 'arrival' | 'duration' | 'transfers'`,
+  **default `'departure'`** (Joe: zatím prio odjezd). Uděláš mapu komparátorů; u každého sekundární
+  klíče (např. departure → tie-break totalMin → transfers). Tím jsou budoucí UI filtry (příjezd /
+  délka / přestupy) hotové bez zásahu do jádra.
+- **Rychlejší spojení s přestupem se MUSÍ ukázat** i vedle pomalejšího přímého (plyne z H1a — journey
+  teď dostane i tyhle varianty; jen je nezahazuj předčasně).
+- **Co-located přestup (H1d):** když je přestup „same-place", výsledek nese `waitMin` normálně a
+  `transferStop` = název místa; `walkMin: 0` (přidej pole, ať UI ví, že se nikam nejde).
+- **Limit:** zvedni default na `limit = 8` (parametr zachovej), ať je z čeho v UI filtrovat.
+- Zbytek (přesah přes půlnoc, `trip[2] || pattern.off`, předěl dne u přestupu) **beze změny** — funguje.
 
-Formát řádku (návrh):
-```
-08:06 → 08:31 · 25 min · přímo linka 15 → Stará Kysibelská
-08:06 → 08:41 · 35 min · 1 přestup (Tržnice, čekání 4 min): 15 → …  ⇒  3 → …
-```
-**Executor namátkou ověří 2–3 spojení proti reálnému JŘ DPKV** (raw HTML, ne AI
-shrnutí stránky — u tabulek nespolehlivé), hlavně že: (a) časy odjezdu/příjezdu
-sedí na minutu, (b) přestup má rezervu ≥ `minTransfer`, (c) přesah přes půlnoc je
-správně. Výsledek napiš do VÝSLEDKU.
+**Commit H2** + testovací příkaz.
 
 ---
 
-## KROK B3 — 2 kontroly do `scripts/verify_network.js`
+## H4 — Testy (průběžně a na závěr)
 
-Přidej do souhrnu (PASS/FAIL):
-- U vzorového přestupního spojení platí `leg2.depMin ≥ leg1.arrMin + minTransfer`
-  (návaznost drží).
-- `totalMin === arrMin − depMin` a `totalMin > 0` u vráceného spojení.
-
----
-
-## Otevřená témata — stav pro KROK B
-
-1. **Předěl typu dne přes půlnoc u přestupu** — **ŘEŠIT v B** (viz algoritmus krok 3:
-   2. noha se počítá k `date+1`, když dojezd padne po půlnoci).
-2. **Předěly svátek / prázdniny / víkend** — pokryté tím, že aktivitu služby každé
-   nohy počítáš k **jejímu** datu přes `isServiceActive` (ne zafixovaně na 1 den).
-3. **Přechod letní/zimní čas** — **teď NEŘEŠIT** jako blokující. GTFS časy jsou lokální;
-   kolem přechodu (2×/rok, ~02:00–03:00) může hodina chybět/se zdvojit. Pro v1
-   přijatelné; zapiš do VÝSLEDKU jako známé omezení, ať se na to nezapomene v J4/J5.
-4. **Min. čas na přestup** — ✅ 3–5 min (default 3, parametr `minTransfer`).
+- **`routing.test.js`:** uprav očekávání po zrušení Pareto (víc variant); přidej případ na **2 přestupy**
+  a na **smyčku (2× výskyt)**.
+- **`journey.test.js`:** přidej případ, kde se **rychlejší přestup ukáže vedle pomalejšího přímého**;
+  ukázku `sort='arrival'` vs `'departure'`; **co-located přestup Lázně I** (linka 20 ⇄ 2/11/52) se najde.
+- **`verify_network.js`:** 0,0 = FAIL (H0b); výpis co-located skupin je rozumný; kontrola, že známé
+  časově-lepší spojení se ve výsledku objeví.
+- **Namátkové ověření proti reálnému JŘ DPKV** (raw HTML, ne AI shrnutí) u 1–2 nových případů.
+- Cílový souhrn: vše PASS; napiš do VÝSLEDKU počty a co se ověřilo.
 
 ---
 
-## Mimo scope kroku B (jen kontext, NEIMPLEMENTOVAT)
-- **Poloha → zastávka** (mapa / GPS / paste souřadnic) = **J5**. Jádro `planJourney`
-  dostává vždy zastávku; převod polohy na nejbližší zastávku přijde později.
-- **Oblíbené / časté dotazy + odjezdové tabule à la F1** = **J6/J7** (uložené dvojice
-  A→B, osud staré appky). `planJourney` je pro ně jen motor.
-- **UI obrazovka „Hledat spojení"** = **J4**.
-
----
-
-## VÝSLEDEK (executor, 2026-07-23)
-
-**Hotovo:** `scripts/journey.js` (`planJourney`), `scripts/journey.test.js`, 2 nové
-kontroly ve `verify_network.js` (souhrn **20/20 PASS**). Nic nad zadání, `routing.js`
-a `timetable.js` beze změny (jen import).
-
-**Implementace:** `planJourney` volá `search()` (topologie) a pro každou variantu
-dopočítá reálné časy nad `net.trips`/`net.services`, se stejným `trip[2] || pattern.off`
-pravidlem jako `timetable.js`. Indexy zastávek v patternu (kvůli okružním linkám se
-zastávkou 2×) počítá stejně jako `routing.js` `makeLeg`: `idxFrom = stops.indexOf(from)`,
-`idxTo = idxFrom + hops` — konzistentní s tím, jak `search()` počítal `hops`.
-
-**Předěl dne + noc (otevřená témata 1+4 z TASK.md):** vyřešeno dle zadání — `nightAdjust`
-(stejné pravidlo jako v `timetable.js`, `nowMin>=1080 && raw<420 → +1440`) sjednocuje
-noční přesah linky 51 do jedné časové osy; když `arrT>=1440`, druhá noha se počítá
-k `date+1` a `depMin2`/`arrB` se pak vrátí zpět do společné osy (+1440). `minTransfer`
-= parametr, default 3.
-
-**Ověřeno proti reálné síti (`data/network.json`, testovací sada z routing.js):**
-- Přímo Krátká→Tržnice (po 20260202, 08:00): 08:27→08:40 linka 3 — **shoda s KROK C**
-  (už dřív ověřeno proti raw HTML DPKV).
-- Přes půlnoc Okružní→Garáže MHD (23:50): 01:16/03:06/04:06/04:46 linka 51 —
-  **shoda s KROK C** (raw HTML DPKV, viz changelog 2026-07-22).
-- **Nově ověřeno (KROK B) proti raw HTML DPKV** (ne AI shrnutí — `d-15/15102.htm` a
-  `d-19/19006.htm`, staženo přímo): přestup Krátká→Růžový vrch v 08:00 vrátil
-  `13:18 (linka 15, Krátká) → 13:27 (Elite) ⇒ 13:48 (linka 19, Elite) → 14:09
-  (Růžový vrch)`. Reálná tabulka linky 15 (Krátká, sloupec "Pracovní den mimo
-  prázdnin") má v hodině 13 přesně `18S 42` — **13:18 sedí na minutu** (S = zkrácený
-  spoj, odpovídá patternu). Reálná tabulka linky 19 (Elite, směr Garáže MHD) má
-  v hodině 13 přesně `18 48K` — **13:48 sedí na minutu**. Návaznost přestupu
-  (21 min ≥ minTransfer 3) drží. Konečnou zastávku Růžový vrch (přesný příjezdový
-  čas) jsem ověřit nezvládl jednoznačně — DPKV list má pro linku 19 (okružní/smyčka
-  Garáže MHD–Tržnice–Otovice–Tržnice–Garáže MHD) zastávku "Elite" i "Růžový Vrch"
-  dvakrát v souboru (dva směry smyčky) a nešlo bez rizika záměny spolehlivě určit,
-  který ze dvou stopových kódů odpovídá naší GTFS-patternové sekvenci → **shoda na
-  obou koncích přestupu (13:18 i 13:48) považuji za dostatečné potvrzení výpočtu**,
-  přesný čas příjezdu do Růžového vrchu beru jako odvozený (offs z GTFS, stejná
-  logika jako u ověřených úseků).
-
-**Známé omezení (bod 3 z otevřených témat — zapsáno, NEŘEŠENO):** přechod
-letní/zimní čas (2×/rok, ~02:00–03:00) může u datumu přechodu dát chybějící/
-zdvojenou hodinu; `planJourney` to nijak neošetřuje. Pro v1 přijatelné, řešit
-případně v J4/J5 při zadávání konkrétního data uživatelem.
-
-**Commity:** `docs: manager dokumentace + spec kroku B; feat: journey.js
-(planJourney)`, `test: rozsireni verify_network.js o kontroly planJourney (KROK B3)`.
-
-**Testovací příkazy pro Joea:** `node scripts/journey.test.js` (čitelný výpis 3
-scénářů), `node scripts/verify_network.js` (souhrn PASS/FAIL). Žádná změna v UI
-(`index.html`/`index_raw.html` nedotčeny) — nic se nezobrazí v prohlížeči, toto je
-čistě datová/výpočetní vrstva.
+## Mimo scope (NEIMPLEMENTOVAT — kontext)
+- **Pěší přestup 30–200 m + směrové pozice označníků + navádění v uzlech + mapa** = epic **J9**
+  (`docs/ROADMAP.md`). Datový lead: DPKV má na interaktivní mapě přesné puntíky označníků s popisem
+  (Dvory 1/2/3 + linka + směr), ale bez GPS exportu → Joe zkusí oslovit DPKV.
+- **Přechod letní/zimní čas** — stále odloženo (známé omezení).
+- **UI „Hledat spojení"** = J4 (po zpevnění).

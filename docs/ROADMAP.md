@@ -19,6 +19,33 @@ Detailní backlog v `TASK.md`. Fáze F1–F6 níže = historický plán (obsah s
 
 ---
 
+## J9 — Směrové pozice zastávek + navigace v uzlech (EPIC, založeno 2026-07-23)
+
+**Proč:** GTFS zdroj má jen 1 bod na zastávku (a 7 zastávek dokonce `0,0` — dořešeno provizorně v H0).
+Reálně ale řada uzlů má víc označníků fyzicky oddělených (Kpt. Jaroše ~90 m, KV aréna 3 body v trojúhelníku
+~100 m). Bez **přesné pozice označníku podle směru/linky** nejde spolehlivě poradit „kam jít" ani nabídnout
+pěší přestup mezi blízkými (ale ne totožnými) označníky. To je klíč k cíli „náhrada zastaralých oficiálních
+nástrojů" (PID v Praze má schémata uzlů + přesné pozice + vykreslení trasy v mapě).
+
+**Co epic zahrne (návrh, upřesní se vlastním briefem):**
+- **Datový formát směrových pozic:** zastávka → {označník → poloha, linky, směr}. Ruční sběr (jako Joe
+  udělal u Kpt. Jaroše 2 body / Mattoni 3 body dne 23.7. — uloženo jako první vstup).
+- **Pěší přestup 30–200 m** (haversine + navádění), který teď v jádru VĚDOMĚ chybí (Předávka 1 řeší jen
+  totožné body ≤ 30 m).
+- **Vykreslení v mapě / schéma uzlu** (J5 souvislost) — puntíky označníků, trasa spoje.
+- **Nejbližší označník k mé poloze** podle konkrétního směru (J5).
+
+**Datové leady:**
+- **DPKV interaktivní mapa** má přesné puntíky označníků s popisem (Dvory 1/2/3 + linka + směr), ale
+  bez GPS exportu → **Joe zkusí oslovit DPKV** o data; když nepůjde, řešíme jinak (ruční / OSM / odečet z mapy).
+
+**První krok epicu:** brief + návrh datového formátu + sběrový plán. **Neotvírat, dokud neběží J4 UI** (ať
+je epic řízený reálnou potřebou, ne dopředu).
+
+**Riziko:** vysoké na přípravu dat (ruční, hodně uzlů), nízké technicky. **Odhad:** dny (hlavně sběr dat).
+
+---
+
 ## F1 — Opravit bugy + přidat zastávku Krátká
 
 **Cíl:** Dostat aktuální data do správného stavu a rozšířit o třetí výchozí zastávku.
