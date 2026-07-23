@@ -1,0 +1,33 @@
+name: update-data
+on:
+  schedule:
+    - cron: '0 3 * * *'        # 03:00 UTC denne (v CR 04:00/05:00)
+  workflow_dispatch:            # rucni spusteni (tlacitko v Actions) — pousti s FORCE=1
+permissions:
+  contents: write               # aby GITHUB_TOKEN mohl commitnout
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Run update
+        run: node scripts/update_data.js
+        env:
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
+      - name: Commit changes (jen kdyz se neco zmenilo)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/network.json data/data_source_state.json
+          if git diff --cached --quiet; then
+            echo "Zadna zmena dat — necommitovat."
+          else
+            git commit -m "chore(data): automaticka obnova jizdnich radu $(date -u +%F)"
+            git push
+          fi
