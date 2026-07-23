@@ -1,5 +1,5 @@
 // Node test pro scripts/journey.js — spustit: node scripts/journey.test.js
-// Citelny vypis planovanych spojeni (primo + 1 prestup + noc/pulnoc).
+// Citelny vypis planovanych spojeni (primo + 1 prestup + noc/pulnoc + H2 razeni + H1d co-located).
 
 const path = require("path");
 const { planJourney } = require("./journey.js");
@@ -21,14 +21,14 @@ function fmtItinerary(it) {
   const [l1, l2] = it.legs;
   return (
     head +
-    `1 přestup (${net.stops[it.transferStop] ? net.stops[it.transferStop].n : it.transferStop}, čekání ${it.waitMin} min): ` +
+    `1 přestup (${net.stops[it.transferStop] ? net.stops[it.transferStop].n : it.transferStop}, čekání ${it.waitMin} min, walkMin ${it.walkMin}): ` +
     `${l1.line} → ${l1.headsign} (${fmt(l1.depMin)}–${fmt(l1.arrMin)})  ⇒  ${l2.line} → ${l2.headsign} (${fmt(l2.depMin)}–${fmt(l2.arrMin)})`
   );
 }
 
-function runCase(label, A, B, date, nowMin) {
-  console.log(`\n=== ${label}: ${A} → ${B} (${date}, nyní ${fmt(nowMin)}) ===`);
-  const results = planJourney(net, A, B, { date, nowMin });
+function runCase(label, A, B, date, nowMin, opts) {
+  console.log(`\n=== ${label}: ${A} → ${B} (${date}, nyní ${fmt(nowMin)}${opts && opts.sort ? `, sort=${opts.sort}` : ""}) ===`);
+  const results = planJourney(net, A, B, { date, nowMin, ...opts });
   if (results.length === 0) {
     console.log("  (žádné spojení nenalezeno)");
     return;
@@ -41,3 +41,18 @@ const WORKDAY = "20260202"; // pondělí
 runCase("přímé spojení", "Krátká", "Tržnice", WORKDAY, 8 * 60);
 runCase("spojení s přestupem", "Krátká", "Růžový vrch", WORKDAY, 8 * 60);
 runCase("přes půlnoc (linka 51)", "Okružní", "Garáže MHD", WORKDAY, 23 * 60 + 50);
+
+// H1a/H2: vedle pomalejsiho primeho spoje (13 min, ale odjezd az 08:14) se ted
+// ukazuji i drive odjizdejici prestupove varianty (odjezd 08:06) - pri vychozim
+// razeni 'departure' se zobrazi napred, protoze odjizdi driv, i kdyz je celkem
+// pomalejsi. Drivejsi Pareto filtr (podle poctu zastavek/prestupu) by tyhle
+// prestupove varianty v routing.js vubec nevratil.
+console.log("\n--- H1a/H2: razeni 'departure' vs 'arrival' vs 'duration' (Krátká → Tržnice) ---");
+runCase("departure (výchozí)", "Krátká", "Tržnice", WORKDAY, 8 * 60, { sort: "departure", limit: 5 });
+runCase("arrival", "Krátká", "Tržnice", WORKDAY, 8 * 60, { sort: "arrival", limit: 5 });
+runCase("duration", "Krátká", "Tržnice", WORKDAY, 8 * 60, { sort: "duration", limit: 5 });
+
+// H1d: prestup mezi fakticky totoznymi zastavkami s jinym ID (Lazne I: S155 linka
+// 20 <-> S116 linky 2/11/52). Bez H1d by se toto spojeni vubec nenaslo (jine ID).
+console.log("\n--- H1d: co-located přestup (Lázně I, linka 20 ⇄ 2/11/52) ---");
+runCase("Parkoviště KOME → Tržnice přes Lázně I", "Parkoviště KOME", "Tržnice", WORKDAY, 9 * 60, { limit: 3 });

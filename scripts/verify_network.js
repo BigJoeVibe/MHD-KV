@@ -4,7 +4,7 @@
 
 const path = require("path");
 const net = require(path.join(__dirname, "..", "data", "network.json"));
-const { stopsAfter, resolveStopId } = require("./routing.js");
+const { stopsAfter, resolveStopId, search, coLocatedGroups } = require("./routing.js");
 const { nextDepartures } = require("./timetable.js");
 const { planJourney } = require("./journey.js");
 
@@ -93,6 +93,37 @@ if (badServiceRefs === 0) {
   pass("kazdy serviceId v trips existuje v services");
 } else {
   fail(`${badServiceRefs} odkazu na neexistujici serviceId`);
+}
+
+// --- Co-located zastavky (H1d) ---
+console.log("\n--- Co-located zastavky (H1d, pro rucni kontrolu) ---");
+function haversineM(a, b) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lon - a.lon);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+const coGroups = coLocatedGroups(net);
+console.log(`INFO: nalezeno ${coGroups.length} skupin co-located zastavek (zkontroluj rucne, ze nejde o 2 ruzna mista):`);
+let maxGroupDist = 0;
+for (const g of coGroups) {
+  const names = g.map((id) => `${id} "${net.stops[id].n}"`).join("  <->  ");
+  let dists = [];
+  for (let i = 0; i < g.length; i++) {
+    for (let j = i + 1; j < g.length; j++) {
+      const d = haversineM(net.stops[g[i]], net.stops[g[j]]);
+      dists.push(d);
+      if (d > maxGroupDist) maxGroupDist = d;
+    }
+  }
+  console.log(`  ${names}  (${dists.map((d) => d.toFixed(0)).join(", ")} m)`);
+}
+if (coGroups.length > 0 && coGroups.length <= 10 && maxGroupDist <= 60) {
+  pass(`co-located skupiny v rozumnem poctu a vzdalenosti (max ${maxGroupDist.toFixed(0)} m)`);
+} else {
+  fail(`co-located skupiny podezrele (pocet ${coGroups.length}, max vzdalenost ${maxGroupDist.toFixed(0)} m) - zkontroluj rucne`);
 }
 
 // --- Logika dne ---
@@ -236,6 +267,56 @@ if (anySample && anySample.totalMin === anySample.arrMin - anySample.depMin && a
   fail(`totalMin neodpovida arrMin-depMin nebo neni kladne (totalMin=${anySample.totalMin}, arrMin-depMin=${anySample.arrMin - anySample.depMin})`);
 } else {
   fail("nenalezeno zadne spojeni Kratka->Ruzovy vrch pro kontrolu totalMin");
+}
+
+// --- Robustnost routingu (H1) ---
+console.log("\n--- Robustnost routingu (H1) ---");
+
+// H1a: bez Pareto filtru musi search() vracet vic nez jen "hop-minimalni" variantu —
+// primo i vic 1-prestupovych moznosti soucasne (drivejsi filterDominated by prestupni
+// varianty s vic zastavkami zahodil, i kdyz v case mohou byt potreba/rychlejsi).
+const hnResults = search(net, "Krátká", "Horní nádraží", { maxTransfers: 1 });
+const hnDirect = hnResults.filter((r) => r.transfers === 0).length;
+const hnTransfer = hnResults.filter((r) => r.transfers === 1).length;
+console.log(`INFO: Kratka->Horni nadrazi: ${hnDirect} primych, ${hnTransfer} 1-prestupovych variant`);
+if (hnDirect >= 1 && hnTransfer >= 5) {
+  pass(`primo i vic 1-prestupovych variant soucasne (primo ${hnDirect}, prestup ${hnTransfer}) — bez Pareto zahazovani`);
+} else {
+  fail(`ocekavano >=1 primo a >=5 prestupovych variant, nalezeno primo=${hnDirect} prestup=${hnTransfer}`);
+}
+
+// H1b: 2 prestupy zapnute parametrem, vypnute ve vychozim stavu.
+const twoTransfer = search(net, "Rozcestí u Koníčka", "Stadion ZM", { maxTransfers: 2 });
+const twoTransferCount = twoTransfer.filter((r) => r.transfers === 2).length;
+if (twoTransferCount > 0) {
+  pass(`maxTransfers:2 vraci >=1 retezec o 2 prestupech (${twoTransferCount})`);
+} else {
+  fail("maxTransfers:2 nevratilo zadny retezec o 2 prestupech");
+}
+const defaultNoTwoTransfer = search(net, "Rozcestí u Koníčka", "Stadion ZM").every((r) => r.transfers <= 1);
+if (defaultNoTwoTransfer) {
+  pass("bez parametru (default maxTransfers=1) se 2 prestupy nevraceji");
+} else {
+  fail("bez parametru se presto vratily varianty s 2 prestupy — default se nechova jako drive");
+}
+
+// H1c: smyckovy pattern (P5, linka 12, Pivovar<->Trznice) musi vratit >=2 variant
+// primeho spoje (kratka cesta i cesta pres celou smycku), s ruznymi fromIdx.
+const loopResults = search(net, "Pivovar", "Tržnice", { maxTransfers: 0 }).filter((r) => r.legs[0].patternId === "P5");
+const distinctFromIdx = new Set(loopResults.map((r) => r.legs[0].fromIdx));
+if (loopResults.length >= 2 && distinctFromIdx.size >= 2) {
+  pass(`smyckovy pattern P5 (Pivovar->Trznice) vraci ${loopResults.length} varianty z ${distinctFromIdx.size} ruznych vyskytu zastavky`);
+} else {
+  fail(`smyckovy pattern P5 (Pivovar->Trznice) vratil jen ${loopResults.length} variant(y), ${distinctFromIdx.size} vyskyt(u) — ocekavano >=2/>=2`);
+}
+
+// H1d: co-located prestup (Parkoviste KOME na lince 20 -> Lazne I S155 -> S116 -> linka 2/52).
+const coLocResults = search(net, "Parkoviště KOME", "Tržnice", { maxTransfers: 1 });
+const coLocFound = coLocResults.some((r) => r.coLocated);
+if (coLocFound) {
+  pass("co-located prestup Parkoviste KOME -> (S155<->S116 Lazne I) -> Trznice nalezen");
+} else {
+  fail("co-located prestup Parkoviste KOME -> Trznice NENALEZEN (H1d nefunguje)");
 }
 
 // --- Souhrn ---
