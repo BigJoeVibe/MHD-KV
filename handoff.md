@@ -103,5 +103,54 @@ Postupně (z `docs/DATA_SOURCES.md` → Test/QA B):
 
 ---
 
-## VÝSLEDEK (vyplní executor)
-_(sem executor po dokončení: co hotové, počty, čas běhu, jak testováno, problémy, nápady pro managera)_
+## VÝSLEDEK (vyplnil executor, 2026-07-23)
+
+**Hotovo:** `scripts/update_data.js` (KROK J8a-1+2+3), otestováno end-to-end na reálných datech
+(KROK J8a-4). Commity: `6d0097e` (skript), `827aab4` (docs fix + zápis nálezu).
+
+### Co skript dělá
+Stáhne `JDF_merged_GTFS.zip` (curl), filtruje agency 48364282 + `425xxx` (agency→routes→trips v paměti,
+`stop_times.txt` **streamovaně** přes `unzip -p`/`tar -xOf` + readline, ne najednou), zapíše
+`data_raw/kv_gtfs/*.txt`, zavolá `build_network.js`, prožene guardem a při úspěchu zapíše
+`data/data_source_state.json`. Extraktor detekuje `unzip` (git-bash/Linux) s fallbackem na `tar`
+(Windows bsdtar) — funguje z obou.
+
+### Reálný běh (ne testovací fixture) — čísla
+- ZIP 122,4 MB, `Last-Modified: Wed, 22 Jul 2026 21:14:15 GMT`.
+- Filtr: agency_id 5, routes MHD KV 132, trips 10 151.
+- Stream stop_times: přečteno **16 749 428** řádků celé ČR, ponecháno **144 766**, zastávek 157.
+- Build: 23 linek, 157 zastávek, 290 patternů, 10 151 spojů, 588 KB.
+- Celkový čas běhu (stažení + filtr + stream 1,38 GB + build + guard): **~55–60 s** na této mašině
+  (síť + disk, ne datový objem — stream samotný byl rychlý).
+
+### Guard — chytá rozbití (ověřeno oběma cestami)
+1. **Reálně, bez zásahu:** guard na čerstvě stažených datech (22.7.) narazil na skutečný FAIL ve
+   `verify_network.js` (3/26) → **rollback proběhl správně** (`data/network.json` zůstalo beze změny,
+   `git status` čisté). Root cause níže — není to bug guardu, je to reálná vlastnost zdroje.
+2. **Uměle, dle zadání:** dočasně nastaven `THRESHOLDS.trips = 999999` → guard správně nahlásil
+   `trips=10151 < prah 999999` **a zároveň** FAIL z verify_network (guard sbírá všechny důvody, ne jen
+   první) → rollback, exit 1. Práh vrácen zpět na 9000 před commitem.
+
+### ⚠️ Nález (důležité pro managera, zapsáno do `TASK.md` a `docs/DATA_SOURCES.md`)
+Guard **správně odmítl** commitnout, protože skutečně čerstvá data (22.7.) proti starším (17.–18.7.)
+odhalila: **GTFS `stop_id` (`JDFS-xxxxx`) nejsou stabilní mezi obnovami** — stejná zastávka dostala
+jiné id. Dopady:
+1. `COORD_OVERRIDES` v `build_network.js` (klíč = `JDFS-` id, H0/JH 23.7.) se rozbije při každé další
+   obnově → 7 zastávek spadne zpět na `0,0`.
+2. Interní `S#`/`P#` id v `network.json` jsou přiřazována pořadím výskytu při buildu → taky nestabilní.
+   `verify_network.js` má natvrdo `P50`/`P5` — po čerstvém stažení odpovídaly jiným linkám, testy
+   spadly (falešný poplach, ne regrese dat).
+
+**Neopravoval jsem to sám** (zásah do `build_network.js`/`verify_network.js`, mimo zadání J8a) —
+guard dělá přesně to, co má (blokuje špatný commit), ale **J8b (auto-commit bez lidí) v tomto stavu
+nikdy neprojde**. Návrh oprav a rozhodnutí je v `TASK.md` u J8. Doporučuji vyřešit před stavbou J8b.
+
+### Jak testováno
+- `node scripts/update_data.js` 2× naostro (viz výše) + kontrola `git status`/`git diff data/network.json`
+  po každém běhu (rollback beze zbytku).
+- `node -c scripts/update_data.js` (syntax) před každým commitem.
+- Ruční inspekce příčiny FAILů: rebuild z už staženého `data_raw/kv_gtfs/` (bez re-downloadu) +
+  `node -e "require('./data/network.json').patterns.P50/.P5"` → potvrzeno přečíslování patternů;
+  `grep` jmen zastávek v novém `stops.txt` → potvrzena změna `JDFS-` id.
+- `data_raw/` zůstává mimo git (gitignore) — commitovány jen `scripts/update_data.js` a docs.
+  `data/data_source_state.json` se v tomto testu nevytvořil (oba reálné běhy guard odmítl, jak má).

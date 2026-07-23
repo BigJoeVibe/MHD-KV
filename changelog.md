@@ -7,6 +7,28 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-07-23 (3) — v0.1.0 (J8a: update_data.js — ruční obnova dat + regression guard)
+
+- **`scripts/update_data.js`** — stáhne aktuální `JDF_merged_GTFS.zip`, vyfiltruje MHD KV (agency
+  48364282 + `route_short_name` `425xxx`), **streamuje** `stop_times.txt` (~1,38 GB, readline řádek
+  po řádku, nikdy celé v paměti) → `data_raw/kv_gtfs/`, zavolá `build_network.js`, prožene výsledek
+  regresním guardem (validní JSON, prahy linky≥20/zast≥140/spoje≥9000, pokles ≤20 % oproti předchozí
+  verzi, celý `verify_network.js` musí PASS) → při FAIL rollback `data/network.json` + nenulový exit,
+  při OK zapíše `data/data_source_state.json`. Extraktor ZIPu: `unzip` s fallbackem na `tar` (Windows
+  bsdtar) — funguje bez node_modules navíc.
+- **Otestováno end-to-end na reálném čerstvém stažení** (22.7. data, ~55 s běh): 16 749 428 řádků
+  `stop_times.txt` celé ČR → 144 766 po filtru, build 23 linek/157 zastávek/10 151 spojů. Guard
+  ověřen oběma cestami — reálný FAIL z `verify_network.js` i uměle vynucený FAIL z prahu — v obou
+  případech správný rollback (`data/network.json` beze změny, čisté `git status`).
+- **Nález (zapsáno do `TASK.md`/`docs/DATA_SOURCES.md`, blokuje J8b):** GTFS `stop_id` (`JDFS-xxxxx`)
+  ani interní `network.json` id (`S#`/`P#`) **nejsou stabilní mezi obnovami dat** — čerstvé stažení
+  přečíslovalo zastávky i patterny. Proto `COORD_OVERRIDES` (klíč = `JDFS-` id, JH 23.7.) po obnově
+  přestane sedět a natvrdo zadané `P50`/`P5` ve `verify_network.js` už neodpovídají původním linkám.
+  Guard fungoval přesně jak má (odmítl commit), ale J8b (auto-commit bez lidí) v tomto stavu neprojde
+  — návrh oprav u manažera před stavbou J8b.
+- **Docs fix:** `docs/DATA_SOURCES.md` — uvedena na pravou míru tvrzení o GPS (zdroj 7 zastávek nemá,
+  řeší `COORD_OVERRIDES` v buildu, ne trvale).
+
 ## 2026-07-23 (2) — v0.1.0 (JH Předávka 1: zpevnění jádra — GPS, routing, řazení)
 
 - **H0 (data-integrita):** 7 zastávek mělo v GTFS zdroji `(0,0)` misto GPS (`build_network.js`
