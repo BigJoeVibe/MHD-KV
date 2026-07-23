@@ -32,6 +32,21 @@ function patternsThrough(net, stopId) {
   return out;
 }
 
+// Index zastavka -> patterny, ktere jí projíždí. Search() nad 2 přestupy dělá
+// desítky tisíc "kudy z T vede spoj" dotazů — bez indexu by to bylo O(patterns)
+// pokaždé (viz patternsThrough výše), s indexem O(1). Postaveno jednou za search().
+function buildStopPatternIndex(net) {
+  const idx = new Map();
+  for (const pid in net.patterns) {
+    for (const s of net.patterns[pid].stops) {
+      let set = idx.get(s);
+      if (!set) { set = new Set(); idx.set(s, set); }
+      set.add(pid);
+    }
+  }
+  return idx;
+}
+
 function lineOf(net, patternId) {
   return net.patterns[patternId].line;
 }
@@ -72,6 +87,9 @@ function search(net, A, B, opts = {}) {
 
   if (!stopA || !stopB) return results;
 
+  const stopIdx = maxTransfers >= 1 ? buildStopPatternIndex(net) : null;
+  const patternsAt = (stopId) => (stopIdx.get(stopId) ? Array.from(stopIdx.get(stopId)) : []);
+
   // Prime spoje (transfers 0)
   for (const patternId in net.patterns) {
     if (stopsAfter(net, patternId, stopA).includes(stopB)) {
@@ -86,7 +104,7 @@ function search(net, A, B, opts = {}) {
       const afterA = stopsAfter(net, p1, stopA);
       for (const T of afterA) {
         if (T === stopB || T === stopA) continue;
-        for (const p2 of patternsThrough(net, T)) {
+        for (const p2 of patternsAt(T)) {
           if (lineOf(net, p2) === lineOf(net, p1)) continue;
           if (stopsAfter(net, p2, T).includes(stopB)) {
             const leg1 = makeLeg(net, p1, stopA, T);
@@ -96,6 +114,41 @@ function search(net, A, B, opts = {}) {
               legs: [leg1, leg2],
               totalHops: leg1.hops + leg2.hops,
             });
+          }
+        }
+      }
+    }
+  }
+
+  // 2 prestupy (transfers 2) — retezec A->T1->T2->B pres 2 ruzne uzly, kazda noha
+  // jina linka nez sousedni. Vypnuto ve vychozim stavu (maxTransfers=1); zapina se
+  // parametrem. Vykon: patternsAt() je O(1) diky indexu, ale porad jde o 3 vnorene
+  // urovne — proto se preskakuje vetev, kde uz p2 dojede rovnou do B (to je uz
+  // pokryte 1-prestupovym vysledkem vyse, dalsi prestup by byl jen zbytecna oklika).
+  if (maxTransfers >= 2) {
+    for (const p1 in net.patterns) {
+      const afterA = stopsAfter(net, p1, stopA);
+      for (const T1 of afterA) {
+        if (T1 === stopB || T1 === stopA) continue;
+        for (const p2 of patternsAt(T1)) {
+          if (lineOf(net, p2) === lineOf(net, p1)) continue;
+          const afterT1 = stopsAfter(net, p2, T1);
+          if (afterT1.includes(stopB)) continue; // pokryto 1-prestupovym vysledkem
+          for (const T2 of afterT1) {
+            if (T2 === stopA || T2 === T1 || T2 === stopB) continue;
+            for (const p3 of patternsAt(T2)) {
+              if (lineOf(net, p3) === lineOf(net, p2)) continue;
+              if (stopsAfter(net, p3, T2).includes(stopB)) {
+                const leg1 = makeLeg(net, p1, stopA, T1);
+                const leg2 = makeLeg(net, p2, T1, T2);
+                const leg3 = makeLeg(net, p3, T2, stopB);
+                results.push({
+                  transfers: 2,
+                  legs: [leg1, leg2, leg3],
+                  totalHops: leg1.hops + leg2.hops + leg3.hops,
+                });
+              }
+            }
           }
         }
       }
