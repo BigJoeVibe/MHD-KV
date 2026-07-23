@@ -9,12 +9,13 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 |---|------|----------|------|-------|
 | J1 | **Síťový model z KV GTFS** (stops + patterns + trips + services) | vysoká | ✅ HOTOVO 19.7. | `data/network.json` (62 KB gzip) + `scripts/build_network.js`. 23 linek, 157 zast./všechny GPS, 290 patternů |
 | J2 | **Routing A→B** (přímé + 1 přestup) v JS | vysoká | ✅ HOTOVO 21.7. | `scripts/routing.js` (+`routing.test.js`, `verify_network.js` 14/14 PASS). Směrové + headsign, dedup, Pareto filtr, huby v řazení. Zrevidováno managerem, pushnuto. |
-| J3 | **Časová vrstva** (nejbližší odjezd, čekání na přestup, půlnoc 51) | vysoká | ⭐ TEĎ | **postup C→B** (Joe 22.7.). `isServiceActive()` je ve `verify_network.js` → přenést do nového `scripts/timetable.js` |
+| J3 | **Časová vrstva** (nejbližší odjezd, čekání na přestup, půlnoc 51) | vysoká | ⭐ KROK B TEĎ | C ✅ hotové (`timetable.js`); B = `scripts/journey.js` (`planJourney`), spec v `handoff.md` |
 
 **J3 — postup (rozhodnuto 2026-07-22, C→B):**
-- **KROK C (teď, spec v `handoff.md`):** samostatný `scripts/timetable.js` (`nextDepartures` ze zastávky k datu/času, směrově, noční 51) + `timetable.test.js` + 2–3 kontroly ve `verify_network.js`. NEintegruje se do `search()`, ověří se proti reálnému JŘ.
-- **KROK B (příště):** integrace času do `search()` — reálná návaznost přestupu (dojezd + rezerva + odjezd 2. spoje). Řeší otevřená témata níže.
-- **Otevřená témata pro B (22.7.):** (1) předěl typu dne přes půlnoc u přestupu — aktivitu 2. nohy počítat k jejímu datu; (2) předěly svátek/prázdniny/víkend brát pro každou nohu zvlášť; (3) přechod letní/zimní čas (2×/rok, chybějící/dvojitá hodina kolem 02–03:00); (4) min. čas na přestup na uzlu — ✅ **3–5 min** (Joe 22.7.).
+- **KROK C — ✅ HOTOVO 23.7.:** `scripts/timetable.js` (`nextDepartures` ze zastávky k datu/času, směrově, noční 51) + `timetable.test.js` + 4 časové kontroly ve `verify_network.js` (18/18 PASS). Ověřeno proti reálnému JŘ DPKV (linka 3 08:27; linka 51 přes půlnoc 22:46/23:26/01:16/03:06). **Nález:** ~45 % spojů má vlastní `offs` (`trips[…][2]`) → čas počítat `trip[2] || pattern.off`.
+- **KROK B — ⭐ TEĎ (spec v `handoff.md`):** nový `scripts/journey.js` — `planJourney(net, A, B, opts)` nad `search()` + `timetable.js`: reálné časy, garantovaná návaznost přestupu (≥ minTransfer), přesah dne. Výstup = konkrétní časová spojení (**1A**), řazení podle odjezdu + celková délka jízdy (**2B**).
+- **Varianty zadávání (motor staví B, UI/pozici řeší později):** čas **nejbližší teď × konkrétní datum+čas** = pro jádro jen jiný `date`+`nowMin` (dosadí UI, J4). Směr **z mé pozice → cíl × opačně** = prohození A↔B (jádro směrové, zadarmo). Poloha = zastávka/mapa/GPS → **J5**. Oblíbené/časté + tabule à la F1 → **J6/J7**.
+- **Otevřená témata u B:** (1) předěl typu dne přes půlnoc = ŘEŠÍ B (2. noha k `date+1`); (2) svátky/prázdniny/víkend = aktivita každé nohy k jejímu datu; (3) letní/zimní čas = teď NEřešit, zapsat jako známé omezení; (4) min. přestup = ✅ **3–5 min** (default 3).
 
 **J2 — HOTOVO (2026-07-21):** `scripts/routing.js` (search + helpery, browser-safe), `routing.test.js`, `verify_network.js` (14/14 PASS). Nález+oprava: okružní patterny mají zastávku 2× → `indexOf` dával záporné `hops`, opraveno přes `stopsAfter`. Ověřeno proti JŘ DPKV (linka 3, 13). Detail v `handoff.md` → VÝSLEDEK.
 
