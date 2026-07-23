@@ -151,17 +151,51 @@ function countActiveTrips(patternId, dateStr) {
   return n;
 }
 
-// Linka 3, Kratka -> Trznice (P50, viz scripts/routing.test.js)
+// Patternova/S# id jsou per-build volatilni (JrUtil je pri kazde obnove preciska,
+// viz docs/DATA_SOURCES.md) - dohledavame pattern pres linku + nazvy zastavek, ne natvrdo.
+function findPattern(net, line, fromName, toName) {
+  const fromId = resolveStopId(net, fromName);
+  const toId = resolveStopId(net, toName);
+  if (!fromId || !toId) return null;
+  for (const pid in net.patterns) {
+    const p = net.patterns[pid];
+    if (p.line !== line) continue;
+    const fromIdx = p.stops.indexOf(fromId);
+    const toIdx = p.stops.indexOf(toId);
+    if (fromIdx !== -1 && toIdx !== -1 && fromIdx < toIdx) return pid;
+  }
+  return null;
+}
+
+// Smyckovy pattern dane linky = ma nejakou zastavku (krome posledni) vic nez jednou.
+function findLoopPattern(net, line) {
+  for (const pid in net.patterns) {
+    const p = net.patterns[pid];
+    if (p.line !== line) continue;
+    const seen = new Set();
+    for (const s of p.stops) {
+      if (seen.has(s)) return pid;
+      seen.add(s);
+    }
+  }
+  return null;
+}
+
+// Linka 3, Kratka -> Trznice (drive natvrdo "P50", viz scripts/routing.test.js)
 const workdaySample = "20260202"; // pondeli
 const saturdaySample = "20260207"; // sobota
-const line3Pattern = "P50";
-const workdayCount = countActiveTrips(line3Pattern, workdaySample);
-const saturdayCount = countActiveTrips(line3Pattern, saturdaySample);
-console.log(`INFO: linka 3 (${line3Pattern}) spoju: pondeli ${workdaySample}=${workdayCount}, sobota ${saturdaySample}=${saturdayCount}`);
-if (workdayCount > saturdayCount) {
-  pass(`vsedni den hustsi nez sobota (${workdayCount} > ${saturdayCount})`);
+const line3Pattern = findPattern(net, 3, "Krátká", "Tržnice");
+if (!line3Pattern) {
+  fail('nenalezen pattern linky 3 Kratka->Trznice');
 } else {
-  fail(`vsedni den NENI hustsi nez sobota (${workdayCount} vs ${saturdayCount})`);
+  const workdayCount = countActiveTrips(line3Pattern, workdaySample);
+  const saturdayCount = countActiveTrips(line3Pattern, saturdaySample);
+  console.log(`INFO: linka 3 (${line3Pattern}) spoju: pondeli ${workdaySample}=${workdayCount}, sobota ${saturdaySample}=${saturdayCount}`);
+  if (workdayCount > saturdayCount) {
+    pass(`vsedni den hustsi nez sobota (${workdayCount} > ${saturdayCount})`);
+  } else {
+    fail(`vsedni den NENI hustsi nez sobota (${workdayCount} vs ${saturdayCount})`);
+  }
 }
 
 // --- Vyluka Bohatice,namesti ---
@@ -300,14 +334,19 @@ if (defaultNoTwoTransfer) {
   fail("bez parametru se presto vratily varianty s 2 prestupy — default se nechova jako drive");
 }
 
-// H1c: smyckovy pattern (P5, linka 12, Pivovar<->Trznice) musi vratit >=2 variant
-// primeho spoje (kratka cesta i cesta pres celou smycku), s ruznymi fromIdx.
-const loopResults = search(net, "Pivovar", "Tržnice", { maxTransfers: 0 }).filter((r) => r.legs[0].patternId === "P5");
-const distinctFromIdx = new Set(loopResults.map((r) => r.legs[0].fromIdx));
-if (loopResults.length >= 2 && distinctFromIdx.size >= 2) {
-  pass(`smyckovy pattern P5 (Pivovar->Trznice) vraci ${loopResults.length} varianty z ${distinctFromIdx.size} ruznych vyskytu zastavky`);
+// H1c: smyckovy pattern (linka 12, Pivovar<->Trznice; drive natvrdo "P5") musi vratit
+// >=2 variant primeho spoje (kratka cesta i cesta pres celou smycku), s ruznymi fromIdx.
+const line12LoopPattern = findLoopPattern(net, 12);
+if (!line12LoopPattern) {
+  fail('nenalezen smyckovy pattern linky 12');
 } else {
-  fail(`smyckovy pattern P5 (Pivovar->Trznice) vratil jen ${loopResults.length} variant(y), ${distinctFromIdx.size} vyskyt(u) — ocekavano >=2/>=2`);
+  const loopResults = search(net, "Pivovar", "Tržnice", { maxTransfers: 0 }).filter((r) => r.legs[0].patternId === line12LoopPattern);
+  const distinctFromIdx = new Set(loopResults.map((r) => r.legs[0].fromIdx));
+  if (loopResults.length >= 2 && distinctFromIdx.size >= 2) {
+    pass(`smyckovy pattern ${line12LoopPattern} (Pivovar->Trznice) vraci ${loopResults.length} varianty z ${distinctFromIdx.size} ruznych vyskytu zastavky`);
+  } else {
+    fail(`smyckovy pattern ${line12LoopPattern} (Pivovar->Trznice) vratil jen ${loopResults.length} variant(y), ${distinctFromIdx.size} vyskyt(u) — ocekavano >=2/>=2`);
+  }
 }
 
 // H1d: co-located prestup (Parkoviste KOME na lince 20 -> Lazne I S155 -> S116 -> linka 2/52).

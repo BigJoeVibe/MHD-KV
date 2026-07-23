@@ -125,29 +125,46 @@ Ve `update-data.yml` po buildu, ještě před commitem:
 - **`network.json` je validní JSON** a naparsuje se.
 - Když guard selže → **NEcommituj** nová data a pošli upozornění (e-mail z Actions). Radši stará platná data než rozbitá nová.
 
+## ⚠️ Stabilní vs. volatilní identifikátory (trvalé pravidlo, zavedeno 2026-07-23 po J8-fix)
+
+**Nikdy neklíčuj nic, co má přežít obnovu dat, na:**
+- `JDFS-…` — zdrojové GTFS `stop_id`. Příklad přečíslování (ověřeno na reálném datu): Kpt.Jaroše
+  `JDFS-10020` (17.–18. 7.) → `JDFS-3526` (22. 7.); Globus `JDFS-18345` → `JDFS-2780`.
+- `S#` / `P#` — interní zkrácená id v `network.json` (zastávky/patterny). Přiřazují se pořadím
+  výskytu při běhu `build_network.js` → mezi obnovami se přeskládají, i když se GTFS obsahově
+  skoro nezměnilo (ověřeno: `P50` = linka 3 v jednom buildu, linka 9 v dalším).
+
+**Klíčuj výhradně na:**
+- **normalizovaný název zastávky** (`normalizeName()` v `routing.js`/`build_network.js`: strip
+  `Karlovy Vary,`, `trim`, `toLowerCase`) + **veřejné číslo linky** (`route_short_name − 425000`).
+- Pro rozlišení konkrétního patternu/varianty trasy: `headsign` + pořadí zastávek, ne pattern id.
+
+**Proč:** JrUtil GTFS generuje `stop_id`/interní pořadí znovu při každém buildu ze zdroje — nejde
+o regresi dat, ale o vlastnost zdroje. Kód, testy i guard, které na tato id spoléhají natvrdo,
+selžou po každé další obnově, i když jsou data jinak v pořádku (viz `J8a` nález 23. 7. 2026 níže).
+
+**Dopad na kód (řešeno J8-fix, 2026-07-23):**
+- `build_network.js`: `COORD_OVERRIDES` klíčovaný normalizovaným názvem, aplikuje se JEN když
+  zdroj GPS nemá (nikdy nepřepíše validní data).
+- `verify_network.js`: pattern se dohledává přes `findPattern(net, line, fromName, toName)` /
+  `findLoopPattern(net, line)`, žádné natvrdo `P50`/`P5`.
+- `routing.test.js`/`journey.test.js`/`timetable.test.js`: odjakživa pracují přes názvy zastávek
+  (`resolveStopId`), ne přes `S#` — nebylo potřeba měnit.
+
 ## Rizika a otevřené body (číst!)
 
 - **Licence [k dořešení]** — před ostrým/veřejným nasazením ověřit podmínky užití GTFS z JrUtil / CIS JŘ
   (nejspíš open data, ale je třeba **potvrdit a uvést atribuci**). Spojenka svá data omezuje na nekomerční užití — nás se netýká (bereme JrUtil).
 - **Data nejsou 100% ucelená** — 7 zastávek nemá ve zdroji souřadnice (`0,0`); doplňuje je
-  `COORD_OVERRIDES` v `build_network.js`, ale klíč **není stabilní** — viz níže.
-  Platnost `calendar` je široká, „co jede tento týden" se musí počítat z `calendar_dates`.
-  Zbývá gap „na znamení" (viz výše).
-- ⚠️ **NOVÉ (zjištěno 2026-07-23, J8a test na reálném čerstvém stažení): interní GTFS `stop_id`
-  (`JDFS-xxxxx`) NEJSOU stabilní mezi obnovami dat.** Test s daty z 22. 7. (proti dřívějším z 17.–18. 7.)
-  ukázal, že stejná fyzická zastávka („Kpt.Jaroše", „Lázně I", …) dostala **jiné** `JDFS-` id.
-  Důsledky:
-  1. `COORD_OVERRIDES` klíčovaný `JDFS-` idčkem (H0/JH, 23.7.) se **rozbije při každé další obnově**
-     — GPS override přestane sedět a `verify_network.js` nahlásí 7 zastávek s `0,0`. Ověřeno reálně:
-     `update_data.js` guard toto správně zachytil a odmítl commit (funguje jak má), ale dokud se
-     override nepřeklíčuje na něco stabilnějšího (např. `stop_name`), **automatická obnova (J8b) nikdy
-     neprojde guardem**.
-  2. Interní zkrácená id v `network.json` (`S0,S1,…` zastávky, `P0,P1,…` patterny) jsou přiřazována
-     pořadím výskytu při buildu → **taky se mění mezi obnovami**. `verify_network.js` má natvrdo
-     `P50` (linka 3) a `P5` (linka 12, smyčka) — po čerstvém stažení `P50`/`P5` odpovídaly úplně
-     jiným linkám (9, resp. 1) a testy proto spadly. Není to regrese dat, je to křehkost testu.
-  **Stav:** guard funguje správně (odmítl commitnout), ale J8b (auto-commit bez lidské kontroly) je
-  blokované, dokud se toto nevyřeší — návrh a rozhodnutí u manažera. Detail v `TASK.md`.
+  `COORD_OVERRIDES` v `build_network.js` (klíč = normalizovaný název, ne `JDFS-` id — viz sekce
+  „Stabilní vs. volatilní identifikátory" výše). Platnost `calendar` je široká, „co jede tento
+  týden" se musí počítat z `calendar_dates`. Zbývá gap „na znamení" (viz výše).
+- ✅ **VYŘEŠENO 2026-07-23 (J8-fix)** — dřívější nález (J8a test 23.7.): GTFS `stop_id` (`JDFS-xxxxx`)
+  ani interní `S#`/`P#` nejsou stabilní mezi obnovami (ověřeno: Kpt.Jaroše `JDFS-10020`→`JDFS-3526`,
+  `P50` linka 3→linka 9 po přečíslování). `COORD_OVERRIDES` překlíčován na název (viz sekce výše),
+  `verify_network.js` odhardcodován přes `findPattern`/`findLoopPattern`. **Důkaz:** `update_data.js`
+  spuštěný na živá čerstvá data proběhl end-to-end, guard 26/26 PASS, patterny se skutečně přečíslovaly
+  (`P50`→`P206`, `P5`→`P120`) a testy i tak našly správné linky/spoje. J8b (auto workflow) teď dává smysl.
 - **Varianty linek** — každá linka má víc směrů a odbočkových variant (např. linka 13 má větev na Lanovku Imperial
   i na Starou Roli-sídliště). Model musí umět víc „patternů" na linku, ne jeden.
 - **Závislost na zprostředkovateli** — JrUtil je třetí strana (byť věrný převod CIS). Pojistka: přímo CIS JŘ / oslovit DPKV.

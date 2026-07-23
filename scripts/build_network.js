@@ -59,15 +59,21 @@ const stByTrip = {};
 
 // Ruční doplnění GPS pro zastávky, které zdroj (CIS/GTFS) nemá (0,0). Joe, 2026-07-23.
 // PROVIZORNÍ single-point na uzel — přesné směrové pozice řeší epic J9.
+// Klíč = normalizovaný název (ne JDFS-/S# id!) — ta jsou per-build volatilní, JrUtil je
+// při každé obnově přečísluje (viz docs/DATA_SOURCES.md, nález 2026-07-23). Název zastávky
+// je naopak stabilní. Aplikuje se JEN když zdroj GPS nemá → nikdy nepřepíše validní data
+// (proto "lázně i" sedí i pro totožnou zastávku, která GPS má).
+const normalizeName = (n) => (n || '').replace(/^Karlovy Vary,/, '').trim().toLowerCase();
 const COORD_OVERRIDES = {
-  'JDFS-10020': [50.225355, 12.839125],  // Kpt.Jaroše — střed 2 označníků (~90 m od sebe)
-  'JDFS-14283': [50.239712, 12.889429],  // Mattoniho nábřeží — 2 MHD označníky (příměstský 3. bod → J9)
-  'JDFS-16310': [50.255920, 12.885421],  // Nádraží Dalovice
-  'JDFS-16311': [50.252510, 12.882424],  // Na Pasece
-  'JDFS-18345': [50.217823, 12.806296],  // Globus
-  'JDFS-32745': [50.226009, 12.823021],  // Tesco
-  'JDFS-36827': [50.219270, 12.880980],  // Lázně I (S155) = poloha totožné zastávky S116 (JDFS-6580)
+  'kpt.jaroše':        [50.225355, 12.839125],  // střed 2 označníků (~90 m od sebe) — přesné směr. pozice → J9
+  'mattoniho nábřeží': [50.239712, 12.889429],  // 2 MHD označníky (příměstský 3. bod → J9)
+  'nádraží dalovice':  [50.255920, 12.885421],
+  'na pasece':         [50.252510, 12.882424],
+  'globus':            [50.217823, 12.806296],
+  'tesco':             [50.226009, 12.823021],
+  'lázně i':           [50.219270, 12.880980],
 };
+const overrideUsed = new Set();
 
 // remap stop_id na krátké S0,S1,... (úspora bytů)
 const stopIdx = {}, stops = {}; let sc = 0;
@@ -99,11 +105,16 @@ for (const t of trips) {
     const k = stopIdx[gid];
     if (!(k in stops)) {
       const m = stopMeta[gid];
-      const override = COORD_OVERRIDES[gid];
+      const rawLat = m.stop_lat ? +(+m.stop_lat).toFixed(5) : null;
+      const rawLon = m.stop_lon ? +(+m.stop_lon).toFixed(5) : null;
+      const missingGps = !rawLat || !rawLon; // 0/prazdne/null = chybi (validni GPS v KV neni 0,0)
+      const nameKey = normalizeName(m.stop_name);
+      const override = missingGps ? COORD_OVERRIDES[nameKey] : null;
+      if (override) overrideUsed.add(nameKey);
       stops[k] = {
         n: (m.stop_name || '').replace(/^Karlovy Vary,/, ''),
-        lat: override ? override[0] : (m.stop_lat ? +(+m.stop_lat).toFixed(5) : null),
-        lon: override ? override[1] : (m.stop_lon ? +(+m.stop_lon).toFixed(5) : null),
+        lat: override ? override[0] : rawLat,
+        lon: override ? override[1] : rawLon,
       };
     }
   }
@@ -120,6 +131,12 @@ for (const c of cal) {
 for (const cd of calDates) {
   const sv = services[cd.service_id] || (services[cd.service_id] = { d: null, s: null, e: null, add: [], rem: [] });
   if (cd.exception_type === '1') sv.add.push(cd.date); else sv.rem.push(cd.date);
+}
+
+for (const nameKey of Object.keys(COORD_OVERRIDES)) {
+  if (!overrideUsed.has(nameKey)) {
+    console.warn(`WARN: COORD_OVERRIDES["${nameKey}"] se nepoužil (zastávka s tímto názvem se v datech nevyskytla, nebo už má vlastní GPS) — zkontroluj, jestli se přejmenovala/zmizela.`);
+  }
 }
 
 const net = {
