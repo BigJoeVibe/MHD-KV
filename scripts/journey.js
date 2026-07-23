@@ -122,6 +122,10 @@ function transferItineraries(net, variant, dateStr, nowMin, minTransfer) {
       ],
       transferStop: leg1.to,
       waitMin: depMin2 - arrT,
+      // Vsechny prestupy v teto predavce jsou "same-place" — bud doslova stejna
+      // zastavka, nebo H1d co-located sourozenec (<=30 m). Pesi presun mezi
+      // ruznymi oznacniky (30-200 m) je az epic J9, do te doby vzdy 0.
+      walkMin: 0,
     });
   }
   return out;
@@ -131,11 +135,23 @@ function itineraryKey(it) {
   return it.legs.map((l) => `${l.line}:${l.depMin}`).join("|");
 }
 
+// Prepinatelne razeni (H2) — pripravene pro UI filtry (prijezd / delka / prestupy),
+// aniz by se muselo sahat do jadra. Kazdy klic ma sekundarni tie-break, aby razeni
+// bylo stabilni i pri shode hlavniho kriteria. Vychozi je 'departure' (Joe: zatim
+// prio nejblizsi odjezd).
+const SORTERS = {
+  departure: (a, b) => (a.depMin !== b.depMin ? a.depMin - b.depMin : a.totalMin !== b.totalMin ? a.totalMin - b.totalMin : a.transfers - b.transfers),
+  arrival: (a, b) => (a.arrMin !== b.arrMin ? a.arrMin - b.arrMin : a.totalMin !== b.totalMin ? a.totalMin - b.totalMin : a.transfers - b.transfers),
+  duration: (a, b) => (a.totalMin !== b.totalMin ? a.totalMin - b.totalMin : a.depMin - b.depMin),
+  transfers: (a, b) => (a.transfers !== b.transfers ? a.transfers - b.transfers : a.depMin - b.depMin),
+};
+
 function planJourney(net, A, B, opts = {}) {
   const { date, nowMin } = opts;
   const minTransfer = opts.minTransfer != null ? opts.minTransfer : 3;
-  const limit = opts.limit != null ? opts.limit : 5;
+  const limit = opts.limit != null ? opts.limit : 8;
   const maxTransfers = opts.maxTransfers != null ? opts.maxTransfers : 1;
+  const sortKey = opts.sort && SORTERS[opts.sort] ? opts.sort : "departure";
 
   const stopA = resolveStopId(net, A);
   const stopB = resolveStopId(net, B);
@@ -147,9 +163,13 @@ function planJourney(net, A, B, opts = {}) {
   for (const variant of variants) {
     if (variant.transfers === 0) {
       itineraries = itineraries.concat(directItineraries(net, variant.legs[0], date, nowMin));
-    } else {
+    } else if (variant.transfers === 1) {
       itineraries = itineraries.concat(transferItineraries(net, variant, date, nowMin, minTransfer));
     }
+    // transfers === 2 (H1b): casova vrstva pro retezec o 2 prestupech zatim
+    // neni implementovana (mimo rozsah teto predavky) — search() s maxTransfers:2
+    // je pripraveny pro budouci UI "dalsi moznosti", journey.js ho zatim
+    // preskakuje, aby nevracel nekompletni/spatny itinerar (jen 2 ze 3 nohou).
   }
 
   const seen = new Set();
@@ -162,11 +182,7 @@ function planJourney(net, A, B, opts = {}) {
     }
   }
 
-  deduped.sort((a, b) => {
-    if (a.depMin !== b.depMin) return a.depMin - b.depMin;
-    if (a.totalMin !== b.totalMin) return a.totalMin - b.totalMin;
-    return a.transfers - b.transfers;
-  });
+  deduped.sort(SORTERS[sortKey]);
 
   return deduped.slice(0, limit);
 }
