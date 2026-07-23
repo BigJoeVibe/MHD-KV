@@ -26,7 +26,9 @@ Recept je v `data_raw/` (skripty se spouštěly ad-hoc; při obnově dat zopakov
 ## Co subset obsahuje (ověřeno 2026-07-19)
 
 - **23 linek**: 1–9, 11, 12, 13, 15–17, 19–23, 44, 51, 52.
-- **157 zastávek**, z toho **150 se souřadnicemi** (7 bez — doplnit).
+- **157 zastávek**, z toho **150 se souřadnicemi ve zdroji** — 7 zdroj nemá (`0,0`), doplňuje
+  `COORD_OVERRIDES` v `build_network.js` (JH, 23.7.). Viz rizika níže — klíč override **není
+  stabilní přes obnovy dat**.
 - **10 151 spojů**, **144 775 stop_times**, ~9,7 MB.
 - Platnost `calendar` do **31. 12. 2026** (aktuální). Reálně jedoucí dny řídí `calendar_dates`.
 - Klíčové zastávky sedí: `Karlovy Vary,Okružní` a `…,Krátká` jsou vedle sebe (linky 15, 51) = domovské.
@@ -44,8 +46,9 @@ Recept je v `data_raw/` (skripty se spouštěly ad-hoc; při obnově dat zopakov
 Skript `scripts/build_network.js` převádí `kv_gtfs/` → `data/network.json` (kompaktní model appky).
 Ověřeno na reálných datech:
 
-- **Rozsah:** 23 linek, **157 zastávek (VŠECHNY s GPS)**, 290 patternů (linka×směr×varianta trasy), 10 151 spojů.
-  → **Korekce:** dřívější „7 zastávek bez GPS" už NEPLATÍ (aktuální data mají souřadnice u všech).
+- **Rozsah:** 23 linek, **157 zastávek** (150 se souřadnicemi ve zdroji + 7 doplněných `COORD_OVERRIDES`
+  = výsledných 157 s GPS **jen když override správně sedí** — viz rizika níže), 290 patternů
+  (linka×směr×varianta trasy), 10 151 spojů.
 - **Velikost:** `network.json` ~592 KB, **~62 KB přes síť (gzip)** → pro mobil v pohodě.
 - **Varianty linek = patterny.** To, co F1 řešila legendou (písmenko „jede jen do X / jinudy / jiná konečná"),
   je tu strukturálně: každá varianta trasy = vlastní pattern se skutečným pořadím zastávek + `headsign` (konečná).
@@ -126,9 +129,25 @@ Ve `update-data.yml` po buildu, ještě před commitem:
 
 - **Licence [k dořešení]** — před ostrým/veřejným nasazením ověřit podmínky užití GTFS z JrUtil / CIS JŘ
   (nejspíš open data, ale je třeba **potvrdit a uvést atribuci**). Spojenka svá data omezuje na nekomerční užití — nás se netýká (bereme JrUtil).
-- **Data nejsou 100% ucelená** — ~~7 zastávek bez souřadnic~~ (VYŘEŠENO 2026-07-19: všech 157 má GPS);
-  platnost `calendar` je široká, „co jede tento týden" se musí počítat z `calendar_dates`.
+- **Data nejsou 100% ucelená** — 7 zastávek nemá ve zdroji souřadnice (`0,0`); doplňuje je
+  `COORD_OVERRIDES` v `build_network.js`, ale klíč **není stabilní** — viz níže.
+  Platnost `calendar` je široká, „co jede tento týden" se musí počítat z `calendar_dates`.
   Zbývá gap „na znamení" (viz výše).
+- ⚠️ **NOVÉ (zjištěno 2026-07-23, J8a test na reálném čerstvém stažení): interní GTFS `stop_id`
+  (`JDFS-xxxxx`) NEJSOU stabilní mezi obnovami dat.** Test s daty z 22. 7. (proti dřívějším z 17.–18. 7.)
+  ukázal, že stejná fyzická zastávka („Kpt.Jaroše", „Lázně I", …) dostala **jiné** `JDFS-` id.
+  Důsledky:
+  1. `COORD_OVERRIDES` klíčovaný `JDFS-` idčkem (H0/JH, 23.7.) se **rozbije při každé další obnově**
+     — GPS override přestane sedět a `verify_network.js` nahlásí 7 zastávek s `0,0`. Ověřeno reálně:
+     `update_data.js` guard toto správně zachytil a odmítl commit (funguje jak má), ale dokud se
+     override nepřeklíčuje na něco stabilnějšího (např. `stop_name`), **automatická obnova (J8b) nikdy
+     neprojde guardem**.
+  2. Interní zkrácená id v `network.json` (`S0,S1,…` zastávky, `P0,P1,…` patterny) jsou přiřazována
+     pořadím výskytu při buildu → **taky se mění mezi obnovami**. `verify_network.js` má natvrdo
+     `P50` (linka 3) a `P5` (linka 12, smyčka) — po čerstvém stažení `P50`/`P5` odpovídaly úplně
+     jiným linkám (9, resp. 1) a testy proto spadly. Není to regrese dat, je to křehkost testu.
+  **Stav:** guard funguje správně (odmítl commitnout), ale J8b (auto-commit bez lidské kontroly) je
+  blokované, dokud se toto nevyřeší — návrh a rozhodnutí u manažera. Detail v `TASK.md`.
 - **Varianty linek** — každá linka má víc směrů a odbočkových variant (např. linka 13 má větev na Lanovku Imperial
   i na Starou Roli-sídliště). Model musí umět víc „patternů" na linku, ne jeden.
 - **Závislost na zprostředkovateli** — JrUtil je třetí strana (byť věrný převod CIS). Pojistka: přímo CIS JŘ / oslovit DPKV.

@@ -43,11 +43,31 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 | J5 | Poloha: klik do mapy / GPS / paste GPS → nejbližší zastávka | coords už v datech; mapa = zvážit Leaflet |
 | J6 | Favourites = body 1–3 (domov↔centrum, ↔Západní, ↔nádraží) jako uložené dotazy | nahrazuje ruční F2 |
 | J7 | Sloučení se starou appkou F1 / osud „odjezdové tabule" | rozhodnout |
-| **J8** | **Automatizace obnovy dat** (GitHub Actions, bez lokálu) — návrh hotový, viz `docs/DATA_SOURCES.md` | **⭐ TEĎ — J8a** (ruční `update_data.js` + guard, spec v `handoff.md`); J8b (workflow) potom |
+| **J8** | **Automatizace obnovy dat** (GitHub Actions, bez lokálu) — návrh hotový, viz `docs/DATA_SOURCES.md` | **J8a HOTOVO 23.7.** (`update_data.js` + guard, otestováno na reálných datech); **J8b BLOKOVÁNO** — viz nález níže |
 
-**J8 — rozdělení (rozhodnuto 2026-07-23, staged + denní kontrola):**
-- **J8a — ⭐ TEĎ:** `scripts/update_data.js` (stáhnout GTFS → filtr KV agency 48364282 + `425xxx`, stream `stop_times` 1,38 GB → `build_network.js`) + **regression guard** (validní JSON + prahy linky≥20/zast≥140/spoje≥9000 + pokles ≤20 % + `verify_network.js` celý PASS → jinak rollback, necommitovat) + stavový soubor + docs fix (GPS: zdroj 7 nemá, řeší override). Otestovat ručně.
-- **J8b — potom:** `.github/workflows/update-data.yml` (denní cron, Last-Modified check, `workflow_dispatch`, **keepalive** proti 60dennímu vypnutí).
+**J8a — HOTOVO 23.7.:** `scripts/update_data.js` — stáhne aktuální GTFS, vyfiltruje MHD KV, streamuje
+`stop_times.txt` (~1,38 GB), zavolá `build_network.js`, prožene guardem (validní JSON + prahy
+linky≥20/zast≥140/spoje≥9000 + pokles ≤20 % + `verify_network.js` celý PASS → jinak rollback +
+nenulový exit). Otestováno end-to-end na reálném čerstvém stažení (22.7. data) — viz `handoff.md` → VÝSLEDEK.
+
+**⚠️ NÁLEZ blokující J8b (2026-07-23, z reálného testu J8a) — GTFS interní id nejsou stabilní mezi
+obnovami:** čerstvé stažení (22.7.) proti staršímu (17.–18.7.) ukázalo, že `stop_id` (`JDFS-xxxxx`)
+téže fyzické zastávky se mezi obnovami **mění**. Důsledky:
+1. `COORD_OVERRIDES` v `build_network.js` (klíč = `JDFS-` id, JH/H0 23.7.) se rozbije při každé další
+   obnově → 7 zastávek spadne zpět na `0,0` → guard to správně zachytí a odmítne commit, ale
+   **automatický běh (J8b) tak nikdy neprojde bez zásahu**. Návrh opravy: rekeyovat override na
+   `stop_name` (stabilnější) — potřebuje rozhodnutí, protože „Lázně I" má ve zdroji 2 různě
+   pojmenované záznamy (`Karlovy Vary,Lázně I` × `Lázně I` bez prefixu) a je nutné to vyřešit korektně,
+   ne overridovat obě.
+2. Interní zkrácená id v `network.json` (`S#` zastávky, `P#` patterny) jsou přiřazována pořadím
+   výskytu při buildu → nejsou stabilní mezi obnovami. `verify_network.js` má natvrdo `P50` (dřív
+   linka 3), `P5` (dřív linka 12 smyčka) — po čerstvém stažení odpovídaly jiným linkám (9, resp. 1) a
+   testy proto spadly (FAIL 3×). **Není to regrese dat**, je to křehkost testu vůči přeindexaci.
+   Návrh opravy: resolvovat testovací pattern přes (linka, headsign, zastávky), ne přes natvrdo `P#`.
+**Rozhodnout před J8b:** buď (a) opravit oba body výše, nebo (b) J8b nechat jako navrhované PR ke
+schválení (ne auto-commit), dokud guard nebude spolehlivě zelený i na cizí den dat. Detail `docs/DATA_SOURCES.md` → Rizika.
+
+**J8b — potom (po vyřešení nálezu výše):** `.github/workflows/update-data.yml` (denní cron, Last-Modified check, `workflow_dispatch`, **keepalive** proti 60dennímu vypnutí).
 
 **J8 — podúkoly (návrh 2026-07-21):**
 - `scripts/update_data.js` — stáhnout JrUtil GTFS → filtr KV (stream `stop_times`) → `build_network.js`.
