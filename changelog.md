@@ -7,6 +7,27 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-07-23 (5) — v0.1.0 (J8b: GitHub Actions — auto-obnova dat bez lidí, kroky 1–3)
+
+- **`scripts/update_data.js` (J8b-1):** levný pre-check přes HTTP HEAD na zdrojovou URL — porovná
+  `Last-Modified` s `data/data_source_state.json`, při shodě skončí hned (exit 0, nestahuje 123 MB
+  zbytečně). Přepínač `--force`/env `FORCE=1` pre-check obchází (pro `workflow_dispatch` a testy).
+  Fallback na plné stažení, když HEAD selže nebo hlavička chybí. Otestováno 3× lokálně: beze změny
+  (0,2 s), `--force` (plný běh, guard 26/26 PASS, 51,4 s), znovu bez force (opět přeskočeno).
+- **`.github/workflows/update-data.yml` (J8b-2):** denní cron `0 3 * * *` UTC + `workflow_dispatch`
+  (ruční tlačítko, posílá `FORCE=1`). Commit `data/network.json` + `data_source_state.json` jen když
+  se liší; guard uvnitř `update_data.js` — při FAIL skript skončí nenulově, job zčervená (e-mail),
+  žádný commit se nestane (auto-commit do `main` je bezpečný přesně proto).
+- **Keepalive (J8b-3):** další krok ve stejném workflow, spustí se jen když datový krok nic
+  necommitnul; spočítá stáří posledního commitu a při `>=50` dnech bumpne `lastChecked` v
+  `data_source_state.json` (proti tichému 60dennímu vypnutí scheduled workflow GitHubem). Idempotentní,
+  běžný den beze změny = žádný šum v historii.
+- **Otevřeno:** J8b-4 (ověření na reálném runneru přes `workflow_dispatch`) čeká na Joeovu ruční akci
+  v Actions tabu — executor nemá k dispozici `gh` CLI ani token pro spuštění. Detail a instrukce v
+  `handoff.md` → VÝSLEDEK.
+
+---
+
 ## 2026-07-23 (4) — v0.1.0 (J8-fix: refresh-stabilita — klíčování na název/linku, ne volatilní id)
 
 - **`scripts/build_network.js`** — `COORD_OVERRIDES` překlíčován ze 7× `JDFS-…` (volatilní GTFS

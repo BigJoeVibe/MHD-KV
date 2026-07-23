@@ -130,4 +130,44 @@ hrozí. Řešení (nízký šum):
 ---
 
 ## VÝSLEDEK (vyplní executor)
-_(sem: co hotové, výsledek ručního běhu workflow, keepalive, čas běhu, problémy, nápady)_
+
+**J8b-1, J8b-2, J8b-3 hotové a pushnuté na `main` (commity `f575a0f`, `a5d51db`, `3f56e75`).
+J8b-4 čeká na ruční spuštění — viz níže, potřebuje Joeovu akci v prohlížeči.**
+
+- **J8b-1** (`scripts/update_data.js`): přidán `isForced()` (`--force` nebo env `FORCE=1`/`true`) a
+  `headLastModified()` (levný `curl -sI` bez stažení 123MB ZIPu). Na začátku `main()`: bez force se
+  porovná HEAD `Last-Modified` s uloženým stavem (`data/data_source_state.json`) — při shodě skript
+  vypíše „zdroj beze změny — přeskočeno" a skončí (exit 0) bez stažení/buildu. Když HEAD selže nebo
+  hlavička chybí → fallback pokračuje stažením (ať se pipeline nezasekne). **Testováno 3×:** (1) beze
+  změny zdroje → přeskočeno za 0,2 s; (2) `--force` → plný běh, guard 26/26 PASS, 51,4 s (data beze
+  změny oproti předchozímu buildu, jen `updatedAt` v state se posunul); (3) znovu bez `--force` po
+  forced běhu → opět přeskočeno (idempotence potvrzena).
+- **J8b-2** (`.github/workflows/update-data.yml`): denní cron `0 3 * * *` (UTC) + `workflow_dispatch`
+  (posílá `FORCE=1`). Krok „Commit changes" commitne `data/network.json` + `data_source_state.json`
+  jen když se liší (`git diff --cached --quiet`), jinak nic. `permissions: contents write` pro push
+  přes `GITHUB_TOKEN`, `concurrency` group proti souběžným během. Přesně dle specu.
+- **J8b-3** (keepalive): přidán jako další krok ve stejném workflow (ne v `update_data.js`, dle
+  nabízené varianty ze specu) — spustí se jen `if: steps.commit_data.outputs.committed == 'false'`.
+  Spočítá stáří posledního commitu (`git log -1 --format=%ct`); když je `>=50` dní, bumpne `lastChecked`
+  v `data_source_state.json` a commitne/pushne. Jinak (běžný den, žádná datová změna, commit mladší
+  než 50 dní) se nic neděje — žádný šum v historii. Idempotentní.
+- **Push:** `git push` proveden (repo `BigJoeVibe/MHD-KV`, `main` je teď `3f56e75`) — workflow soubor
+  musí být na `main`, aby ho GitHub Actions vůbec viděl/nabídl k ručnímu spuštění.
+
+**J8b-4 (ověření na reálném runneru) — NEDOKONČENO, čeká na Joea:**
+- Nemám k dispozici `gh` CLI ani GitHub token s právem `workflow_dispatch` (nekonfigurováno v tomto
+  prostředí) → nemůžu workflow spustit ručně sám. **Repo je public**, takže čtení stavu běhu přes
+  API/web jde bez auth, ale spuštění potřebuje kliknutí v prohlížeči nebo autentizovaný `gh`/token.
+- **Prosba na Joea:** GitHub → repo `BigJoeVibe/MHD-KV` → tab **Actions** → workflow **update-data**
+  (levý panel) → tlačítko **Run workflow** (větev `main`) → **Run workflow**. Poběží s `FORCE=1`
+  (stáhne vždy, i když zdroj nezměněn od včerejška).
+- Po doběhnutí (řádově do 2 minut dle lokálních testů, `timeout-minutes: 20` jako pojistka) zkontroluj:
+  job zelený, log ukazuje `GUARD: ... PASS` / `SOUHRN PASS: 26, FAIL: 0`, a buď proběhl commit
+  „chore(data): automatická obnova..." (pokud se data od posledního lokálního běhu liší), nebo skončil
+  čistě beze commitu (data shodná — pravděpodobnější, protože lokální `--force` běh proběhl dnes,
+  23.7., těsně předtím).
+- Dej vědět výsledek (zelené/červené, commit/bez commitu) — dopíšu sem detail a uzavřu J8 jako celek.
+
+**Problémy/nápady:** žádné nové technické. Otevřené (mimo scope, do budoucna): licence GTFS atribuce
+(už v `TASK.md`), `data_raw/` v repu zkontrolovat po prvním reálném běhu na runneru (má zůstat
+gitignored, lokální testy to potvrdily).
