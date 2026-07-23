@@ -72,7 +72,19 @@ proveden:** `update_data.js` na živé čerstvé stažení prošel end-to-end (g
 patterny se reálně přečíslovaly a dohledání je i tak správně našlo — commitnut i přestavěný
 `network.json` (23 linek/157 zast./290 patternů/10 151 spojů).
 
-**J8b — ⭐ TEĎ (odblokováno):** `.github/workflows/update-data.yml` (denní cron, Last-Modified check, `workflow_dispatch`, **keepalive** proti 60dennímu vypnutí).
+**📌 BUDOUCÍ — Vlastní stabilní id zastávek (registr / mini-DB), váže se na J4/J6 (zapsáno 23.7.):**
+- **Kontext:** zdrojové `JDFS-` i interní `S#`/`P#` jsou per-build volatilní (viz J8-fix). Pro jádro/obnovu
+  to vyřešeno name-keyingem. **Ale** až budeme persistovat uživatelská data — **oblíbené (J6)**, sdílené
+  odkazy / deep-linky na spojení (**J4**) — nesmí viset na volatilních id ani čistě na názvu (přejmenování,
+  normalizované kolize typu „Lázně I").
+- **Nápad:** vlastní registr / mini-DB v repu `stabilní klíč → náš pevný KV-id`, mapovaný při buildu; appka
+  i uložené dotazy pak drží náš KV-id, ne zdrojové/interní.
+- **Kotva = GPS poloha, ne text** (rozhodnutí směru, Joe 23.7.): poloha je jazykově nezávislá a stabilnější
+  než název. Pozor na: zastávky bez GPS (`0,0` → řešeno override), 2 označníky/uzly (→ epic **J9** směrové
+  pozice), drobné posuny souřadnic mezi obnovami (párovat s tolerancí).
+- **Rozhodnout až u J4/J6.** Teď netřeba — name-keying pro J8 stačí. „Uvidíme, jak to bude fungovat" (Joe).
+
+**J8b — ⭐ TEĎ (spec v `handoff.md`):** rozhodnuto (Joe 23.7.): **auto-commit rovnou do `main`** (guard = ventil místo člověka) + **denní cron `0 3 * * *` (UTC)**. Kroky: J8b-1 Last-Modified pre-check + `--force` v `update_data.js`; J8b-2 `.github/workflows/update-data.yml` (cron + `workflow_dispatch` s FORCE, `permissions: contents:write`, commit jen při změně, guard-FAIL = červený job = e-mail, žádný commit); J8b-3 keepalive proti 60dennímu vypnutí; J8b-4 ověřit ručním během na runneru. 📌 licence GTFS (atribuce) = must-do před veřejným během.
 
 **J8 — podúkoly (návrh 2026-07-21):**
 - `scripts/update_data.js` — stáhnout JrUtil GTFS → filtr KV (stream `stop_times`) → `build_network.js`.
