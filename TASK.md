@@ -64,10 +64,13 @@ téže fyzické zastávky se mezi obnovami **mění**. Důsledky:
    linka 3), `P5` (dřív linka 12 smyčka) — po čerstvém stažení odpovídaly jiným linkám (9, resp. 1) a
    testy proto spadly (FAIL 3×). **Není to regrese dat**, je to křehkost testu vůči přeindexaci.
    Návrh opravy: resolvovat testovací pattern přes (linka, headsign, zastávky), ne přes natvrdo `P#`.
-**Rozhodnout před J8b:** buď (a) opravit oba body výše, nebo (b) J8b nechat jako navrhované PR ke
-schválení (ne auto-commit), dokud guard nebude spolehlivě zelený i na cizí den dat. Detail `docs/DATA_SOURCES.md` → Rizika.
+**ROZHODNUTO (Joe 23.7.): varianta (a) — opravit.** → **J8-fix ⭐ TEĎ** (spec v `handoff.md`):
+překlíčovat `COORD_OVERRIDES` na **normalizovaný název** + aplikovat jen když GPS chybí (řeší i „Lázně I"
+se 2 záznamy — validní se nepřepíše); odhardcodovat `P50`/`P5`/`S#` ve `verify_network.js` i v testech
+(resolvovat přes linku + název); trvalé pravidlo do `docs/DATA_SOURCES.md`; **důkaz:** `update_data.js`
+na čerstvá data teď projde (guard 26/26) → commitnout i přestavěný `network.json`.
 
-**J8b — potom (po vyřešení nálezu výše):** `.github/workflows/update-data.yml` (denní cron, Last-Modified check, `workflow_dispatch`, **keepalive** proti 60dennímu vypnutí).
+**J8b — potom (po J8-fix):** `.github/workflows/update-data.yml` (denní cron, Last-Modified check, `workflow_dispatch`, **keepalive** proti 60dennímu vypnutí).
 
 **J8 — podúkoly (návrh 2026-07-21):**
 - `scripts/update_data.js` — stáhnout JrUtil GTFS → filtr KV (stream `stop_times`) → `build_network.js`.
