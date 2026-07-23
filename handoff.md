@@ -154,20 +154,25 @@ J8b-4 čeká na ruční spuštění — viz níže, potřebuje Joeovu akci v pro
 - **Push:** `git push` proveden (repo `BigJoeVibe/MHD-KV`, `main` je teď `3f56e75`) — workflow soubor
   musí být na `main`, aby ho GitHub Actions vůbec viděl/nabídl k ručnímu spuštění.
 
-**J8b-4 (ověření na reálném runneru) — NEDOKONČENO, čeká na Joea:**
-- Nemám k dispozici `gh` CLI ani GitHub token s právem `workflow_dispatch` (nekonfigurováno v tomto
-  prostředí) → nemůžu workflow spustit ručně sám. **Repo je public**, takže čtení stavu běhu přes
-  API/web jde bez auth, ale spuštění potřebuje kliknutí v prohlížeči nebo autentizovaný `gh`/token.
-- **Prosba na Joea:** GitHub → repo `BigJoeVibe/MHD-KV` → tab **Actions** → workflow **update-data**
-  (levý panel) → tlačítko **Run workflow** (větev `main`) → **Run workflow**. Poběží s `FORCE=1`
-  (stáhne vždy, i když zdroj nezměněn od včerejška).
-- Po doběhnutí (řádově do 2 minut dle lokálních testů, `timeout-minutes: 20` jako pojistka) zkontroluj:
-  job zelený, log ukazuje `GUARD: ... PASS` / `SOUHRN PASS: 26, FAIL: 0`, a buď proběhl commit
-  „chore(data): automatická obnova..." (pokud se data od posledního lokálního běhu liší), nebo skončil
-  čistě beze commitu (data shodná — pravděpodobnější, protože lokální `--force` běh proběhl dnes,
-  23.7., těsně předtím).
-- Dej vědět výsledek (zelené/červené, commit/bez commitu) — dopíšu sem detail a uzavřu J8 jako celek.
+**J8b-4 (ověření na reálném runneru) — ✅ HOTOVO 23.7. (Joe spustil ručně):**
+- Joe spustil `workflow_dispatch` v Actions tabu (`main`, `FORCE=1`). **Výsledek: Success, 42 s celkem
+  (krok `update` 38 s).** Commit `b43ad7f` „chore(data): automaticka obnova jizdnich radu 2026-07-23"
+  — obsahuje jen bump `updatedAt` v `data/data_source_state.json` (`network.json` beze změny, protože
+  zdroj se nezměnil od dřívějšího lokálního `--force` běhu ze stejného dne — build je deterministický).
+  To je očekávané a správné chování: `workflow_dispatch` vždy stáhne+rebuilduje (FORCE obchází
+  Last-Modified pre-check), takže `updatedAt` timestamp se pokaždé liší → guard prošel → commit se
+  udělal, i když věcná data (`network.json`) identická. **Ostrý denní cron (bez FORCE) tohle nedělá** —
+  ten při nezměněném zdroji skončí už v pre-checku (žádné stažení, žádný commit).
+- `data_raw/` se v repu neobjevilo (zůstává gitignored, jak má) — potvrzeno, že v commitu `b43ad7f`
+  jsou jen očekávané soubory.
+- **Drobný nález (neblokující):** GitHub Actions log hlásí 1 warning — `actions/checkout@v4` a
+  `actions/setup-node@v4` s `node-version: '20'` se spouští na Node 20, který je deprecated; runner ho
+  vynuceně přepnul na Node 24. Funkčně bez dopadu (běh proběhl OK), ale stálo by za zvážení příště
+  bumpnout `node-version` na `'22'` nebo `'24'` v `update-data.yml`, ať warning zmizí. Zapsáno jako
+  nápad do `TASK.md` (mimo scope této předávky — jen konstatuji, neopravuji bez zadání).
+- **J8 jako celek (J8a + J8-fix + J8b) je tímto HOTOVÝ end-to-end**, včetně reálného ověření na
+  GitHub Actions runneru. Automatická denní obnova dat běží bez nutnosti lidského zásahu, guard chrání
+  `main` před špatnými daty, keepalive chrání workflow před tichým vypnutím.
 
-**Problémy/nápady:** žádné nové technické. Otevřené (mimo scope, do budoucna): licence GTFS atribuce
-(už v `TASK.md`), `data_raw/` v repu zkontrolovat po prvním reálném běhu na runneru (má zůstat
-gitignored, lokální testy to potvrdily).
+**Problémy/nápady:** žádné blokující. Otevřené (mimo scope, do budoucna): licence GTFS atribuce (už v
+`TASK.md`), drobný Node 20→22/24 bump v `update-data.yml` (viz výše, kosmetický warning).

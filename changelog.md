@@ -7,6 +7,23 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-07-23 (6) — v0.1.0 (J8b-4: ověřeno na reálném GH Actions runneru — J8 kompletní)
+
+- Joe spustil `workflow_dispatch` ručně (Actions tab, `main`, `FORCE=1`). **Výsledek: Success, 42 s**
+  (krok `update` 38 s). Guard prošel, commit `b43ad7f` proběhl — obsahuje jen bump `updatedAt` v
+  `data/data_source_state.json` (`network.json` beze změny, protože zdroj se od dřívějšího lokálního
+  `--force` běhu ze stejného dne nezměnil — build je deterministický). Přesně očekávané chování:
+  `workflow_dispatch` vždy stáhne+rebuilduje (FORCE obchází Last-Modified pre-check) → timestamp se
+  liší → guard OK → commit. **Ostrý denní cron (bez FORCE) takhle zbytečně nekomituje** — při
+  nezměněném zdroji skončí už v levném pre-checku, žádné stažení ani commit.
+- `data_raw/` se v repu neobjevilo (zůstává gitignored) — potvrzeno v obsahu commitu.
+- **Drobný neblokující nález:** GH Actions log hlásí Node 20 deprecation warning (`setup-node@v4` s
+  `node-version: '20'`, runner vynuceně použil Node 24). Funkčně bez dopadu, zapsáno jako nápad do
+  `TASK.md` (bump na `'22'`/`'24'` příště).
+- **J8 (celý epic: J8a + J8-fix + J8b) je tímto HOTOVÝ end-to-end** — automatická denní obnova dat
+  běží bez lidského zásahu, guard chrání `main` před špatnými daty, keepalive chrání workflow před
+  tichým 60denním vypnutím GitHubem.
+
 ## 2026-07-23 (5) — v0.1.0 (J8b: GitHub Actions — auto-obnova dat bez lidí, kroky 1–3)
 
 - **`scripts/update_data.js` (J8b-1):** levný pre-check přes HTTP HEAD na zdrojovou URL — porovná

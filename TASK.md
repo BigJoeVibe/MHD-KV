@@ -43,7 +43,7 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 | J5 | Poloha: klik do mapy / GPS / paste GPS → nejbližší zastávka | coords už v datech; mapa = zvážit Leaflet |
 | J6 | Favourites = body 1–3 (domov↔centrum, ↔Západní, ↔nádraží) jako uložené dotazy | nahrazuje ruční F2 |
 | J7 | Sloučení se starou appkou F1 / osud „odjezdové tabule" | rozhodnout |
-| **J8** | **Automatizace obnovy dat** (GitHub Actions, bez lokálu) — návrh hotový, viz `docs/DATA_SOURCES.md` | **J8a HOTOVO 23.7.** (`update_data.js` + guard); **J8-fix HOTOVO 23.7.** (refresh-stabilita, viz níže); **J8b ⭐ TEĎ odblokováno** |
+| **J8** | **Automatizace obnovy dat** (GitHub Actions, bez lokálu) — viz `docs/DATA_SOURCES.md` | **✅ HOTOVO 23.7.** (J8a + J8-fix + J8b, viz níže — ověřeno end-to-end na reálném GH Actions runneru) |
 
 **J8a — HOTOVO 23.7.:** `scripts/update_data.js` — stáhne aktuální GTFS, vyfiltruje MHD KV, streamuje
 `stop_times.txt` (~1,38 GB), zavolá `build_network.js`, prožene guardem (validní JSON + prahy
@@ -84,7 +84,17 @@ patterny se reálně přečíslovaly a dohledání je i tak správně našlo —
   pozice), drobné posuny souřadnic mezi obnovami (párovat s tolerancí).
 - **Rozhodnout až u J4/J6.** Teď netřeba — name-keying pro J8 stačí. „Uvidíme, jak to bude fungovat" (Joe).
 
-**J8b — ⭐ TEĎ (spec v `handoff.md`):** rozhodnuto (Joe 23.7.): **auto-commit rovnou do `main`** (guard = ventil místo člověka) + **denní cron `0 3 * * *` (UTC)**. Kroky: J8b-1 Last-Modified pre-check + `--force` v `update_data.js`; J8b-2 `.github/workflows/update-data.yml` (cron + `workflow_dispatch` s FORCE, `permissions: contents:write`, commit jen při změně, guard-FAIL = červený job = e-mail, žádný commit); J8b-3 keepalive proti 60dennímu vypnutí; J8b-4 ověřit ručním během na runneru. 📌 licence GTFS (atribuce) = must-do před veřejným během.
+**✅ J8b HOTOVO 23.7.** (rozhodnuto Joe 23.7.: **auto-commit rovnou do `main`**, guard = ventil místo
+člověka, + **denní cron `0 3 * * *` UTC**): J8b-1 Last-Modified pre-check + `--force` v `update_data.js`
+(otestováno 3× lokálně — skip/force/skip); J8b-2 `.github/workflows/update-data.yml` (cron +
+`workflow_dispatch` s FORCE, `permissions: contents:write`, commit jen při změně); J8b-3 keepalive
+proti 60dennímu vypnutí (spouští se jen když datový krok nic necommitnul a poslední commit je
+≥50 dní starý); **J8b-4 ověřeno na reálném GH Actions runneru** (Joe spustil ručně, Success 42 s,
+commit `b43ad7f` proběhl — jen bump `data_source_state.json`, `network.json` beze změny, protože
+zdroj se nezměnil od dřívějšího lokálního běhu téhož dne). Detail v `handoff.md` → VÝSLEDEK.
+📌 **Nedořešeno:** licence GTFS (atribuce) = must-do před veřejným/ostrým během (viz níže „NEDOŘEŠENÉ").
+📌 **Drobný nápad (kosmetický, nezablokoval běh):** `update-data.yml` používá `node-version: '20'`,
+GitHub log hlásí deprecation warning (runner vynuceně použil Node 24) — zvážit bump na `'22'`/`'24'`.
 
 **J8 — podúkoly (návrh 2026-07-21):**
 - `scripts/update_data.js` — stáhnout JrUtil GTFS → filtr KV (stream `stop_times`) → `build_network.js`.
