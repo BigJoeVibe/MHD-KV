@@ -43,7 +43,11 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 | J5 | Poloha: klik do mapy / GPS / paste GPS → nejbližší zastávka | coords už v datech; mapa = zvážit Leaflet |
 | J6 | Favourites = body 1–3 (domov↔centrum, ↔Západní, ↔nádraží) jako uložené dotazy | nahrazuje ruční F2 |
 | J7 | Sloučení se starou appkou F1 / osud „odjezdové tabule" | rozhodnout |
-| **J8** | **Automatizace obnovy dat** (GitHub Actions, bez lokálu) — návrh hotový, viz `docs/DATA_SOURCES.md` | staví se, až bude co aktualizovat (po J2–J4) |
+| **J8** | **Automatizace obnovy dat** (GitHub Actions, bez lokálu) — návrh hotový, viz `docs/DATA_SOURCES.md` | **⭐ TEĎ — J8a** (ruční `update_data.js` + guard, spec v `handoff.md`); J8b (workflow) potom |
+
+**J8 — rozdělení (rozhodnuto 2026-07-23, staged + denní kontrola):**
+- **J8a — ⭐ TEĎ:** `scripts/update_data.js` (stáhnout GTFS → filtr KV agency 48364282 + `425xxx`, stream `stop_times` 1,38 GB → `build_network.js`) + **regression guard** (validní JSON + prahy linky≥20/zast≥140/spoje≥9000 + pokles ≤20 % + `verify_network.js` celý PASS → jinak rollback, necommitovat) + stavový soubor + docs fix (GPS: zdroj 7 nemá, řeší override). Otestovat ručně.
+- **J8b — potom:** `.github/workflows/update-data.yml` (denní cron, Last-Modified check, `workflow_dispatch`, **keepalive** proti 60dennímu vypnutí).
 
 **J8 — podúkoly (návrh 2026-07-21):**
 - `scripts/update_data.js` — stáhnout JrUtil GTFS → filtr KV (stream `stop_times`) → `build_network.js`.

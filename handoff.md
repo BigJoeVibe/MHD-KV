@@ -1,191 +1,107 @@
-# Handoff — EXECUTOR spec (Zpevnění jádra — PŘEDÁVKA 1: H0 data-integrita + H1 routing + H2 řazení časem)
+# Handoff — EXECUTOR spec (J8a: ruční `update_data.js` + regression guard)
 
-> 🟢 **AKTIVNÍ ZADÁNÍ (manager, 2026-07-23).** J3 (časová vrstva) je HOTOVÉ a pushnuté
-> (`journey.js`, 20/20 PASS). Teď **zpevnění jádra před UI (J4)**. Archiv J3 je v gitu a `changelog.md`.
-> **Rozsah této předávky:** H0 (oprava chybějících GPS + zpřísnění kontroly), H1 (robustnost
-> routingu), H2 (řazení podle času, připravené pro UI filtry), H4 (testy).
-> **NEŘEŠÍ se tu:** pěší přestup 30–200 m ani směrové pozice označníků — to je nový epic **J9**
-> (viz `docs/ROADMAP.md`). Tady jen **propojení fakticky totožných zastávek (≤ 30 m)**.
+> 🟢 **AKTIVNÍ ZADÁNÍ (manager, 2026-07-23).** Jádro A→B je HOTOVÉ (J1–J3 + JH zpevnění,
+> `verify_network.js` 26/26 PASS). Teď **J8 — automatická obnova dat**, ve dvou předávkách:
+> **J8a (TADY) = ruční skript + guard, otestovat lokálně.** J8b (příště) = GitHub Actions
+> workflow (cron, Last-Modified, keepalive). Rozhodnutí Joe (23.7.): staged + denní kontrola.
+> Archiv JH je v gitu a `changelog.md`.
 
-> **Předávka pro nižší CC (executor).** Manager připravil zadání; executor implementuje dle bodů
-> níže, **nedělá nic nad zadání**. Git děláš ty (executor). Malé kroky, kód jako **diff**,
-> commit + testovací příkaz po každém Hx.
+> **Předávka pro nižšího CC (executor).** Implementuj dle bodů níže, **nedělej nic nad zadání**
+> (žádný `.github/workflows/…` — to je J8b). Git děláš ty. Malé kroky, kód jako **diff**,
+> commit + testovací příkaz po každém dílčím kroku.
 
 ## Jak začít
 1. „Použij skill **kod-jadro**."
-2. Přečti `CLAUDE.md` (Konvence), `TASK.md` (sekce TEĎ), `scripts/routing.js`, `scripts/journey.js`,
-   `scripts/timetable.js`, `scripts/build_network.js`, `docs/DATA_SOURCES.md`, tento soubor.
-3. **Před prvním commitem:** v repu leží necommitnuté manager úpravy dokumentace
-   (`CLAUDE.md`, `TASK.md`, `handoff.md`, `docs/ROADMAP.md`). Commitni je s prvním krokem
-   (`docs: spec zpevnění jádra + epic J9`).
+2. Přečti `CLAUDE.md`, `TASK.md` (sekce TEĎ), `docs/DATA_SOURCES.md` (celé — zdroj, filtr, guard),
+   `scripts/build_network.js`, tento soubor.
+3. **Před prvním commitem** commitni případné necommitnuté manager docs (`handoff.md`, `TASK.md`).
 
 ---
 
-## H0 — Data-integrita: chybějící GPS (proveď PRVNÍ, ostatní kroky na tom stojí)
+## Kontext dat (POTVRZENO v `docs/DATA_SOURCES.md`, neodvozovat znovu)
 
-**Problém:** 7 zastávek má ve zdroji i v `network.json` souřadnice `0, 0` (chybějící GPS, ne validní
-poloha). `build_network.js` je bere jako `0` (protože `"0"` je truthy). `verify_network.js` to
-neodhalil — kontroloval jen přítomnost klíčů, ne nulu.
-
-### H0a — override souřadnic v `build_network.js`
-Přidej **ruční override** klíčovaný **zdrojovým `stop_id`** (`JDFS-…`, stabilní přes rebuildy — `S…`
-se přečíslovává!). Aplikuj ho při stavbě `stops[k]` (kolem řádku 90) — má přednost před `m.stop_lat/lon`.
-Souřadnice dodal Joe (mapy.cz, 2026-07-23):
-
-```js
-// Ruční doplnění GPS pro zastávky, které zdroj (CIS/GTFS) nemá (0,0). Joe, 2026-07-23.
-// PROVIZORNÍ single-point na uzel — přesné směrové pozice řeší epic J9.
-const COORD_OVERRIDES = {
-  'JDFS-10020': [50.225355, 12.839125],  // Kpt.Jaroše — střed 2 označníků (~90 m od sebe)
-  'JDFS-14283': [50.239712, 12.889429],  // Mattoniho nábřeží — 2 MHD označníky (příměstský 3. bod → J9)
-  'JDFS-16310': [50.255920, 12.885421],  // Nádraží Dalovice
-  'JDFS-16311': [50.252510, 12.882424],  // Na Pasece
-  'JDFS-18345': [50.217823, 12.806296],  // Globus
-  'JDFS-32745': [50.226009, 12.823021],  // Tesco
-  'JDFS-36827': [50.219270, 12.880980],  // Lázně I (S155) = poloha totožné zastávky S116 (JDFS-6580)
-};
-```
-Po úpravě **rebuild** `data/network.json` (`node scripts/build_network.js`) a commitni nový `network.json`
-+ `build_network.js`. V commitu zkontrola: žádná zastávka nesmí mít `lat===0 || lon===0`.
-
-### H0b — zpřísnit `verify_network.js`
-Kontrola GPS: `lat`/`lon` musí existovat **a nesmí být 0** (`lat===0||lon===0` → **FAIL**, vypiš které).
-Cíl: 157/157 s validní GPS, jinak build neprojde.
-
-**Commit H0**, testovací příkaz pro Joea: `node scripts/verify_network.js` (0 nul, vše PASS).
+- **Zdroj:** `https://data.jr.ggu.cz/results/latest/JDF_merged_GTFS.zip` (~123 MB, GTFS celé ČR autobusy+MHD).
+- **Filtr na MHD KV:**
+  - dopravce DPKV = IČO 48364282 → `agency_id` začíná `JDFA-48364282`;
+  - městská MHD = `route_short_name` ve tvaru `425xxx` (regex `^425\d{3}$`); veřejné číslo linky = číslo − 425000;
+  - navázat `routes → trips → stop_times → stops` + `calendar` + `calendar_dates`.
+- **`stop_times.txt` je ~1,38 GB → STREAMOVAT** (`unzip -p … stop_times.txt | filtr po řádcích`), NEnačítat celé do paměti.
+- **Build:** `scripts/build_network.js` čte `data_raw/kv_gtfs/*.txt` → `data/network.json`. `COORD_OVERRIDES`
+  (7 zastávek, JH) se aplikuje v buildu → chybějící GPS ve zdroji se automaticky opraví i po obnově.
+- `data_raw/` je v `.gitignore` (do repa se commitne jen `data/network.json` + stavový soubor).
 
 ---
 
-## H1 — Routing robustnost (`scripts/routing.js`)
+## KROK J8a-1 — `scripts/update_data.js` (nový skript, spustitelný ručně)
 
-### H1a — zrušit topologický Pareto filtr (o pořadí rozhoduje ČAS)
-Dnes `search()` filtruje varianty přes `filterDominated` na `(transfers, totalHops)` → zahodí přestupní
-variantu s víc zastávkami dřív, než se vůbec podívá na čas. To je špatně: **rychlejší spojení s přestupem
-se pak neukáže vedle pomalejšího přímého.** (Joe: rozhoduje celkový čas, ne počet zastávek/přestupů.)
-- **Odstraň krok `filterDominated`** ze `search()` (funkci můžeš nechat nevyužitou nebo smazat).
-- **Ponech dedup.** Řazení podle hubů v `search()` můžeš nechat (je jen sekundární), autoritu nad
-  pořadím přebírá `journey.js` (H2). Topologie teď vrací **všechny rozumné trasy**.
-- Pozn.: víc variant = víc práce pro `journey`, ale síť je malá (290 patternů) — dedup + limit to unesou.
+**Cíl:** `node scripts/update_data.js` stáhne aktuální GTFS, vyfiltruje MHD KV do `data_raw/kv_gtfs/`,
+přestaví `data/network.json` a **před „schválením" ho prožene guardem**. Bez závislostí navíc (Node stdlib
++ systémový `unzip`/`curl`, které jsou na runneru i u tebe). Idempotentní, opakovaně spustitelný.
 
-### H1b — podpora 2 přestupů
-Rozšiř `search()` o `maxTransfers === 2` (řetěz A→T1→T2→B přes 2 různé uzly, každá noha jiná linka než
-sousední). **Default zůstává `maxTransfers = 1`**; 2 se zapíná parametrem (UI si o víc řekne přes „další
-možnosti"). Hlídej výkon a dedup.
+### Kroky skriptu
+1. **Stáhnout** ZIP do dočasného adresáře (`data_raw/_tmp/` nebo `os.tmpdir()`), zapsat i zdrojový
+   `Last-Modified`/velikost do stavového souboru (příprava pro J8b).
+2. **Filtr (pořadí kvůli závislostem):**
+   - `agency.txt` → `agency_id` začínající `JDFA-48364282` (množina).
+   - `routes.txt` → routes s tímto `agency_id` **a** `route_short_name` matchujícím `^425\d{3}$` → `routeIds`.
+   - `trips.txt` → trips s `route_id ∈ routeIds` → `tripIds` (+ posbírat `service_id`).
+   - `stop_times.txt` → **STREAM**, nech jen řádky s `trip_id ∈ tripIds`; posbírej `stop_id`.
+   - `stops.txt` → jen `stop_id ∈` posbíraných.
+   - `calendar.txt` + `calendar_dates.txt` → jen posbírané `service_id`.
+   - Zapiš vyfiltrované soubory do `data_raw/kv_gtfs/` (přepiš staré).
+3. **Build:** zavolej `build_network.js` (spawn `node` nebo require) → `data/network.json`.
+4. **Guard (KROK J8a-2)** — viz níže. Když PROJDE, nech nový `network.json`; když SELŽE, **vrať zpět**
+   předchozí `network.json` (zálohu udělej před buildem) a skonči nenulovým exit kódem s důvodem.
+5. Ukliď `_tmp/`.
 
-### H1c — správné zacházení se smyčkami (2× výskyt zastávky)
-Dnes se bere jen **první** výskyt zastávky v patternu (`stops.indexOf`). U okružních linek (zastávka 2×)
-to může minout platný nástup/přestup z druhého výskytu. Zobecni: helper vracející **všechny „dopředné
-úseky"** pro zastávku v patternu (jeden per výskyt) a použij je v přímém i přestupním hledání. Drž
-konzistenci `hops` (index-based) s `journey.js` (`legStopIndices`). Dobře otestuj.
-
-### H1d — propojení fakticky totožných zastávek (≤ 30 m, „same-place")
-Některé fyzicky **stejné** zastávky jsou ve zdroji dvě ID (Lázně I: S116 pro linky 2/11/52 × S155 pro
-linku 20; Andělská Hora horní/dolní obec = varianty názvu). Přestup mezi nimi se dnes nenajde (různé ID).
-- Po H0 (opravené GPS!) spočti **skupiny co-located zastávek**: dvojice s haversine **≤ 30 m** *a*
-  shodným normalizovaným názvem (strip `Karlovy Vary,`, trim, lower, toleruj drobný překlep — u shody
-  názvu klidně povol i o něco víc než 30 m; u NEshodných názvů 30 m nepřekračuj).
-- V přestupním hledání ber uzel `T` a jeho co-located sourozence `T'` jako **stejné místo**:
-  leg1 dojede na `T`, leg2 může odjet z `T'`. Tohle je **jediná** forma „přestupu mezi jinými
-  označníky" v této předávce — bezpečná, protože jde o týž bod (žádné „kam jít").
-- **Pozor na pořadí:** skupiny počítej až nad opravenými daty (jinak by 7 nul u `0,0` bylo „všechno
-  na jednom místě"). Guard z H0b to pojistí.
-- Executor **vypíše seznam nalezených co-located skupin** do výstupu testu, ať to Joe očima zkontroluje
-  (nesmí tam být dvě různá místa).
-
-**Commit každý pod-krok H1a–H1d zvlášť** + testovací příkaz.
+**Pozn.:** ať filtr **nezahodí** 7 override zastávek (v filtrovaných datech budou dál `0,0`, správně —
+opraví je až `COORD_OVERRIDES` v buildu; guard pak kontroluje výsledný `network.json`, kde nuly nejsou).
 
 ---
 
-## H2 — `scripts/journey.js`: řazení podle času, připravené pro UI filtry
+## KROK J8a-2 — regression guard (funkce v `update_data.js`, běží PŘED „schválením")
 
-- **Přepínatelné řazení:** `opts.sort = 'departure' | 'arrival' | 'duration' | 'transfers'`,
-  **default `'departure'`** (Joe: zatím prio odjezd). Uděláš mapu komparátorů; u každého sekundární
-  klíče (např. departure → tie-break totalMin → transfers). Tím jsou budoucí UI filtry (příjezd /
-  délka / přestupy) hotové bez zásahu do jádra.
-- **Rychlejší spojení s přestupem se MUSÍ ukázat** i vedle pomalejšího přímého (plyne z H1a — journey
-  teď dostane i tyhle varianty; jen je nezahazuj předčasně).
-- **Co-located přestup (H1d):** když je přestup „same-place", výsledek nese `waitMin` normálně a
-  `transferStop` = název místa; `walkMin: 0` (přidej pole, ať UI ví, že se nikam nejde).
-- **Limit:** zvedni default na `limit = 8` (parametr zachovej), ať je z čeho v UI filtrovat.
-- Zbytek (přesah přes půlnoc, `trip[2] || pattern.off`, předěl dne u přestupu) **beze změny** — funguje.
-
-**Commit H2** + testovací příkaz.
+Postupně (z `docs/DATA_SOURCES.md` → Test/QA B):
+- **Validní JSON:** `network.json` se naparsuje.
+- **Absolutní prahy zdravé sady:** linek ≥ 20, zastávek ≥ 140, spojů ≥ 9 000 (jinak feed nejspíš ořezaný).
+- **Relativní pokles:** oproti PŘEDCHOZÍ verzi `network.json` nesmí spadnout o **> 20 %** (linky/zastávky/spoje) —
+  ochrana proti vadnému upstreamu. (Práh 20 % nech jako konstantu.)
+- **`verify_network.js` musí projít celý** (spusť ho na nový `network.json`, vyžaduj „FAIL: 0"; jeho
+  součástí je i `lat===0||lon===0` → FAIL z JH). Guard = zelené jen když projde i tohle.
+- Výsledek guardu čitelně vypiš (co prošlo/spadlo). Při FAIL → rollback + nenulový exit.
 
 ---
 
-## H4 — Testy (průběžně a na závěr)
+## KROK J8a-3 — stavový soubor + drobný docs fix
 
-- **`routing.test.js`:** uprav očekávání po zrušení Pareto (víc variant); přidej případ na **2 přestupy**
-  a na **smyčku (2× výskyt)**.
-- **`journey.test.js`:** přidej případ, kde se **rychlejší přestup ukáže vedle pomalejšího přímého**;
-  ukázku `sort='arrival'` vs `'departure'`; **co-located přestup Lázně I** (linka 20 ⇄ 2/11/52) se najde.
-- **`verify_network.js`:** 0,0 = FAIL (H0b); výpis co-located skupin je rozumný; kontrola, že známé
-  časově-lepší spojení se ve výsledku objeví.
-- **Namátkové ověření proti reálnému JŘ DPKV** (raw HTML, ne AI shrnutí) u 1–2 nových případů.
-- Cílový souhrn: vše PASS; napiš do VÝSLEDKU počty a co se ověřilo.
+- **Stavový soubor** (např. `data/data_source_state.json`): `{ lastModified, size, updatedAt, counts:{lines,stops,trips} }`.
+  Commituje se do repa (J8b z něj čte „levný check", jestli se zdroj změnil). Teď ho jen vytvoř a plň.
+- **Docs fix v `docs/DATA_SOURCES.md`:** řádky, co tvrdí „všech 157 má GPS / 7 bez GPS VYŘEŠENO" (ř. ~29, 48, 129),
+  uveď na pravou míru: **zdroj 7 zastávek nemá (`0,0`), doplňuje je `COORD_OVERRIDES` v buildu (JH, 23.7.).**
 
 ---
 
-## Mimo scope (NEIMPLEMENTOVAT — kontext)
-- **Pěší přestup 30–200 m + směrové pozice označníků + navádění v uzlech + mapa** = epic **J9**
-  (`docs/ROADMAP.md`). Datový lead: DPKV má na interaktivní mapě přesné puntíky označníků s popisem
-  (Dvory 1/2/3 + linka + směr), ale bez GPS exportu → Joe zkusí oslovit DPKV.
-- **Přechod letní/zimní čas** — stále odloženo (známé omezení).
-- **UI „Hledat spojení"** = J4 (po zpevnění).
+## KROK J8a-4 — test (ruční, u tebe / na runneru s reálnou sítí)
+
+- Spusť `node scripts/update_data.js`. Ověř: doběhne, `data/network.json` se přestaví, **guard projde**,
+  `verify_network.js` je 26/26 PASS, a **7 override souřadnic je pořád správně** (ne `0,0`).
+- Zkus i **negativní scénář guardu**: dočasně sniž práh nebo podstrč ořezaná data → ověř, že guard
+  **NEcommitne** a udělá rollback (pak vrať zpět).
+- Do `VÝSLEDEK` napiš: velikost staženého ZIP, počty po filtru (linky/zastávky/spoje), čas běhu,
+  a že guard chytá rozbití.
+
+**Commituj po dílčích krocích.** `data_raw/` se necommituje (gitignore); commituje se `update_data.js`,
+`data/network.json` (jen když se reálně změnil), stavový soubor, docs fix.
 
 ---
 
-## VÝSLEDEK (executor, 2026-07-23)
+## Mimo scope J8a (→ J8b, NEIMPLEMENTOVAT teď)
+- `.github/workflows/update-data.yml` (cron `0 3 * * *`, `workflow_dispatch`, `GITHUB_TOKEN` contents:write).
+- Levný `Last-Modified` check (přeskočit stahování, když se zdroj nezměnil) — J8a jen připraví stavový soubor.
+- **Keepalive** proti 60dennímu auto-vypnutí scheduled workflow.
+- Front-end fetch `network.json` za běhu = J4.
 
-Hotovo celé zadání Předávky 1 (H0, H1a–d, H2, H4), 8 commitů (KROK 0 dokumentace +
-H0 + H1a + H1b + H1c + H1d + H2 + H4). `verify_network.js`: **26/26 PASS** (bylo 20/20).
+---
 
-**H0 — data-integrita GPS:**
-- 7 zastávek s `(0,0)` v GTFS zdroji (Kpt.Jaroše, Mattoniho nábřeží, Nádraží Dalovice,
-  Na Pasece, Globus, Tesco, Lázně I/JDFS-36827) — ruční override v `build_network.js`
-  klíčovaný `JDFS-` stop_id, rebuild `network.json`. `verify_network.js` teď hlásí
-  `lat===0||lon===0` jako FAIL, ne jen chybějící klíč.
-
-**H1a — zrušen topologický Pareto filtr:** `search()` už nefiltruje podle
-(transfers, totalHops) — vrací všechny rozumné (dedup) varianty. Autoritu nad
-pořadím má `journey.js` (skutečný čas). Ukázka v `journey.test.js`
-(sort departure/arrival/duration na Krátká→Tržnice).
-
-**H1b — 2 přestupy:** `search()` umí řetěz A→T1→T2→B (`opts.maxTransfers: 2`),
-default zůstává 1. Výkon: přidán index zastávka→patterny (O(1) místo O(patternů)),
-worst-case změřený případ (Rozcestí u Koníčka→Stadion ZM) ~700 ms/~294 tis. variant —
-proto **`journey.js` zatím transfers:2 časově nezpracovává** (explicitně přeskakuje,
-aby nevracel neúplný/špatný itinerář) — časová vrstva pro 2 přestupy je mimo rozsah
-této předávky, zapsáno jako TODO níže.
-
-**H1c — smyčky (2× výskyt zastávky):** nový `forwardSegments()` vrací dopředný úsek
-pro každý použitelný výskyt zastávky v patternu (ne jen první přes `indexOf`). Legy
-nesou explicitní `fromIdx`/`toIdx`; `journey.js` je používá přímo místo dopočítávání
-(oprava latentní chyby, která by u smyček počítala čas ze špatného výskytu). Ověřeno:
-Pivovar→Tržnice (P5, linka 12) vrací 2 varianty (krátká i přes celou smyčku).
-
-**H1d — co-located zastávky (≤30 m):** `coLocatedGroups()` (haversine + normalizovaný
-název, union-find) — nalezeny **4 skupiny**, vypsané ve `verify_network.js` k ruční
-kontrole (Andělská Hora horní/dolní obec — 2× jméno pro stejný bod 0 m; Shopland↔Tesco
-8 m; Lázně I S116↔S155 0 m). Přestup přes co-located sourozence funguje v 1- i
-2-přestupovém hledání, výsledek nese `coLocated`/`coLocated1`/`coLocated2`.
-
-**H2 — journey.js:** `opts.sort` = `departure` (default) / `arrival` / `duration` /
-`transfers`, každý s tie-breakem. Default `limit` 5→8. Každý přestupní itinerář nese
-`walkMin: 0` (všechny přestupy v této předávce jsou "same-place" — J9 doplní nenulové
-hodnoty).
-
-**H4 — testy:** `verify_network.js` +6 kontrol (co-located výpis, H1a/b/c/d
-robustnost). `routing.test.js` přepsán na souhrny po transferech (plný výpis by u
-husté dvojice hubů byl stovky řádků) + 3 nové ukázkové případy. `journey.test.js` +2
-bloky (srovnání sort klíčů, co-located přestup). Namátkově ověřeno proti realitě dat
-(Pivovar/P5 smyčka, Lázně I S116/S155 GTFS zdroj).
-
-**Otevřené TODO (zapsat do TASK.md, manager rozhodne prioritu):**
-1. Časová vrstva pro `transfers: 2` v `journey.js` (topologie je hotová v routing.js,
-   časové skládání řetězu přes 2 uzly zatím chybí — mimo rozsah H2).
-2. `maxTransfers: 2` worst-case (hub↔hub) je pomalý na broad dotazy (~700 ms, ~294 tis.
-   topologických variant) — v pořádku pro opt-in "další možnosti", ale UI by ho neměla
-   volat eagerly/defaultně.
-
-Žádné jiné úpravy mimo zadání. Rebuildnutý `network.json` je commitnutý (H0).
+## VÝSLEDEK (vyplní executor)
+_(sem executor po dokončení: co hotové, počty, čas běhu, jak testováno, problémy, nápady pro managera)_
