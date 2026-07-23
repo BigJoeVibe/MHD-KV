@@ -64,17 +64,6 @@ function usesHub(result, hubIds) {
   return hubIds.includes(transferStop);
 }
 
-function dominates(a, b) {
-  // a dominuje b, pokud a je <= ve vsem a ostre lepsi aspon v jednom
-  const le = a.transfers <= b.transfers && a.totalHops <= b.totalHops;
-  const lt = a.transfers < b.transfers || a.totalHops < b.totalHops;
-  return le && lt;
-}
-
-function filterDominated(results) {
-  return results.filter((r) => !results.some((other) => other !== r && dominates(other, r)));
-}
-
 function search(net, A, B, opts = {}) {
   const maxTransfers = opts.maxTransfers != null ? opts.maxTransfers : 1;
   const stopA = resolveStopId(net, A);
@@ -124,12 +113,13 @@ function search(net, A, B, opts = {}) {
     }
   }
 
-  // Filtr dominovanych variant (Pareto na transfers, totalHops)
-  const pareto = filterDominated(deduped);
-
-  // Razeni: transfers vzestupne -> prestup pres hub napred -> totalHops vzestupne
+  // Razeni: transfers vzestupne -> prestup pres hub napred -> totalHops vzestupne.
+  // Jen sekundarni/topologicke razeni (kolik zastavek) — autoritu nad poradim ma
+  // journey.js (H2), ktery razeni resi podle skutecneho casu. Zadne filtrovani
+  // podle poctu prestupu/hops: rychlejsi prestupni spojeni se musi ukazat i vedle
+  // pomalejsiho primeho, o tom rozhoduje az cas v journey.js.
   const hubIds = hubStopIds(net);
-  pareto.sort((a, b) => {
+  deduped.sort((a, b) => {
     if (a.transfers !== b.transfers) return a.transfers - b.transfers;
     const aHub = usesHub(a, hubIds) ? 0 : 1;
     const bHub = usesHub(b, hubIds) ? 0 : 1;
@@ -137,7 +127,7 @@ function search(net, A, B, opts = {}) {
     return a.totalHops - b.totalHops;
   });
 
-  return pareto;
+  return deduped;
 }
 
 module.exports = { search, stopsAfter, patternsThrough, resolveStopId, lineOf, HUBS };
