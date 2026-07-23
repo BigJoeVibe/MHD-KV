@@ -3,10 +3,12 @@
 // Spusteni z korene repa: node scripts/update_data.js
 // Zdroj+filtr: docs/DATA_SOURCES.md. Zadani: handoff.md (KROK J8a-1..4).
 //
-// Kroky: stahnout ZIP -> filtr (agency 48364282 + route_short_name 425xxx) -> data_raw/kv_gtfs/
+// Kroky: pre-check Last-Modified (preskoci stazeni, kdyz zdroj nezmenen) -> stahnout ZIP
+//   -> filtr (agency 48364282 + route_short_name 425xxx) -> data_raw/kv_gtfs/
 //   -> build_network.js -> regression guard -> commit (necha nova data) nebo rollback.
 // stop_times.txt (~1,38 GB nekomprimovane) se STREAMUJE, nikdy necte cele do pameti.
-// J8b (mimo scope tady): GitHub Actions workflow, Last-Modified levny check, keepalive.
+// Prepinac --force (nebo env FORCE=1/true) preskoci pre-check a stahne vzdy (workflow_dispatch, test).
+// J8b (mimo scope tady): GitHub Actions workflow, keepalive.
 
 const fs = require("fs");
 const path = require("path");
@@ -165,6 +167,27 @@ function rmrf(p) {
   fs.rmSync(p, { recursive: true, force: true });
 }
 
+function isForced() {
+  const flag = process.env.FORCE;
+  return process.argv.includes("--force") || flag === "1" || flag === "true";
+}
+
+// Levny pre-check bez stazeni celeho ZIPu (123 MB) — jen HTTP HEAD hlavicky.
+function headLastModified(url) {
+  const r = spawnSync("curl", ["-sI", "-f", "--connect-timeout", "30", "--max-time", "60", url], { encoding: "utf8" });
+  if (r.status !== 0 || !r.stdout) return null;
+  return parseHeaderValue(r.stdout, "Last-Modified");
+}
+
+function readState(statePath) {
+  if (!fs.existsSync(statePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(statePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function countTrips(net) {
   let n = 0;
   for (const pid in net.trips) n += net.trips[pid].length;
@@ -239,6 +262,26 @@ function runGuard(prevCounts) {
 
 async function main() {
   const t0 = Date.now();
+  const force = isForced();
+
+  if (force) {
+    log("PRE-CHECK: preskoceno (--force/FORCE) — stahuji vzdy.");
+  } else {
+    log(`PRE-CHECK: HEAD ${SRC_URL} ...`);
+    const remoteLM = headLastModified(SRC_URL);
+    if (!remoteLM) {
+      log("PRE-CHECK: Last-Modified se nepodarilo zjistit (HEAD selhal nebo hlavicka chybi) — pokracuji stazenim, at se pipeline nezasekne.");
+    } else {
+      const state = readState(STATE_PATH);
+      if (state && state.lastModified === remoteLM) {
+        log(`PRE-CHECK: zdroj beze zmeny (Last-Modified: ${remoteLM}) — preskoceno, nestahuji.`);
+        log(`\nCELKEM: preskoceno za ${((Date.now() - t0) / 1000).toFixed(1)} s.`);
+        return;
+      }
+      log(`PRE-CHECK: zdroj zmenen (${(state && state.lastModified) || "(zadny predchozi stav)"} -> ${remoteLM}) — pokracuji.`);
+    }
+  }
+
   rmrf(TMP_DIR);
   fs.mkdirSync(TMP_DIR, { recursive: true });
 
