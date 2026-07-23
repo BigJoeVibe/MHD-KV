@@ -7,6 +7,28 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-07-23 — v0.1.0 (J3 KROK B: journey.js — časové plánování spojení A→B)
+
+- **`scripts/journey.js`** — `planJourney(net, A, B, opts)`: kombinuje topologii
+  (`routing.js` `search()`) s časy (`net.trips`/`net.services`, stejné pravidlo
+  `trip[2] || pattern.off` jako v KROKU C) do konkrétních itinerářů (přímo / 1
+  přestup), řazeno podle odjezdu. Řeší předěl typu dne přes půlnoc u přestupu
+  (2. noha k `date+1`, když dojezd na uzel padne po půlnoci) a noční přesah linky
+  51 (`nightAdjust`, stejné pravidlo jako `timetable.js`). `minTransfer` (default 3)
+  jako parametr. Beze změny v `routing.js`/`timetable.js` (jen import).
+- **`scripts/journey.test.js`** — čitelný výpis 3 scénářů (přímo Krátká→Tržnice,
+  přestup Krátká→Růžový vrch, přes půlnoc Okružní→Garáže MHD linkou 51).
+  **`verify_network.js`** rozšířen o 2 kontroly (návaznost přestupu, konzistence
+  `totalMin`) — souhrn 20/20 PASS.
+- **Ověřeno proti reálnému JŘ DPKV (raw HTML, ne AI shrnutí):** linka 15 Krátká
+  hodina 13 = `18S 42` → odjezd 13:18 sedí na minutu; linka 19 Elite (směr Garáže
+  MHD) hodina 13 = `18 48K` → odjezd 13:48 sedí na minutu. Přestup 21 min ≥
+  minTransfer. Přesný příjezd do Růžového vrchu nešlo jednoznačně dohledat (linka
+  19 je smyčka, stejná zastávka 2× v datech DPKV) — bráno jako odvozené z ověřené
+  GTFS logiky.
+- **Známé omezení (zapsáno, neřešeno):** přechod letní/zimní čas (2×/rok) — `planJourney`
+  ho neošetřuje, viz `handoff.md` → VÝSLEDEK.
+
 ## 2026-07-22 — v0.1.0 (J3 KROK C: časová vrstva timetable.js)
 
 - **`scripts/timetable.js`** — `isServiceActive`/`activeServicesOn`/`patternDeparturesOn`/`nextDepartures`. Zatím **neintegrováno** do `routing.js` search() (to je KROK B).

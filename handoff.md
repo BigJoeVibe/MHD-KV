@@ -168,3 +168,57 @@ Přidej do souhrnu (PASS/FAIL):
 - **Oblíbené / časté dotazy + odjezdové tabule à la F1** = **J6/J7** (uložené dvojice
   A→B, osud staré appky). `planJourney` je pro ně jen motor.
 - **UI obrazovka „Hledat spojení"** = **J4**.
+
+---
+
+## VÝSLEDEK (executor, 2026-07-23)
+
+**Hotovo:** `scripts/journey.js` (`planJourney`), `scripts/journey.test.js`, 2 nové
+kontroly ve `verify_network.js` (souhrn **20/20 PASS**). Nic nad zadání, `routing.js`
+a `timetable.js` beze změny (jen import).
+
+**Implementace:** `planJourney` volá `search()` (topologie) a pro každou variantu
+dopočítá reálné časy nad `net.trips`/`net.services`, se stejným `trip[2] || pattern.off`
+pravidlem jako `timetable.js`. Indexy zastávek v patternu (kvůli okružním linkám se
+zastávkou 2×) počítá stejně jako `routing.js` `makeLeg`: `idxFrom = stops.indexOf(from)`,
+`idxTo = idxFrom + hops` — konzistentní s tím, jak `search()` počítal `hops`.
+
+**Předěl dne + noc (otevřená témata 1+4 z TASK.md):** vyřešeno dle zadání — `nightAdjust`
+(stejné pravidlo jako v `timetable.js`, `nowMin>=1080 && raw<420 → +1440`) sjednocuje
+noční přesah linky 51 do jedné časové osy; když `arrT>=1440`, druhá noha se počítá
+k `date+1` a `depMin2`/`arrB` se pak vrátí zpět do společné osy (+1440). `minTransfer`
+= parametr, default 3.
+
+**Ověřeno proti reálné síti (`data/network.json`, testovací sada z routing.js):**
+- Přímo Krátká→Tržnice (po 20260202, 08:00): 08:27→08:40 linka 3 — **shoda s KROK C**
+  (už dřív ověřeno proti raw HTML DPKV).
+- Přes půlnoc Okružní→Garáže MHD (23:50): 01:16/03:06/04:06/04:46 linka 51 —
+  **shoda s KROK C** (raw HTML DPKV, viz changelog 2026-07-22).
+- **Nově ověřeno (KROK B) proti raw HTML DPKV** (ne AI shrnutí — `d-15/15102.htm` a
+  `d-19/19006.htm`, staženo přímo): přestup Krátká→Růžový vrch v 08:00 vrátil
+  `13:18 (linka 15, Krátká) → 13:27 (Elite) ⇒ 13:48 (linka 19, Elite) → 14:09
+  (Růžový vrch)`. Reálná tabulka linky 15 (Krátká, sloupec "Pracovní den mimo
+  prázdnin") má v hodině 13 přesně `18S 42` — **13:18 sedí na minutu** (S = zkrácený
+  spoj, odpovídá patternu). Reálná tabulka linky 19 (Elite, směr Garáže MHD) má
+  v hodině 13 přesně `18 48K` — **13:48 sedí na minutu**. Návaznost přestupu
+  (21 min ≥ minTransfer 3) drží. Konečnou zastávku Růžový vrch (přesný příjezdový
+  čas) jsem ověřit nezvládl jednoznačně — DPKV list má pro linku 19 (okružní/smyčka
+  Garáže MHD–Tržnice–Otovice–Tržnice–Garáže MHD) zastávku "Elite" i "Růžový Vrch"
+  dvakrát v souboru (dva směry smyčky) a nešlo bez rizika záměny spolehlivě určit,
+  který ze dvou stopových kódů odpovídá naší GTFS-patternové sekvenci → **shoda na
+  obou koncích přestupu (13:18 i 13:48) považuji za dostatečné potvrzení výpočtu**,
+  přesný čas příjezdu do Růžového vrchu beru jako odvozený (offs z GTFS, stejná
+  logika jako u ověřených úseků).
+
+**Známé omezení (bod 3 z otevřených témat — zapsáno, NEŘEŠENO):** přechod
+letní/zimní čas (2×/rok, ~02:00–03:00) může u datumu přechodu dát chybějící/
+zdvojenou hodinu; `planJourney` to nijak neošetřuje. Pro v1 přijatelné, řešit
+případně v J4/J5 při zadávání konkrétního data uživatelem.
+
+**Commity:** `docs: manager dokumentace + spec kroku B; feat: journey.js
+(planJourney)`, `test: rozsireni verify_network.js o kontroly planJourney (KROK B3)`.
+
+**Testovací příkazy pro Joea:** `node scripts/journey.test.js` (čitelný výpis 3
+scénářů), `node scripts/verify_network.js` (souhrn PASS/FAIL). Žádná změna v UI
+(`index.html`/`index_raw.html` nedotčeny) — nic se nezobrazí v prohlížeči, toto je
+čistě datová/výpočetní vrstva.
