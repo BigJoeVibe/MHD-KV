@@ -10,7 +10,7 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 | J1 | **Síťový model z KV GTFS** (stops + patterns + trips + services) | vysoká | ✅ HOTOVO 19.7. | `data/network.json` (62 KB gzip) + `scripts/build_network.js`. 23 linek, 157 zast./všechny GPS, 290 patternů |
 | J2 | **Routing A→B** (přímé + 1 přestup) v JS | vysoká | ✅ HOTOVO 21.7. | `scripts/routing.js` (+`routing.test.js`, `verify_network.js` 14/14 PASS). Směrové + headsign, dedup, Pareto filtr, huby v řazení. Zrevidováno managerem, pushnuto. |
 | J3 | **Časová vrstva** (nejbližší odjezd, čekání na přestup, půlnoc 51) | vysoká | ✅ HOTOVO 23.7. | C `timetable.js` + B `journey.js` (`planJourney`), 20/20 PASS, ověřeno proti JŘ |
-| JH | **Zpevnění jádra před UI** (data-integrita + robustnost routingu + řazení časem) | vysoká | ⭐ TEĎ — Předávka 1 | spec v `handoff.md`: H0 GPS override + verify, H1 routing (bez Pareto, 2 přestupy, smyčky, ≤30m same-place), H2 řazení časem |
+| JH | **Zpevnění jádra před UI** (data-integrita + robustnost routingu + řazení časem) | vysoká | ✅ HOTOVO 23.7. (Předávka 1) | H0+H1a-d+H2+H4 hotové, `verify_network.js` 26/26 PASS. Detail + otevřené TODO v `handoff.md` → VÝSLEDEK |
 
 **J3 — postup (rozhodnuto 2026-07-22, C→B):**
 - **KROK C — ✅ HOTOVO 23.7.:** `scripts/timetable.js` (`nextDepartures` ze zastávky k datu/času, směrově, noční 51) + `timetable.test.js` + 4 časové kontroly ve `verify_network.js` (18/18 PASS). Ověřeno proti reálnému JŘ DPKV (linka 3 08:27; linka 51 přes půlnoc 22:46/23:26/01:16/03:06). **Nález:** ~45 % spojů má vlastní `offs` (`trips[…][2]`) → čas počítat `trip[2] || pattern.off`.
@@ -24,6 +24,10 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 - **GPS override (Joe 23.7., mapy.cz)** — klíč = zdrojové `JDFS-` id, provizorní single-point (přesné směrové pozice → epic J9):
   Kpt.Jaroše `JDFS-10020` 50.225355,12.839125 (střed 2 označníků ~90 m) · Mattoniho nábřeží `JDFS-14283` 50.239712,12.889429 (2 MHD; příměstský 3. bod → J9) · Nádraží Dalovice `JDFS-16310` 50.255920,12.885421 · Na Pasece `JDFS-16311` 50.252510,12.882424 · Globus `JDFS-18345` 50.217823,12.806296 · Tesco `JDFS-32745` 50.226009,12.823021 · Lázně I `JDFS-36827` 50.219270,12.880980 (= poloha S116).
 - **ODLOŽENO do epicu J9** (`docs/ROADMAP.md`): pěší přestup 30–200 m + směrové pozice označníků + navádění „kam jít" + mapa. Datový lead: **DPKV interaktivní mapa** má puntíky označníků s popisem (Dvory 1/2/3 + linka + směr) bez GPS exportu → Joe zkusí oslovit DPKV.
+- **Předávka 1 — HOTOVO 23.7.:** 8 commitů (H0, H1a, H1b, H1c, H1d, H2, H4 + docs). `verify_network.js` 26/26 PASS (bylo 20/20). Detail v `handoff.md` → VÝSLEDEK.
+- **Otevřené TODO z Předávky 1 (k naplánování, priorita na manageru):**
+  1. Časová vrstva pro `transfers: 2` v `journey.js` chybí — `routing.js` `search()` umí topologický řetěz o 2 přestupech (H1b), ale `journey.js` ho zatím explicitně přeskakuje (nekombinuje s časy). Mimo rozsah H2.
+  2. `maxTransfers: 2` je na dotaz mezi dvěma hustými huby pomalé (~700 ms, ~294 tis. topologických variant) — v pořádku jako opt-in „další možnosti" v UI, ne jako výchozí/eager dotaz.
 
 **J2 — HOTOVO (2026-07-21):** `scripts/routing.js` (search + helpery, browser-safe), `routing.test.js`, `verify_network.js` (14/14 PASS). Nález+oprava: okružní patterny mají zastávku 2× → `indexOf` dával záporné `hops`, opraveno přes `stopsAfter`. Ověřeno proti JŘ DPKV (linka 3, 13). Detail v `handoff.md` → VÝSLEDEK.
 

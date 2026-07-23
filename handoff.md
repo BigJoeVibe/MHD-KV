@@ -132,3 +132,60 @@ linku 20; Andělská Hora horní/dolní obec = varianty názvu). Přestup mezi n
   (Dvory 1/2/3 + linka + směr), ale bez GPS exportu → Joe zkusí oslovit DPKV.
 - **Přechod letní/zimní čas** — stále odloženo (známé omezení).
 - **UI „Hledat spojení"** = J4 (po zpevnění).
+
+---
+
+## VÝSLEDEK (executor, 2026-07-23)
+
+Hotovo celé zadání Předávky 1 (H0, H1a–d, H2, H4), 8 commitů (KROK 0 dokumentace +
+H0 + H1a + H1b + H1c + H1d + H2 + H4). `verify_network.js`: **26/26 PASS** (bylo 20/20).
+
+**H0 — data-integrita GPS:**
+- 7 zastávek s `(0,0)` v GTFS zdroji (Kpt.Jaroše, Mattoniho nábřeží, Nádraží Dalovice,
+  Na Pasece, Globus, Tesco, Lázně I/JDFS-36827) — ruční override v `build_network.js`
+  klíčovaný `JDFS-` stop_id, rebuild `network.json`. `verify_network.js` teď hlásí
+  `lat===0||lon===0` jako FAIL, ne jen chybějící klíč.
+
+**H1a — zrušen topologický Pareto filtr:** `search()` už nefiltruje podle
+(transfers, totalHops) — vrací všechny rozumné (dedup) varianty. Autoritu nad
+pořadím má `journey.js` (skutečný čas). Ukázka v `journey.test.js`
+(sort departure/arrival/duration na Krátká→Tržnice).
+
+**H1b — 2 přestupy:** `search()` umí řetěz A→T1→T2→B (`opts.maxTransfers: 2`),
+default zůstává 1. Výkon: přidán index zastávka→patterny (O(1) místo O(patternů)),
+worst-case změřený případ (Rozcestí u Koníčka→Stadion ZM) ~700 ms/~294 tis. variant —
+proto **`journey.js` zatím transfers:2 časově nezpracovává** (explicitně přeskakuje,
+aby nevracel neúplný/špatný itinerář) — časová vrstva pro 2 přestupy je mimo rozsah
+této předávky, zapsáno jako TODO níže.
+
+**H1c — smyčky (2× výskyt zastávky):** nový `forwardSegments()` vrací dopředný úsek
+pro každý použitelný výskyt zastávky v patternu (ne jen první přes `indexOf`). Legy
+nesou explicitní `fromIdx`/`toIdx`; `journey.js` je používá přímo místo dopočítávání
+(oprava latentní chyby, která by u smyček počítala čas ze špatného výskytu). Ověřeno:
+Pivovar→Tržnice (P5, linka 12) vrací 2 varianty (krátká i přes celou smyčku).
+
+**H1d — co-located zastávky (≤30 m):** `coLocatedGroups()` (haversine + normalizovaný
+název, union-find) — nalezeny **4 skupiny**, vypsané ve `verify_network.js` k ruční
+kontrole (Andělská Hora horní/dolní obec — 2× jméno pro stejný bod 0 m; Shopland↔Tesco
+8 m; Lázně I S116↔S155 0 m). Přestup přes co-located sourozence funguje v 1- i
+2-přestupovém hledání, výsledek nese `coLocated`/`coLocated1`/`coLocated2`.
+
+**H2 — journey.js:** `opts.sort` = `departure` (default) / `arrival` / `duration` /
+`transfers`, každý s tie-breakem. Default `limit` 5→8. Každý přestupní itinerář nese
+`walkMin: 0` (všechny přestupy v této předávce jsou "same-place" — J9 doplní nenulové
+hodnoty).
+
+**H4 — testy:** `verify_network.js` +6 kontrol (co-located výpis, H1a/b/c/d
+robustnost). `routing.test.js` přepsán na souhrny po transferech (plný výpis by u
+husté dvojice hubů byl stovky řádků) + 3 nové ukázkové případy. `journey.test.js` +2
+bloky (srovnání sort klíčů, co-located přestup). Namátkově ověřeno proti realitě dat
+(Pivovar/P5 smyčka, Lázně I S116/S155 GTFS zdroj).
+
+**Otevřené TODO (zapsat do TASK.md, manager rozhodne prioritu):**
+1. Časová vrstva pro `transfers: 2` v `journey.js` (topologie je hotová v routing.js,
+   časové skládání řetězu přes 2 uzly zatím chybí — mimo rozsah H2).
+2. `maxTransfers: 2` worst-case (hub↔hub) je pomalý na broad dotazy (~700 ms, ~294 tis.
+   topologických variant) — v pořádku pro opt-in "další možnosti", ale UI by ho neměla
+   volat eagerly/defaultně.
+
+Žádné jiné úpravy mimo zadání. Rebuildnutý `network.json` je commitnutý (H0).

@@ -7,6 +7,33 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-07-23 (2) — v0.1.0 (JH Předávka 1: zpevnění jádra — GPS, routing, řazení)
+
+- **H0 (data-integrita):** 7 zastávek mělo v GTFS zdroji `(0,0)` misto GPS (`build_network.js`
+  bralo string `"0"` jako pravdivé) — ruční override klíčovaný `JDFS-` stop_id (Kpt.Jaroše,
+  Mattoniho nábřeží, Nádraží Dalovice, Na Pasece, Globus, Tesco, Lázně I), rebuild `network.json`.
+  `verify_network.js` nově hlásí `lat===0||lon===0` jako FAIL.
+- **H1a (routing.js):** zrušen topologický Pareto filtr (`filterDominated` na transfers×totalHops) —
+  zahazoval přestupové varianty dřív, než se vůbec podívalo na čas. `search()` teď vrací všechny
+  rozumné (dedup) varianty, o pořadí rozhoduje až `journey.js` podle skutečného času.
+- **H1b:** `search()` umí řetěz o 2 přestupech (`opts.maxTransfers: 2`, opt-in, default zůstává 1).
+  Přidán index zastávka→patterny pro výkon (O(1) místo O(patternů) při opakovaném dotazu).
+- **H1c:** okružní patterny (2× výskyt stejné zastávky, např. P5/linka 12) — nový `forwardSegments()`
+  vrací dopředný úsek pro každý výskyt, ne jen první přes `indexOf`. Legy nesou explicitní
+  `fromIdx`/`toIdx`, `journey.js` je používá přímo (oprava latentní chyby u smyček).
+- **H1d:** propojení fakticky totožných zastávek s různým ID (`coLocatedGroups`, haversine ≤30 m
+  + shoda názvu) — nalezeny 4 skupiny (Lázně I S116↔S155, Andělská Hora horní/dolní obec,
+  Shopland↔Tesco). Přestup mezi nimi teď funguje (dřív se nenašel — jiné ID = jiný uzel grafu).
+- **H2 (journey.js):** přepínatelné řazení `opts.sort` = departure (default) / arrival / duration /
+  transfers, připravené pro budoucí UI filtry. Default `limit` zvednut z 5 na 8. Přestupní itineráře
+  nově nesou `walkMin: 0` (všechny přestupy v této předávce jsou "same-place" — reálný pěší přestup
+  30–200 m řeší až epic J9).
+- **H4:** `verify_network.js` rozšířen o kontroly H0–H1d (26/26 PASS, bylo 20/20), `routing.test.js`
+  a `journey.test.js` doplněny o ukázky 2 přestupů, smyčky, co-located přestupu a srovnání řazení.
+- **Otevřeno pro příště:** časová vrstva pro `transfers: 2` v `journey.js` zatím chybí (topologie
+  hotová, časové skládání řetězu přes 2 uzly ne — `journey.js` je explicitně přeskakuje).
+  `maxTransfers: 2` je pomalé na hub↔hub dotazy (~700 ms) — vhodné jen jako opt-in, ne default v UI.
+
 ## 2026-07-23 — v0.1.0 (J3 KROK B: journey.js — časové plánování spojení A→B)
 
 - **`scripts/journey.js`** — `planJourney(net, A, B, opts)`: kombinuje topologii
