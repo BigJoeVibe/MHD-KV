@@ -31,14 +31,6 @@ function stopOffsets(net, patternId, trip) {
   return trip[2] || net.patterns[patternId].off;
 }
 
-function legStopIndices(net, patternId, from, hops) {
-  // Konzistentni s routing.js makeLeg(): "from" = prvni vyskyt v patternu,
-  // "to" = from + hops (okruzni linky mivaji stopId 2x, indexOf by jinak selhal).
-  const stops = net.patterns[patternId].stops;
-  const idxFrom = stops.indexOf(from);
-  return [idxFrom, idxFrom + hops];
-}
-
 function tripTimes(net, patternId, trip, idxFrom, idxTo) {
   const offs = stopOffsets(net, patternId, trip);
   return [trip[0] + offs[idxFrom], trip[0] + offs[idxTo]];
@@ -47,7 +39,9 @@ function tripTimes(net, patternId, trip, idxFrom, idxTo) {
 function directItineraries(net, leg, dateStr, nowMin) {
   const active = activeServicesOn(net, dateStr);
   const trips = net.trips[leg.patternId] || [];
-  const [idxFrom, idxTo] = legStopIndices(net, leg.patternId, leg.from, leg.hops);
+  // leg.fromIdx/leg.toIdx prijdou primo z routing.js (search()) — presna pozice
+  // v ramci patternu, i pro smyckove patterny se 2 vyskyty stejne zastavky.
+  const [idxFrom, idxTo] = [leg.fromIdx, leg.toIdx];
   const out = [];
 
   for (const trip of trips) {
@@ -74,8 +68,8 @@ function transferItineraries(net, variant, dateStr, nowMin, minTransfer) {
   const [leg1, leg2] = variant.legs;
   const active1 = activeServicesOn(net, dateStr);
   const trips1 = net.trips[leg1.patternId] || [];
-  const [idxFrom1, idxT1] = legStopIndices(net, leg1.patternId, leg1.from, leg1.hops);
-  const [idxT2, idxB2] = legStopIndices(net, leg2.patternId, leg2.from, leg2.hops);
+  const [idxFrom1, idxT1] = [leg1.fromIdx, leg1.toIdx];
+  const [idxT2, idxB2] = [leg2.fromIdx, leg2.toIdx];
   const trips2 = net.trips[leg2.patternId] || [];
   const out = [];
 
