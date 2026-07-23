@@ -7,6 +7,29 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-07-23 (4) — v0.1.0 (J8-fix: refresh-stabilita — klíčování na název/linku, ne volatilní id)
+
+- **`scripts/build_network.js`** — `COORD_OVERRIDES` překlíčován ze 7× `JDFS-…` (volatilní GTFS
+  stop_id) na normalizovaný název zastávky; aplikuje se JEN když zdroj GPS chybí/je `0`, jinak
+  nikdy nepřepíše validní data. Oprava i latentní chyby (string `"0"` bylo dřív vyhodnoceno jako
+  pravdivé). Nepoužitý override klíč hlásí `console.warn` (self-check proti přejmenování/zániku
+  zastávky).
+- **`scripts/verify_network.js`** — natvrdo zadané `P50`/`P5` nahrazeny dohledáním přes nové
+  helpery `findPattern(net, line, fromName, toName)` a `findLoopPattern(net, line)` (linka +
+  názvy zastávek). Žádné `S#`/`P#`/`JDFS-` literály. `routing.test.js`/`journey.test.js`/
+  `timetable.test.js` už na id nespoléhaly, beze změny.
+- **`docs/DATA_SOURCES.md`** — nová trvalá sekce „Stabilní vs. volatilní identifikátory" +
+  starší nález o nestabilitě id označen jako vyřešený.
+- **Důkaz refresh-stability (klíčové ověření):** `update_data.js` spuštěn na živé čerstvé stažení
+  (ne cache) — celý pipeline (stažení → filtr → build → guard) proběhl za 57,9 s, **guard
+  `verify_network.js` 26/26 PASS**. Patterny se v běhu skutečně přečíslovaly přesně jako v
+  původním nálezu (`P50` linka 3→9, `P5`→jiná linka), ale dynamické dohledání (`findPattern`/
+  `findLoopPattern`) je i tak správně našlo (nově `P206`/`P120`) — přímý důkaz, že fix řeší
+  přesně popsaný problém. Commitnut i přestavěný `data/network.json` (23 linek, 157 zastávek
+  vše s validní GPS, 290 patternů, 10 151 spojů) + nový `data/data_source_state.json`.
+- **Výsledek:** J8b (GitHub Actions workflow pro automatickou obnovu) je teď odblokován —
+  guard bude reálně procházet i bez lidského zásahu. Detail v `handoff.md` → VÝSLEDEK.
+
 ## 2026-07-23 (3) — v0.1.0 (J8a: update_data.js — ruční obnova dat + regression guard)
 
 - **`scripts/update_data.js`** — stáhne aktuální `JDF_merged_GTFS.zip`, vyfiltruje MHD KV (agency

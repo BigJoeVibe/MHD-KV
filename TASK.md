@@ -43,14 +43,14 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 | J5 | Poloha: klik do mapy / GPS / paste GPS → nejbližší zastávka | coords už v datech; mapa = zvážit Leaflet |
 | J6 | Favourites = body 1–3 (domov↔centrum, ↔Západní, ↔nádraží) jako uložené dotazy | nahrazuje ruční F2 |
 | J7 | Sloučení se starou appkou F1 / osud „odjezdové tabule" | rozhodnout |
-| **J8** | **Automatizace obnovy dat** (GitHub Actions, bez lokálu) — návrh hotový, viz `docs/DATA_SOURCES.md` | **J8a HOTOVO 23.7.** (`update_data.js` + guard, otestováno na reálných datech); **J8b BLOKOVÁNO** — viz nález níže |
+| **J8** | **Automatizace obnovy dat** (GitHub Actions, bez lokálu) — návrh hotový, viz `docs/DATA_SOURCES.md` | **J8a HOTOVO 23.7.** (`update_data.js` + guard); **J8-fix HOTOVO 23.7.** (refresh-stabilita, viz níže); **J8b ⭐ TEĎ odblokováno** |
 
 **J8a — HOTOVO 23.7.:** `scripts/update_data.js` — stáhne aktuální GTFS, vyfiltruje MHD KV, streamuje
 `stop_times.txt` (~1,38 GB), zavolá `build_network.js`, prožene guardem (validní JSON + prahy
 linky≥20/zast≥140/spoje≥9000 + pokles ≤20 % + `verify_network.js` celý PASS → jinak rollback +
 nenulový exit). Otestováno end-to-end na reálném čerstvém stažení (22.7. data) — viz `handoff.md` → VÝSLEDEK.
 
-**⚠️ NÁLEZ blokující J8b (2026-07-23, z reálného testu J8a) — GTFS interní id nejsou stabilní mezi
+**✅ VYŘEŠENO 23.7. (J8-fix) — NÁLEZ z reálného testu J8a — GTFS interní id nejsou stabilní mezi
 obnovami:** čerstvé stažení (22.7.) proti staršímu (17.–18.7.) ukázalo, že `stop_id` (`JDFS-xxxxx`)
 téže fyzické zastávky se mezi obnovami **mění**. Důsledky:
 1. `COORD_OVERRIDES` v `build_network.js` (klíč = `JDFS-` id, JH/H0 23.7.) se rozbije při každé další
@@ -64,13 +64,15 @@ téže fyzické zastávky se mezi obnovami **mění**. Důsledky:
    linka 3), `P5` (dřív linka 12 smyčka) — po čerstvém stažení odpovídaly jiným linkám (9, resp. 1) a
    testy proto spadly (FAIL 3×). **Není to regrese dat**, je to křehkost testu vůči přeindexaci.
    Návrh opravy: resolvovat testovací pattern přes (linka, headsign, zastávky), ne přes natvrdo `P#`.
-**ROZHODNUTO (Joe 23.7.): varianta (a) — opravit.** → **J8-fix ⭐ TEĎ** (spec v `handoff.md`):
-překlíčovat `COORD_OVERRIDES` na **normalizovaný název** + aplikovat jen když GPS chybí (řeší i „Lázně I"
-se 2 záznamy — validní se nepřepíše); odhardcodovat `P50`/`P5`/`S#` ve `verify_network.js` i v testech
-(resolvovat přes linku + název); trvalé pravidlo do `docs/DATA_SOURCES.md`; **důkaz:** `update_data.js`
-na čerstvá data teď projde (guard 26/26) → commitnout i přestavěný `network.json`.
+**ROZHODNUTO (Joe 23.7.): varianta (a) — opravit.** → **J8-fix HOTOVO 23.7.** (`handoff.md` → VÝSLEDEK):
+`COORD_OVERRIDES` překlíčován na normalizovaný název (aplikuje se jen když GPS chybí, „Lázně I" se
+2 záznamy vyřešeno korektně — validní se nepřepíše); `verify_network.js` odhardcodován přes
+`findPattern`/`findLoopPattern` (linka + název); trvalé pravidlo v `docs/DATA_SOURCES.md`; **důkaz
+proveden:** `update_data.js` na živé čerstvé stažení prošel end-to-end (guard 26/26 PASS, 57,9 s),
+patterny se reálně přečíslovaly a dohledání je i tak správně našlo — commitnut i přestavěný
+`network.json` (23 linek/157 zast./290 patternů/10 151 spojů).
 
-**J8b — potom (po J8-fix):** `.github/workflows/update-data.yml` (denní cron, Last-Modified check, `workflow_dispatch`, **keepalive** proti 60dennímu vypnutí).
+**J8b — ⭐ TEĎ (odblokováno):** `.github/workflows/update-data.yml` (denní cron, Last-Modified check, `workflow_dispatch`, **keepalive** proti 60dennímu vypnutí).
 
 **J8 — podúkoly (návrh 2026-07-21):**
 - `scripts/update_data.js` — stáhnout JrUtil GTFS → filtr KV (stream `stop_times`) → `build_network.js`.

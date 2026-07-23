@@ -103,4 +103,36 @@ Přidej sekci: **„Stabilní vs. volatilní identifikátory"** — `JDFS-`/`S#`
 ---
 
 ## VÝSLEDEK (vyplní executor)
-_(sem: co odhardcodováno, guard po fixu, testy, potvrzení refresh-stability, problémy, nápady)_
+
+**Hotovo 2026-07-23, commit `d8c7456` (push proveden, `main` u remote sladěn).**
+
+- **FIX-1** (`scripts/build_network.js`): `COORD_OVERRIDES` překlíčován ze 7× `JDFS-…` na
+  normalizovaný název (`kpt.jaroše`, `mattoniho nábřeží`, `nádraží dalovice`, `na pasece`,
+  `globus`, `tesco`, `lázně i`). Aplikuje se jen když `rawLat`/`rawLon` chybí/je `0`
+  (opravena i latentní chybu: string `"0"` bylo dřív vyhodnoceno jako pravdivé, takže by
+  se validace „chybí GPS" nechovala správně bez override existence). Nepoužitý klíč hlásí
+  `console.warn`. Ověřeno: build proběhl bez jediného WARN (všech 7 názvů se v datech našlo).
+- **FIX-2** (`scripts/verify_network.js`): přidány `findPattern(net, line, fromName, toName)`
+  a `findLoopPattern(net, line)`; nahrazují natvrdo `"P50"` (linka 3, Krátká→Tržnice) a
+  `"P5"` (smyčka linky 12, Pivovar↔Tržnice). Žádné `S#`/`P#`/`JDFS-` literály nezůstaly.
+- **FIX-3**: `routing.test.js`, `journey.test.js`, `timetable.test.js` už odjakživa pracují
+  přes názvy zastávek (`resolveStopId`), ne přes `S#` — grep potvrdil, žádná změna nebyla
+  potřeba. Všechny tři proběhly bez chyby (exit 0) na novém `network.json`.
+- **FIX-4** (`docs/DATA_SOURCES.md`): nová sekce „⚠️ Stabilní vs. volatilní identifikátory"
+  (co neklíčovat, na co klíčovat, proč, jak to řeší kód); starší nález o nestabilitě id
+  označen jako ✅ VYŘEŠENO s odkazem na důkaz.
+- **FIX-5 — DŮKAZ refresh-stability:** `node scripts/update_data.js` spuštěn na živá čerstvá
+  data (reálné stažení z `data.jr.ggu.cz`, ne cache). Proběhl celý pipeline (stažení → filtr
+  → `build_network.js` → guard) za 57,9 s. **Guard: `verify_network.js` 26/26 PASS.**
+  Zajímavé potvrzení bugu i fixu najednou: patterny se v tomto běhu skutečně přečíslovaly
+  přesně jako v nálezu z 23.7. (`P50` linka 3→9, `P5`→jiná linka) — `findPattern`/
+  `findLoopPattern` je i tak správně dohledaly (nově `P206` linka 3, `P120` smyčka linky 12)
+  a všechny testy prošly. To je přímý důkaz, že J8-fix řeší přesně to, co měl.
+  Data po tomto běhu: 23 linek, 157 zastávek (všech 157 s validní GPS), 290 patternů,
+  10 151 spojů — commitnuto `data/network.json` + nově vzniklý `data/data_source_state.json`.
+- **Potvrzení:** `update_data.js` je teď refresh-stabilní — J8b (GitHub Actions workflow)
+  dává smysl stavět, guard bude reálně procházet i bez lidského zásahu.
+- **Problémy/nápady:** žádné nové. `data_raw/kv_gtfs/` už z předchozího (neúspěšného) J8a
+  testu obsahoval čerstvá data z 22.7. — proto se přečíslování reprodukovalo hned i při
+  lokálním rebuildu před spuštěním celého `update_data.js`; nic to nemění na tom, že finální
+  důkaz (FIX-5) proběhl přes skutečné nové stažení, ne jen přes starý cache soubor.
