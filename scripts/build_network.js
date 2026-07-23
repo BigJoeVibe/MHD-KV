@@ -57,6 +57,18 @@ const stByTrip = {};
   for (const t in stByTrip) stByTrip[t].sort((a, b) => (+a.stop_sequence) - (+b.stop_sequence));
 }
 
+// Ruční doplnění GPS pro zastávky, které zdroj (CIS/GTFS) nemá (0,0). Joe, 2026-07-23.
+// PROVIZORNÍ single-point na uzel — přesné směrové pozice řeší epic J9.
+const COORD_OVERRIDES = {
+  'JDFS-10020': [50.225355, 12.839125],  // Kpt.Jaroše — střed 2 označníků (~90 m od sebe)
+  'JDFS-14283': [50.239712, 12.889429],  // Mattoniho nábřeží — 2 MHD označníky (příměstský 3. bod → J9)
+  'JDFS-16310': [50.255920, 12.885421],  // Nádraží Dalovice
+  'JDFS-16311': [50.252510, 12.882424],  // Na Pasece
+  'JDFS-18345': [50.217823, 12.806296],  // Globus
+  'JDFS-32745': [50.226009, 12.823021],  // Tesco
+  'JDFS-36827': [50.219270, 12.880980],  // Lázně I (S155) = poloha totožné zastávky S116 (JDFS-6580)
+};
+
 // remap stop_id na krátké S0,S1,... (úspora bytů)
 const stopIdx = {}, stops = {}; let sc = 0;
 const sid = gid => { if (!(gid in stopIdx)) stopIdx[gid] = 'S' + (sc++); return stopIdx[gid]; };
@@ -87,10 +99,11 @@ for (const t of trips) {
     const k = stopIdx[gid];
     if (!(k in stops)) {
       const m = stopMeta[gid];
+      const override = COORD_OVERRIDES[gid];
       stops[k] = {
         n: (m.stop_name || '').replace(/^Karlovy Vary,/, ''),
-        lat: m.stop_lat ? +(+m.stop_lat).toFixed(5) : null,
-        lon: m.stop_lon ? +(+m.stop_lon).toFixed(5) : null,
+        lat: override ? override[0] : (m.stop_lat ? +(+m.stop_lat).toFixed(5) : null),
+        lon: override ? override[1] : (m.stop_lon ? +(+m.stop_lon).toFixed(5) : null),
       };
     }
   }

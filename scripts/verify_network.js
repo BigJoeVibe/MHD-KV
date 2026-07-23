@@ -41,21 +41,24 @@ console.log("\n--- Uplnost ---");
 const stopIds = Object.keys(net.stops);
 let withName = 0;
 let withGps = 0;
+const zeroGps = [];
 for (const id of stopIds) {
   const s = net.stops[id];
   if (s.n) withName++;
-  if (typeof s.lat === "number" && typeof s.lon === "number") withGps++;
+  const validGps = typeof s.lat === "number" && typeof s.lon === "number" && s.lat !== 0 && s.lon !== 0;
+  if (validGps) withGps++;
+  else if (typeof s.lat === "number" && typeof s.lon === "number") zeroGps.push(`${id} (${s.n}): ${s.lat},${s.lon}`);
 }
 if (withName === stopIds.length) {
   pass(`vsechny zastavky maji jmeno (${withName}/${stopIds.length})`);
 } else {
   fail(`chybi jmeno u ${stopIds.length - withName} zastavek`);
 }
-console.log(`INFO: zastavek s GPS: ${withGps}/${stopIds.length} (ocekavano 157/157)`);
+console.log(`INFO: zastavek s validni GPS (0,0 se nepocita): ${withGps}/${stopIds.length} (ocekavano 157/157)`);
 if (withGps === stopIds.length) {
-  pass("vsechny zastavky maji GPS");
+  pass("vsechny zastavky maji validni GPS (zadna 0,0)");
 } else {
-  fail(`${stopIds.length - withGps} zastavek bez GPS`);
+  fail(`${stopIds.length - withGps} zastavek ma chybejici/nulovou GPS: ${zeroGps.join("; ")}`);
 }
 
 // --- Integrita ---
