@@ -21,13 +21,38 @@ jobs:
         env:
           FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
       - name: Commit changes (jen kdyz se neco zmenilo)
+        id: commit_data
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/network.json data/data_source_state.json
           if git diff --cached --quiet; then
             echo "Zadna zmena dat — necommitovat."
+            echo "committed=false" >> "$GITHUB_OUTPUT"
           else
             git commit -m "chore(data): automaticka obnova jizdnich radu $(date -u +%F)"
             git push
+            echo "committed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Keepalive (proti 60dennimu auto-vypnuti scheduled workflow)
+        if: steps.commit_data.outputs.committed == 'false'
+        run: |
+          LAST_COMMIT_AGE_DAYS=$(( ( $(date -u +%s) - $(git log -1 --format=%ct) ) / 86400 ))
+          echo "Posledni commit v repu stary $LAST_COMMIT_AGE_DAYS dni."
+          if [ "$LAST_COMMIT_AGE_DAYS" -ge 50 ]; then
+            node -e "
+              const fs = require('fs');
+              const p = 'data/data_source_state.json';
+              const s = JSON.parse(fs.readFileSync(p, 'utf8'));
+              s.lastChecked = new Date().toISOString();
+              fs.writeFileSync(p, JSON.stringify(s, null, 2) + '\n');
+            "
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add data/data_source_state.json
+            git commit -m "chore: keepalive (posledni commit byl $LAST_COMMIT_AGE_DAYS dni stary)"
+            git push
+            echo "Keepalive commit proveden."
+          else
+            echo "Neni potreba (posledni commit mladsi nez 50 dni)."
           fi
