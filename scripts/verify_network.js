@@ -6,6 +6,7 @@ const path = require("path");
 const net = require(path.join(__dirname, "..", "data", "network.json"));
 const { stopsAfter, resolveStopId } = require("./routing.js");
 const { nextDepartures } = require("./timetable.js");
+const { planJourney } = require("./journey.js");
 
 let passCount = 0;
 let failCount = 0;
@@ -202,6 +203,36 @@ if (noNegative) {
   pass("zadny depMin neni zaporny");
 } else {
   fail("nalezen zaporny depMin");
+}
+
+// --- Casove planovani spojeni (J3-B: journey.js) ---
+console.log("\n--- Casove planovani spojeni (journey.js) ---");
+const minTransferSample = 3;
+const journeyResults = planJourney(net, "Krátká", "Růžový vrch", {
+  date: workdaySample,
+  nowMin: 8 * 60,
+  minTransfer: minTransferSample,
+  limit: 20,
+});
+const transferSample = journeyResults.find((it) => it.transfers === 1);
+if (transferSample) {
+  const [leg1, leg2] = transferSample.legs;
+  if (leg2.depMin >= leg1.arrMin + minTransferSample) {
+    pass(`prestupni spojeni drzi navaznost (leg2.depMin ${leg2.depMin} >= leg1.arrMin ${leg1.arrMin} + minTransfer ${minTransferSample})`);
+  } else {
+    fail(`prestupni spojeni NEDRZI navaznost (leg2.depMin ${leg2.depMin} < leg1.arrMin ${leg1.arrMin} + minTransfer ${minTransferSample})`);
+  }
+} else {
+  fail("nenalezeno zadne prestupni spojeni Kratka->Ruzovy vrch pro kontrolu navaznosti");
+}
+
+const anySample = journeyResults[0];
+if (anySample && anySample.totalMin === anySample.arrMin - anySample.depMin && anySample.totalMin > 0) {
+  pass(`totalMin === arrMin - depMin a totalMin > 0 (${anySample.totalMin} min)`);
+} else if (anySample) {
+  fail(`totalMin neodpovida arrMin-depMin nebo neni kladne (totalMin=${anySample.totalMin}, arrMin-depMin=${anySample.arrMin - anySample.depMin})`);
+} else {
+  fail("nenalezeno zadne spojeni Kratka->Ruzovy vrch pro kontrolu totalMin");
 }
 
 // --- Souhrn ---
