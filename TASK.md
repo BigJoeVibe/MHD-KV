@@ -43,7 +43,9 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 | J5 | Poloha: klik do mapy / GPS / paste GPS → nejbližší zastávka | coords už v datech; mapa = zvážit Leaflet |
 | J6 | Favourites = body 1–3 (domov↔centrum, ↔Západní, ↔nádraží) jako uložené dotazy | nahrazuje ruční F2 |
 | J7 | Sloučení se starou appkou F1 / osud „odjezdové tabule" | rozhodnout |
-| **J8** | **Automatizace obnovy dat** (GitHub Actions, bez lokálu) — viz `docs/DATA_SOURCES.md` | **✅ HOTOVO 23.7.** (J8a + J8-fix + J8b, viz níže — ověřeno end-to-end na reálném GH Actions runneru) |
+| **J8** | **Automatizace obnovy dat** (GitHub Actions, bez lokálu) — viz `docs/DATA_SOURCES.md` | J8a + J8-fix + J8b nasazené; **⭐ J8-hotfix TEĎ** (první ostrý běh selhal — brittle kontroly v guardu, viz níže) |
+
+**🔴 J8-hotfix (2026-08-02) — první ostrý scheduled běh SELHAL (guard zablokoval zdravá data):** příčina není v datech (25/26 PASS), ale v `verify_network.js` — sekce „Robustnost routingu (H1)" testuje **chování kódu** navázané na konkrétní snímek. Spadlo `H1c` (smyčka linky 12 Pivovar→Trznice: nový build tu trasu jako smyčku nemá → `FAIL`). Kód (`forwardSegments`) je správně. Druhá časovaná bomba: kontrola výluky Bohatice s natvrdo daty `20260901`/`20260915` (spadne po 12.9.). **Web běží dál na starých datech (rollback OK).** Fix (spec v `handoff.md`): guard = jen build-invariantní kontroly; H1a–d přesunout do `routing.test.js` (tolerantně, smyčku hledat dynamicky), nahradit 1 tolerantním smoke testem `planJourney(Krátká→Tržnice)`, odhardcodovat výluku na obecný invariant, audit zbytku. Princip zapsat do `docs/DATA_SOURCES.md`.
 
 **J8a — HOTOVO 23.7.:** `scripts/update_data.js` — stáhne aktuální GTFS, vyfiltruje MHD KV, streamuje
 `stop_times.txt` (~1,38 GB), zavolá `build_network.js`, prožene guardem (validní JSON + prahy

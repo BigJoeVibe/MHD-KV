@@ -42,6 +42,27 @@ runCase("přímé spojení", "Krátká", "Tržnice", WORKDAY, 8 * 60);
 runCase("spojení s přestupem", "Krátká", "Růžový vrch", WORKDAY, 8 * 60);
 runCase("přes půlnoc (linka 51)", "Okružní", "Garáže MHD", WORKDAY, 23 * 60 + 50);
 
+// Tolerantni kontrola navaznosti prestupu (presunuto z verify_network.js, HF-1/HF-4,
+// 2026-08-02) - konkretni prestupova varianta Kratka->Ruzovy vrch je snimkove
+// specifikum (muze se mezi obnovami dat prestrasovat/zmizet), proto jen konzole,
+// nikdy neshazuje proces (nesmi blokovat auto-guard).
+const MIN_TRANSFER = 3;
+const transferCheck = planJourney(net, "Krátká", "Růžový vrch", {
+  date: WORKDAY,
+  nowMin: 8 * 60,
+  minTransfer: MIN_TRANSFER,
+}).find((it) => it.transfers === 1);
+if (transferCheck) {
+  const [l1, l2] = transferCheck.legs;
+  console.log(
+    l2.depMin >= l1.arrMin + MIN_TRANSFER
+      ? `OK: přestupní spojení drží návaznost (${fmt(l2.depMin)} >= ${fmt(l1.arrMin)} + ${MIN_TRANSFER} min)`
+      : `WARN: přestupní spojení NEDRŽÍ návaznost (${fmt(l2.depMin)} < ${fmt(l1.arrMin)} + ${MIN_TRANSFER} min)`
+  );
+} else {
+  console.log("INFO: v tomto buildu nenalezeno přestupové spojení Krátká->Růžový vrch pro kontrolu návaznosti");
+}
+
 // H1a/H2: vedle pomalejsiho primeho spoje (13 min, ale odjezd az 08:14) se ted
 // ukazuji i drive odjizdejici prestupove varianty (odjezd 08:06) - pri vychozim
 // razeni 'departure' se zobrazi napred, protoze odjizdi driv, i kdyz je celkem

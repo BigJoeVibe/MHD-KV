@@ -4,7 +4,7 @@
 
 const path = require("path");
 const net = require(path.join(__dirname, "..", "data", "network.json"));
-const { stopsAfter, resolveStopId, search, coLocatedGroups } = require("./routing.js");
+const { stopsAfter, resolveStopId, coLocatedGroups } = require("./routing.js");
 const { nextDepartures } = require("./timetable.js");
 const { planJourney } = require("./journey.js");
 
@@ -167,59 +167,47 @@ function findPattern(net, line, fromName, toName) {
   return null;
 }
 
-// Smyckovy pattern dane linky = ma nejakou zastavku (krome posledni) vic nez jednou.
-function findLoopPattern(net, line) {
-  for (const pid in net.patterns) {
-    const p = net.patterns[pid];
-    if (p.line !== line) continue;
-    const seen = new Set();
-    for (const s of p.stops) {
-      if (seen.has(s)) return pid;
-      seen.add(s);
-    }
-  }
-  return null;
-}
-
-// Linka 3, Kratka -> Trznice (drive natvrdo "P50", viz scripts/routing.test.js)
+// Nekolik paterizch linek/domovskych smeru - staci, ze JEDNA z nich ma vsedni > vikend
+// (odolne vuci pripadnemu pretrasovani jedne konkretni linky mezi obnovami dat, misto
+// natvrdo linky 3 - HF-4).
 const workdaySample = "20260202"; // pondeli
 const saturdaySample = "20260207"; // sobota
-const line3Pattern = findPattern(net, 3, "Krátká", "Tržnice");
-if (!line3Pattern) {
-  fail('nenalezen pattern linky 3 Kratka->Trznice');
-} else {
-  const workdayCount = countActiveTrips(line3Pattern, workdaySample);
-  const saturdayCount = countActiveTrips(line3Pattern, saturdaySample);
-  console.log(`INFO: linka 3 (${line3Pattern}) spoju: pondeli ${workdaySample}=${workdayCount}, sobota ${saturdaySample}=${saturdayCount}`);
+const BACKBONE_ROUTES = [
+  [3, "Krátká", "Tržnice"],
+  [9, "Krátká", "Tržnice"],
+  [13, "Okružní", "Tržnice"],
+  [15, "Okružní", "Tržnice"],
+];
+let dayLogicOk = false;
+for (const [line, from, to] of BACKBONE_ROUTES) {
+  const pid = findPattern(net, line, from, to);
+  if (!pid) continue;
+  const workdayCount = countActiveTrips(pid, workdaySample);
+  const saturdayCount = countActiveTrips(pid, saturdaySample);
+  console.log(`INFO: linka ${line} (${pid}) spoju: vsedni ${workdaySample}=${workdayCount}, sobota ${saturdaySample}=${saturdayCount}`);
   if (workdayCount > saturdayCount) {
-    pass(`vsedni den hustsi nez sobota (${workdayCount} > ${saturdayCount})`);
-  } else {
-    fail(`vsedni den NENI hustsi nez sobota (${workdayCount} vs ${saturdayCount})`);
+    pass(`paterni linka ${line} ma vsedni den hustsi nez sobota (${workdayCount} > ${saturdayCount})`);
+    dayLogicOk = true;
+    break;
   }
 }
+if (!dayLogicOk) {
+  fail("zadna z paterizch linek (3/9/13/15) nema vsedni den hustsi nez sobota - zkontroluj kalendarni logiku");
+}
 
-// --- Vyluka Bohatice,namesti ---
-console.log("\n--- Vyluka Bohatice,namesti ---");
-const bohaticeId = resolveStopId(net, "Bohatice,náměstí");
-if (!bohaticeId) {
-  fail('zastavka "Bohatice,náměstí" nenalezena');
+// --- Vyjimky kalendare (calendar_dates se promitaji do modelu) ---
+// HF-3: nahrazuje drivejsi natvrdo test vyluky Bohatice (20260901/20260915) -
+// ten spadne, jakmile vyluka skonci nebo ji zdroj zmeni. Obecny invariant: existuje
+// >=1 sluzba s neprazdnym rem/add (tj. mechanismus calendar_dates se do modelu
+// vubec propisuje), bez vazby na konkretni zastavku/termin.
+console.log("\n--- Vyjimky kalendare (services rem/add) ---");
+const servicesWithExceptions = Object.values(net.services).filter(
+  (s) => (s.rem && s.rem.length > 0) || (s.add && s.add.length > 0)
+).length;
+if (servicesWithExceptions > 0) {
+  pass(`vyjimky kalendare (rem/add) se promitaji do modelu (${servicesWithExceptions} sluzeb ma vyjimku)`);
 } else {
-  const patternsWithBohatice = patternIds.filter((pid) => net.patterns[pid].stops.includes(bohaticeId));
-  const beforeSample = "20260901"; // pred vylukou (do 11.9.2026)
-  const afterSample = "20260915"; // po vyluce (od 12.9.2026)
-  const beforeCount = patternsWithBohatice.reduce((sum, pid) => sum + countActiveTrips(pid, beforeSample), 0);
-  const afterCount = patternsWithBohatice.reduce((sum, pid) => sum + countActiveTrips(pid, afterSample), 0);
-  console.log(`INFO: spoju pres Bohatice,namesti: ${beforeSample}=${beforeCount}, ${afterSample}=${afterCount}`);
-  if (beforeCount === 0) {
-    pass(`0 spoju do 11.9.2026 (vzorek ${beforeSample})`);
-  } else {
-    fail(`ocekavano 0 spoju do 11.9.2026, nalezeno ${beforeCount} (vzorek ${beforeSample})`);
-  }
-  if (afterCount >= 1) {
-    pass(`>=1 spoj od 12.9.2026 (vzorek ${afterSample}: ${afterCount})`);
-  } else {
-    fail(`ocekavano >=1 spoj od 12.9.2026, nalezeno ${afterCount} (vzorek ${afterSample})`);
-  }
+  fail("zadna sluzba nema kalendarni vyjimku (rem/add) - mechanismus calendar_dates se nepromita do modelu");
 }
 
 // --- Smerovost ---
@@ -273,92 +261,34 @@ if (noNegative) {
   fail("nalezen zaporny depMin");
 }
 
-// --- Casove planovani spojeni (J3-B: journey.js) ---
-console.log("\n--- Casove planovani spojeni (journey.js) ---");
-const minTransferSample = 3;
-const journeyResults = planJourney(net, "Krátká", "Růžový vrch", {
+// --- Smoke test: data x engine (HF-2, invariant zdraveho feedu) ---
+// Nahrazuje drivejsi test navaznosti prestupu Kratka->Ruzovy vrch (HF-4, snimkove
+// specifikum - konkretni prestupova varianta se muze mezi obnovami zmenit/prestat
+// existovat). Kratka->Trznice je paterni smer s castym primym spojem, ktery musi
+// fungovat v kazdem zdravem KV buildu. Behaviorem journey.js (navaznost prestupu atd.)
+// se zabyvaji tolerantni testy v journey.test.js (nebloki automat).
+console.log("\n--- Smoke test: planJourney Kratka -> Trznice ---");
+const smokeResults = planJourney(net, "Krátká", "Tržnice", {
   date: workdaySample,
   nowMin: 8 * 60,
-  minTransfer: minTransferSample,
-  limit: 20,
 });
-const transferSample = journeyResults.find((it) => it.transfers === 1);
-if (transferSample) {
-  const [leg1, leg2] = transferSample.legs;
-  if (leg2.depMin >= leg1.arrMin + minTransferSample) {
-    pass(`prestupni spojeni drzi navaznost (leg2.depMin ${leg2.depMin} >= leg1.arrMin ${leg1.arrMin} + minTransfer ${minTransferSample})`);
-  } else {
-    fail(`prestupni spojeni NEDRZI navaznost (leg2.depMin ${leg2.depMin} < leg1.arrMin ${leg1.arrMin} + minTransfer ${minTransferSample})`);
-  }
+if (smokeResults.length > 0) {
+  pass(`planJourney Kratka->Trznice vraci >=1 spojeni (${smokeResults.length})`);
 } else {
-  fail("nenalezeno zadne prestupni spojeni Kratka->Ruzovy vrch pro kontrolu navaznosti");
+  fail("planJourney Kratka->Trznice nevratilo zadne spojeni - paterni smer by mel mit spoj v kazdem zdravem buildu");
 }
-
-const anySample = journeyResults[0];
-if (anySample && anySample.totalMin === anySample.arrMin - anySample.depMin && anySample.totalMin > 0) {
-  pass(`totalMin === arrMin - depMin a totalMin > 0 (${anySample.totalMin} min)`);
-} else if (anySample) {
-  fail(`totalMin neodpovida arrMin-depMin nebo neni kladne (totalMin=${anySample.totalMin}, arrMin-depMin=${anySample.arrMin - anySample.depMin})`);
-} else {
-  fail("nenalezeno zadne spojeni Kratka->Ruzovy vrch pro kontrolu totalMin");
-}
-
-// --- Robustnost routingu (H1) ---
-console.log("\n--- Robustnost routingu (H1) ---");
-
-// H1a: bez Pareto filtru musi search() vracet vic nez jen "hop-minimalni" variantu —
-// primo i vic 1-prestupovych moznosti soucasne (drivejsi filterDominated by prestupni
-// varianty s vic zastavkami zahodil, i kdyz v case mohou byt potreba/rychlejsi).
-const hnResults = search(net, "Krátká", "Horní nádraží", { maxTransfers: 1 });
-const hnDirect = hnResults.filter((r) => r.transfers === 0).length;
-const hnTransfer = hnResults.filter((r) => r.transfers === 1).length;
-console.log(`INFO: Kratka->Horni nadrazi: ${hnDirect} primych, ${hnTransfer} 1-prestupovych variant`);
-if (hnDirect >= 1 && hnTransfer >= 5) {
-  pass(`primo i vic 1-prestupovych variant soucasne (primo ${hnDirect}, prestup ${hnTransfer}) — bez Pareto zahazovani`);
-} else {
-  fail(`ocekavano >=1 primo a >=5 prestupovych variant, nalezeno primo=${hnDirect} prestup=${hnTransfer}`);
-}
-
-// H1b: 2 prestupy zapnute parametrem, vypnute ve vychozim stavu.
-const twoTransfer = search(net, "Rozcestí u Koníčka", "Stadion ZM", { maxTransfers: 2 });
-const twoTransferCount = twoTransfer.filter((r) => r.transfers === 2).length;
-if (twoTransferCount > 0) {
-  pass(`maxTransfers:2 vraci >=1 retezec o 2 prestupech (${twoTransferCount})`);
-} else {
-  fail("maxTransfers:2 nevratilo zadny retezec o 2 prestupech");
-}
-const defaultNoTwoTransfer = search(net, "Rozcestí u Koníčka", "Stadion ZM").every((r) => r.transfers <= 1);
-if (defaultNoTwoTransfer) {
-  pass("bez parametru (default maxTransfers=1) se 2 prestupy nevraceji");
-} else {
-  fail("bez parametru se presto vratily varianty s 2 prestupy — default se nechova jako drive");
-}
-
-// H1c: smyckovy pattern (linka 12, Pivovar<->Trznice; drive natvrdo "P5") musi vratit
-// >=2 variant primeho spoje (kratka cesta i cesta pres celou smycku), s ruznymi fromIdx.
-const line12LoopPattern = findLoopPattern(net, 12);
-if (!line12LoopPattern) {
-  fail('nenalezen smyckovy pattern linky 12');
-} else {
-  const loopResults = search(net, "Pivovar", "Tržnice", { maxTransfers: 0 }).filter((r) => r.legs[0].patternId === line12LoopPattern);
-  const distinctFromIdx = new Set(loopResults.map((r) => r.legs[0].fromIdx));
-  if (loopResults.length >= 2 && distinctFromIdx.size >= 2) {
-    pass(`smyckovy pattern ${line12LoopPattern} (Pivovar->Trznice) vraci ${loopResults.length} varianty z ${distinctFromIdx.size} ruznych vyskytu zastavky`);
-  } else {
-    fail(`smyckovy pattern ${line12LoopPattern} (Pivovar->Trznice) vratil jen ${loopResults.length} variant(y), ${distinctFromIdx.size} vyskyt(u) — ocekavano >=2/>=2`);
-  }
-}
-
-// H1d: co-located prestup (Parkoviste KOME na lince 20 -> Lazne I S155 -> S116 -> linka 2/52).
-const coLocResults = search(net, "Parkoviště KOME", "Tržnice", { maxTransfers: 1 });
-const coLocFound = coLocResults.some((r) => r.coLocated);
-if (coLocFound) {
-  pass("co-located prestup Parkoviste KOME -> (S155<->S116 Lazne I) -> Trznice nalezen");
-} else {
-  fail("co-located prestup Parkoviste KOME -> Trznice NENALEZEN (H1d nefunguje)");
+const smokeFirst = smokeResults[0];
+if (smokeFirst && smokeFirst.arrMin > smokeFirst.depMin && smokeFirst.totalMin === smokeFirst.arrMin - smokeFirst.depMin) {
+  pass(`casy prvniho spojeni jsou konzistentni (dep ${smokeFirst.depMin} < arr ${smokeFirst.arrMin}, totalMin ${smokeFirst.totalMin})`);
+} else if (smokeFirst) {
+  fail(`casy prvniho spojeni nejsou konzistentni (dep ${smokeFirst.depMin}, arr ${smokeFirst.arrMin}, totalMin ${smokeFirst.totalMin})`);
 }
 
 // --- Souhrn ---
+// Robustnost routingu (drive H1a-d zde) presunuta do routing.test.js/journey.test.js
+// (HF-1) - testuje CHOVANI kodu na konkretnim snimku dat, ne invarianty zdraveho
+// buildu, a NESMI blokovat auto-guard. Spustit rucne: node scripts/routing.test.js,
+// node scripts/journey.test.js.
 console.log("\n=== SOUHRN ===");
 console.log(`PASS: ${passCount}, FAIL: ${failCount}`);
 if (failCount > 0) process.exitCode = 1;

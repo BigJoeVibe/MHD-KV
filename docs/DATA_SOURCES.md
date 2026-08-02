@@ -109,21 +109,50 @@ Front-end (J4) musí `data/network.json` **načítat za běhu** (fetch), ne mít
 
 Aby se dalo věřit, že `network.json` je správně — teď i po každé automatické obnově.
 
-### A) Jednorázový test po buildu — `scripts/verify_network.js` [k dořešení, doporučeno k J1/J2]
-Kontroly (spustit po `build_network.js`):
+### A) Jednorázový test po buildu — `scripts/verify_network.js`
+Kontroly (spustit po `build_network.js`), **od 2026-08-02 jen invarianty zdravého KV feedu** (viz
+princip níže):
 - **Struktura:** existují `stops`/`patterns`/`trips`/`services`; `meta.lines` obsahuje 23 linek.
 - **Úplnost:** každá zastávka má jméno; kolik má GPS (očekáváno 157/157).
 - **Integrita:** každý pattern má ≥2 zastávky a `off` stejné délky jako `stops`; každý trip odkazuje na `service_id`, který v `services` existuje.
-- **Logika dne:** pro vzorové datum vrátí aktivní služby; známý spoj (linka 3 Krátká→Tržnice) má očekávaný řád odjezdů (všední hustě × sobota řídce).
-- **Výluka:** `Bohatice,náměstí` = 0 spojů do 11. 9. 2026, ≥1 od 12. 9. 2026.
+- **Logika dne:** zkusí několik páteřních linek/směrů (3, 9, 13, 15) a ověří, že aspoň jedna má všední den hustší než sobotu — odolné vůči přetrasování jedné konkrétní linky.
+- **Kalendářní výjimky:** existuje ≥1 služba s neprázdným `rem`/`add` (mechanismus `calendar_dates` se do modelu promítá) — bez vazby na konkrétní zastávku/termín/výluku.
 - **Směrovost:** odjezdy z Krátké směr Tržnice neobsahují protisměr (ne 05:30/05:54).
+- **Smoke test (data×engine):** `planJourney(Krátká→Tržnice)` vrátí ≥1 spojení s konzistentními časy (`arrMin>depMin`, `totalMin===arrMin−depMin`).
 
 ### B) Opakovaný test v obnově (J8) — regression guard PŘED commitem
-Ve `update-data.yml` po buildu, ještě před commitem:
+Ve `update-data.yml`/`update_data.js` po buildu, ještě před commitem (spouští `verify_network.js`):
 - **Prahy zdravé sady:** linky ≥ 20, zastávky ≥ 140, spoje ≥ 9 000 (jinak feed nejspíš ořezaný/rozbitý).
 - **Nesmí spadnout o >X %** oproti předchozí verzi `network.json` (ochrana proti vadnému upstreamu).
 - **`network.json` je validní JSON** a naparsuje se.
 - Když guard selže → **NEcommituj** nová data a pošli upozornění (e-mail z Actions). Radši stará platná data než rozbitá nová.
+
+### ⚠️ Princip guardu: invarianty, ne snímek (trvalé pravidlo, zavedeno 2026-08-02 po J8-hotfix)
+
+**`verify_network.js` běží PŘÍMO v auto-guardu (`update_data.js`), takže smí obsahovat jen kontroly,
+které platí v každém zdravém KV buildu.** Nikdy ne:
+- konkrétní data/termíny (výluky, platnosti — ty jednou skončí a test spadne),
+- konkrétní topologii jedné linky/patternu (že zrovna linka X má na daném úseku smyčku),
+- přesné počty variant vázané na snímek,
+- konkrétní OD dvojice/zastávky, které se mohou mezi obnovami přetrasovat nebo přejmenovat.
+
+**Nález (2026-08-02):** první ostrý scheduled běh J8b selhal, protože sekce „Robustnost routingu (H1)"
+testovala konkrétní snímek (natvrdo linka 12 měla mít smyčku na `Pivovar→Tržnice` — v novém buildu ji
+neměla, jiná linka smyčku měla) a kontrola výluky Bohatice měla natvrdo zadaná data
+`20260901`/`20260915` (časovaná bomba — spadne po skončení výluky 12. 9. 2026). Kód (`forwardSegments`
+atd.) byl v pořádku, brittle byly jen kontroly.
+
+**Oprava (J8-hotfix, HF-1 až HF-4):**
+- Testy **chování kódu** (že routing umí smyčky/2 přestupy/co-located přestup) patří do
+  `routing.test.js`/`journey.test.js` — ty běží jen ručně při vývoji a **nikdy nenastavují
+  `process.exitCode`**, takže nemůžou zablokovat automat. Tam smí být klidně snímkově specifické,
+  ale musí být **tolerantní** (dynamicky si dohledat vhodná data v aktuálním buildu — např.
+  `findAnyLoopPattern()` v `routing.test.js` projde síť a najde JAKÝKOLI smyčkový pattern, místo
+  natvrdo očekávat linku 12; když žádný není, vypíše INFO, nepadá).
+- `verify_network.js` smí mít max. **jeden tolerantní smoke test** integrace dat×enginu (Krátká→Tržnice
+  jako páteřní spoj s jistým přímým spojením) — to je jediné místo, kde je legitimní nechat build
+  spadnout, protože znamená opravdu rozbitá data.
+- Stejné ponaučení jako u ID (sekce výše): guard testuje **invarianty**, ne **specifika snímku**.
 
 ## ⚠️ Stabilní vs. volatilní identifikátory (trvalé pravidlo, zavedeno 2026-07-23 po J8-fix)
 

@@ -1,178 +1,149 @@
-# Handoff — EXECUTOR spec (J8b: GitHub Actions workflow pro automatickou obnovu dat)
+# Handoff — EXECUTOR spec (J8-hotfix: guard robustnost — verify jen build-invariantní kontroly)
 
-> 🟢 **AKTIVNÍ ZADÁNÍ (manager, 2026-07-23).** J8a (`update_data.js` + guard) i J8-fix (refresh-stabilita,
-> guard reálně prošel 26/26 na čerstvých datech) jsou HOTOVÉ. Teď **poslední kus J8 — automatizace bez lidí.**
-> Rozhodnutí Joe (23.7.): **A) auto-commit rovnou do `main`** (guard je „ventil" místo člověka) + **denní cron**.
-> Archiv J8-fix je v gitu (`d8c7456`, `aba419b`) a `changelog.md`.
+> 🔴 **AKTIVNÍ ZADÁNÍ (manager, 2026-08-02) — PROD HOTFIX, priorita.** J8b (automat) je nasazený, ale
+> **první ostrý scheduled běh SELHAL** (`exit 1`, guard zablokoval jinak zdravá data). Web běží dál na
+> starých datech (rollback funguje), ale automat se nedaří dokončit.
+> **Kořenová příčina (potvrzeno z logu):** `verify_network.js` obsahuje kontroly navázané na KONKRÉTNÍ
+> snímek dat — ne na invarianty. Selhalo `H1c` (smyčka linky 12 Pivovar→Trznice: v novém buildu ta trasa
+> smyčku nemá → `FAIL: … vratil jen 1 variant`). Kód (`forwardSegments`) je správně; brittle je jen ta
+> kontrola. Navíc je tam druhá časovaná bomba: kontrola výluky Bohatice s natvrdo daty `20260901`/`20260915`.
+> **Cíl:** guard smí testovat JEN to, co platí v každém zdravém KV feedu. Snímková specifika a testy chování
+> kódu ven z guardu. Pak zdravá nová data konečně protečou.
 
 > **Předávka pro nižšího CC (executor).** Implementuj dle bodů, **nic nad zadání**. Git děláš ty.
-> Commit + krátký test/ověření po každém kroku.
+> Malé kroky, kód jako **diff**, commit + test po každém kroku.
 
 ## Jak začít
 1. „Použij skill **kod-jadro**."
-2. Přečti `CLAUDE.md`, `TASK.md` (sekce TEĎ), `docs/DATA_SOURCES.md` (→ „Aktualizace dat — architektura"
-   a „Rizika"), `scripts/update_data.js`, tento soubor.
-3. **Před prvním commitem** commitni necommitnuté manager docs (`handoff.md`, `TASK.md`).
+2. Přečti `CLAUDE.md`, `TASK.md` (sekce TEĎ), `scripts/verify_network.js`, `scripts/routing.js`,
+   `scripts/journey.js`, `scripts/routing.test.js`, `scripts/journey.test.js`, tento soubor.
+3. **Před prvním commitem** commitni necommitnuté manager docs.
 
 ---
 
-## Kontext (POTVRZENO, neodvozovat znovu)
-- `scripts/update_data.js` (J8a): stáhne GTFS → filtr KV → `build_network.js` → **guard** (validní JSON +
-  prahy linky≥20/zast≥140/spoje≥9000 + pokles ≤20 % + `verify_network.js` FAIL:0). Při FAIL → rollback +
-  **nenulový exit**. Při úspěchu zapíše `data/data_source_state.json` (má `lastModified`, `size`, `counts`).
-- Guard je refresh-stabilní (J8-fix) → auto-commit je bezpečný: špatná data se **nezapíšou**.
-- **GitHub Pages deployuje z `main` automaticky** (~1 min po commitu). Repo: `BigJoeVibe/MHD-KV`.
-- Runner `ubuntu-latest` má `curl`, `unzip`, Node — stejné nástroje jako lokálně. Disk ~14 GB (ZIP 123 MB +
-  stream 1,4 GB se vejde).
+## Princip (zapiš i do `docs/DATA_SOURCES.md`)
+
+`verify_network.js` běží **uvnitř auto-guardu** (`update_data.js`). Smí tedy obsahovat **jen kontroly
+invariantní vůči každému zdravému buildu** KV feedu — NIKDY:
+- konkrétní data/termíny (výluky, platnosti),
+- konkrétní topologii jedné linky (že zrovna linka 12 má smyčku na daném úseku),
+- přesné počty variant vázané na snímek,
+- konkrétní OD dvojice, které se mohou přetrasovat.
+
+Testy **chování kódu** (routing/journey robustnost) patří do `routing.test.js` / `journey.test.js`
+(běží při vývoji, **NEblokují** automat). Toto je stejné ponaučení jako u ID (J8-fix): guard testuje
+invarianty, ne specifika snímku.
 
 ---
 
-## J8b-1 — `update_data.js`: levný „Last-Modified" pre-check + `--force`
+## HF-1 — Vyjmout testy chování routingu (H1a–H1d) z `verify_network.js`
 
-Aby denní běh **zbytečně nestahoval 123 MB**, když se zdroj nezměnil:
-- Na začátku udělej **HTTP HEAD** (nebo `curl -sI`) na zdrojovou URL → přečti `Last-Modified` (příp. `Content-Length`).
-- Porovnej s `lastModified` uloženým v `data/data_source_state.json`. **Když se shodují → skonči brzy**
-  (exit 0, výpis „zdroj beze změny, přeskočeno"), NEstahuj, NEbuilduj.
-- Přidej přepínač **`--force`** (a/nebo env `FORCE=1`), který pre-check přeskočí a stáhne vždy —
-  pro ruční `workflow_dispatch` a pro test.
-- Když se `Last-Modified` liší → pokračuj celým dosavadním pipelinem (stáhnout → filtr → build → guard).
-- Ošetři, když zdroj `Last-Modified` nevrací (fallback: stáhni vždy, ať se nezasekne).
+Celou sekci **„--- Robustnost routingu (H1) ---"** (H1a Pareto počty, H1b 2 přestupy, H1c smyčka,
+H1d co-located) **vyjmi** z `verify_network.js` a **přesuň do `routing.test.js`** (testují `routing.js`).
+Tam je udělej **tolerantní** (nesmí tvrdě padat na variabilitě dat):
+- **H1c (smyčka):** místo pevné linky 12/`Pivovar→Trznice` **projdi celou síť a najdi JAKÝKOLI pattern,
+  kde se `stopId` opakuje** (smyčka). Když nějaký existuje → ověř, že `forwardSegments` na něm vrátí
+  ≥2 úseky. Když v tomto buildu **žádný smyčkový pattern není** → vypiš **INFO** („v tomto buildu není
+  smyčkový pattern"), NE FAIL.
+- **H1a/H1b/H1d:** kde závisí na konkrétních datech (počty ≥5, existence linky 20/Lázně I…), převeď na
+  INFO/print nebo tolerantní práh; smyslem je ukázat, že schopnost funguje, ne fixovat počet.
 
-**Commit J8b-1** + test: spusť 2× po sobě bez `--force` → první může stáhnout, druhý musí hlásit „beze změny"
-a nestahovat; s `--force` stáhne vždy.
+## HF-2 — Nahradit v `verify_network.js` jedním tolerantním smoke testem (integrace data×engine)
 
----
+Do `verify_network.js` přidej **jednu** kontrolu, že nová data reálně fungují s jádrem (invariant zdravého
+feedu):
+- `planJourney(net, 'Krátká', 'Tržnice', { date: <reprezentativní všední den>, nowMin: 480 })` vrátí
+  **≥1 spojení** s **rostoucími/kladnými časy** (`arrMin > depMin`, `totalMin === arrMin−depMin`).
+- Zdůvodnění: Krátká↔Tržnice je páteřní směr s častým **přímým** spojem → platí v každém zdravém buildu.
+  Když vrátí 0, data jsou opravdu rozbitá → legitimní FAIL.
+- Použij `resolveStopId` (názvy), ne `S#`. `date` zvol tak, aby měl jistě provoz (napevno známý všední den,
+  nebo dopočítej nejbližší všední den) — bez vázání na konkrétní výluku/termín.
 
-## J8b-2 — `.github/workflows/update-data.yml`
+## HF-3 — Odhardcodovat kontrolu výluky Bohatice
 
-```yaml
-name: update-data
-on:
-  schedule:
-    - cron: '0 3 * * *'        # 03:00 UTC denně (pozn. UTC — v ČR 04:00/05:00)
-  workflow_dispatch:            # ruční spuštění (tlačítko v Actions) — pustí s FORCE=1
-permissions:
-  contents: write               # aby GITHUB_TOKEN mohl commitnout
-concurrency:
-  group: update-data
-  cancel-in-progress: false
-jobs:
-  update:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - name: Run update
-        run: node scripts/update_data.js
-        env:
-          FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
-      - name: Commit changes (jen když se něco změnilo)
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/network.json data/data_source_state.json
-          if git diff --cached --quiet; then
-            echo "Žádná změna dat — necommitovat."
-          else
-            git commit -m "chore(data): automatická obnova jízdních řádů $(date -u +%F)"
-            git push
-          fi
-```
-- **Klíč:** guard je uvnitř `update_data.js` → když data nejsou zdravá, skript **skončí nenulově**,
-  krok „Run update" selže → job je červený (GitHub pošle e-mail) a **žádný commit se nestane**. Přesně
-  chtěné chování (radši stará platná data).
-- Ověř, že `git push` z workflow funguje (default `GITHUB_TOKEN` + `permissions: contents: write`).
+Kontrola s natvrdo `20260901`/`20260915` spadne, jakmile výluka skončí (12. 9. 2026) nebo ji zdroj změní.
+- **Odstraň konkrétní data.** Nahraď **obecným invariantem**, že se mechanismus výluk/výjimek do modelu
+  propisuje — např.: v `services` existuje ≥1 služba s neprázdným `rem` **nebo** `add` (tj. `calendar_dates`
+  se aplikují). Nezkoumej konkrétní zastávku/termín.
+- Cílem je „výjimky kalendáře se promítají", ne „Bohatice nejede do 11. 9.".
 
-**Commit J8b-2.**
+## HF-4 — Audit zbylých kontrol na snímková specifika
+
+Projdi zbytek `verify_network.js` a odstraň/zjemni vše, co visí na konkrétním snímku:
+- **Logika dne** (linka 3 Krátká→Tržnice, všední > sobota): ponech jako **poměr** (ne přesné počty); ideálně
+  odolné vůči přetrasování (klidně „nějaká páteřní linka má všední > víkend").
+- **journey totalMin** (dnes `Krátká→Růžový vrch`): přesuň na robustní OD (Krátká→Tržnice) nebo zjemni.
+- Cíl: `verify_network.js` **projde na jakémkoli zdravém KV buildu**, ne jen na tom z 22. 7.
+
+## HF-5 — DŮKAZ (klíčové ověření)
+
+1. `node scripts/verify_network.js` na aktuálních datech → **FAIL: 0**.
+2. `node scripts/update_data.js --force` → **guard PROJDE** na čerstvých datech (to, co dřív padalo na H1c)
+   → zdravá nová data se zapíšou (`network.json` + state).
+3. `node scripts/routing.test.js` a `node scripts/journey.test.js` → proběhnou bez tvrdého pádu (relokované
+   H1 testy jsou tolerantní).
+4. Commitni fixy + přestavěný `data/network.json` + state.
+5. Do `VÝSLEDEK` napiš: co se přesunulo/zjemnilo, guard po fixu (počty), a že `update_data.js --force` prošel.
+
+**Pozn.:** finální ověření na runneru (ruční spuštění workflow) udělá Joe po mergi — napiš mu to do VÝSLEDKU
+jako jeho krok.
 
 ---
 
-## J8b-3 — Keepalive proti 60dennímu auto-vypnutí
-
-GitHub **vypne scheduled workflow po 60 dnech bez commitu** do repa (tiše, jen e-mail). JŘ se mění řídce →
-hrozí. Řešení (nízký šum):
-- Po datovém kroku: když **NEnastala** změna dat a **poslední commit na `main` je starší než ~50 dní**,
-  udělej **keepalive commit** — bump `lastChecked` v `data/data_source_state.json` (`git commit`/`push`).
-- Jinak nic (běžně se necommituje každý den).
-- Implementuj buď jako další krok ve stejném workflow (spočítej `git log -1 --format=%ct` stáří), nebo malou
-  logikou v `update_data.js`. Drž to jednoduché a **idempotentní**.
-
-**Commit J8b-3** + do `VÝSLEDEK` napiš, jak keepalive funguje.
-
----
-
-## J8b-4 — Ověření na reálném runneru (ne jen lokálně)
-
-- Po mergi do `main` spusť workflow ručně přes **Actions → update-data → Run workflow** (`workflow_dispatch`,
-  poběží s `FORCE=1`). Ověř: job zelený, stáhne, guard projde, a **buď** commitne obnovená data (pokud se liší
-  od repa), **nebo** čistě skončí bez commitu (když jsou data shodná).
-- Zkontroluj log: čas běhu, počty po filtru, guard PASS. Zkontroluj, že se v repu neobjevil `data_raw/`
-  (má být gitignored) ani dočasné soubory.
-- Do `VÝSLEDEK` napiš: odkaz/čas běhu, co se stalo (commit / beze změny), případné úpravy oproti specu.
-
----
-
-## Rizika / na co dát pozor
-- **Cron není přesný na minutu** (u denního běhu nevadí). UTC — neřeš letní/zimní čas.
-- **Velký soubor:** `stop_times` 1,38 GB streamem (už řeší `update_data.js`) — na runneru hlídej `timeout-minutes`.
-- 📌 **Licence [k dořešení]:** před veřejným/ostrým během ověřit podmínky užití GTFS (JrUtil/CIS) + **uvést
-  atribuci**. Neblokuje technicky J8b, ale zapiš jako must-do před „vypuštěním do světa" (už je v `TASK.md`/`DATA_SOURCES.md`).
-
----
-
-## Mimo scope J8b (NEIMPLEMENTOVAT)
-- Front-end fetch `network.json` za běhu = **J4** (bez toho se auto-obnova k uživateli nedostane — ale to je
-  úkol UI fáze, ne J8).
-- Vlastní stabilní id zastávek / registr = budoucí (viz `TASK.md`, váže se na J4/J6).
+## Co NESAHAT
+- **Neměnit** logiku routingu/journey/timetable ani `build_network.js` — kód je správně, opravuje se JEN
+  robustnost kontrol.
+- Neměnit prahy guardu v `update_data.js` (lines≥20/stops≥140/trips≥9000, pokles ≤20 %) — ty jsou invariantní, OK.
+- Workflow `.yml` neměnit.
 
 ---
 
 ## VÝSLEDEK (vyplní executor)
 
-**J8b-1, J8b-2, J8b-3 hotové a pushnuté na `main` (commity `f575a0f`, `a5d51db`, `3f56e75`).
-J8b-4 čeká na ruční spuštění — viz níže, potřebuje Joeovu akci v prohlížeči.**
+**Hotovo 2026-08-02, vše dle bodů HF-1 až HF-5.**
 
-- **J8b-1** (`scripts/update_data.js`): přidán `isForced()` (`--force` nebo env `FORCE=1`/`true`) a
-  `headLastModified()` (levný `curl -sI` bez stažení 123MB ZIPu). Na začátku `main()`: bez force se
-  porovná HEAD `Last-Modified` s uloženým stavem (`data/data_source_state.json`) — při shodě skript
-  vypíše „zdroj beze změny — přeskočeno" a skončí (exit 0) bez stažení/buildu. Když HEAD selže nebo
-  hlavička chybí → fallback pokračuje stažením (ať se pipeline nezasekne). **Testováno 3×:** (1) beze
-  změny zdroje → přeskočeno za 0,2 s; (2) `--force` → plný běh, guard 26/26 PASS, 51,4 s (data beze
-  změny oproti předchozímu buildu, jen `updatedAt` v state se posunul); (3) znovu bez `--force` po
-  forced běhu → opět přeskočeno (idempotence potvrzena).
-- **J8b-2** (`.github/workflows/update-data.yml`): denní cron `0 3 * * *` (UTC) + `workflow_dispatch`
-  (posílá `FORCE=1`). Krok „Commit changes" commitne `data/network.json` + `data_source_state.json`
-  jen když se liší (`git diff --cached --quiet`), jinak nic. `permissions: contents write` pro push
-  přes `GITHUB_TOKEN`, `concurrency` group proti souběžným během. Přesně dle specu.
-- **J8b-3** (keepalive): přidán jako další krok ve stejném workflow (ne v `update_data.js`, dle
-  nabízené varianty ze specu) — spustí se jen `if: steps.commit_data.outputs.committed == 'false'`.
-  Spočítá stáří posledního commitu (`git log -1 --format=%ct`); když je `>=50` dní, bumpne `lastChecked`
-  v `data_source_state.json` a commitne/pushne. Jinak (běžný den, žádná datová změna, commit mladší
-  než 50 dní) se nic neděje — žádný šum v historii. Idempotentní.
-- **Push:** `git push` proveden (repo `BigJoeVibe/MHD-KV`, `main` je teď `3f56e75`) — workflow soubor
-  musí být na `main`, aby ho GitHub Actions vůbec viděl/nabídl k ručnímu spuštění.
+- **HF-1** — sekce „--- Robustnost routingu (H1) ---" (H1a Pareto, H1b 2 přestupy, H1c smyčka,
+  H1d co-located) kompletně vyjmuta z `verify_network.js`. Přesunuto:
+  - `routing.test.js`: nová sekce „Tolerantní kontroly H1a-d" — jen `console.log` (OK/INFO/WARN),
+    **nikdy nenastavuje `process.exitCode`**. H1c už nehledá natvrdo linku 12/`Pivovar→Tržnice`, ale
+    `findAnyLoopPattern()` projde celou síť a najde JAKÝKOLI smyčkový pattern; když žádný v buildu
+    není, vypíše INFO místo pádu. H1d (co-located Parkoviště KOME) má fallback INFO, když zastávka
+    v buildu chybí.
+  - `journey.test.js`: přesunuta kontrola návaznosti přestupu (Krátká→Růžový vrch, `leg2.depMin >=
+    leg1.arrMin + minTransfer`) — taky jen tolerantní `console.log`, s INFO fallbackem, když
+    v aktuálním buildu žádné přestupové spojení na té trase není.
+- **HF-2** — do `verify_network.js` přidán jeden smoke test: `planJourney(Krátká→Tržnice, date=
+  20260202 pondělí, nowMin=480)` musí vrátit ≥1 spojení s konzistentními časy (`arrMin>depMin`,
+  `totalMin===arrMin−depMin`). Toto je JEDINÉ místo v guardu, kde smí spadnout celý build kvůli
+  chování enginu — protože Krátká→Tržnice je páteřní přímý spoj, který musí fungovat v každém
+  zdravém KV feedu.
+- **HF-3** — kontrola výluky Bohatice (natvrdo `20260901`/`20260915`) nahrazena obecným invariantem:
+  `Object.values(net.services)` musí obsahovat ≥1 službu s neprázdným `rem` nebo `add` (tj.
+  `calendar_dates` výjimky se do modelu vůbec propisují) — bez vazby na konkrétní zastávku/termín.
+- **HF-4** — audit zbytku:
+  - „Logika dne" už nezávisí natvrdo na lince 3 — zkouší postupně 3/9/13/15 (Krátká/Okružní→Tržnice)
+    a stačí, že JEDNA z nich má všední den hustší než sobotu (odolné vůči přetrasování jedné linky).
+  - Journey `totalMin` test (dřív Krátká→Růžový vrch) sloučen do HF-2 smoke testu na robustní OD
+    Krátká→Tržnice.
+  - Struktura/Úplnost/Integrita/Co-located/Směrovost/Časová vrstva ponechány beze změny — už byly
+    invariantní (nezávisí na konkrétních id, jen na obecných vlastnostech buildu).
+  - Nepoužitý import `search` a mrtvá funkce `findLoopPattern` z `verify_network.js` odstraněny
+    (přesunuty/nahrazeny jinde).
+- **HF-5 — DŮKAZ:**
+  1. `node scripts/verify_network.js` na aktuálních datech → **PASS: 20, FAIL: 0**.
+  2. `node scripts/update_data.js --force` → **plný běh na živé čerstvé stažení GTFS** (63,0 s) →
+     guard **PASS: 20, FAIL: 0**, `CELKEM: OK` → `data/network.json` + `data_source_state.json`
+     přestavěny a zapsány. Přesně to, co dřív padalo na H1c, teď prochází (patterny se skutečně
+     přečíslovaly — smyčkový pattern byl `P18`/linka 1 před buildem, po přestavbě `P55`/linka 17 —
+     `findAnyLoopPattern()` a `findPattern()` to i tak správně dohledaly).
+  3. `node scripts/routing.test.js` a `node scripts/journey.test.js` → `exit 0`, žádný tvrdý pád;
+     nové tolerantní H1 kontroly vypsaly `OK` pro všechny (H1a/b/c/d i navaznost přestupu).
+- **Commit:** fixy (`verify_network.js`, `routing.test.js`, `journey.test.js`), princip zapsaný do
+  `docs/DATA_SOURCES.md` (nová sekce „Princip guardu: invarianty, ne snímek"), přestavěný
+  `data/network.json` + `data_source_state.json` ze skutečného `--force` běhu výše. Spolu s tím
+  commitnuty i necommitnuté manager úpravy `TASK.md`/`handoff.md` (dle protokolu předávky).
 
-**J8b-4 (ověření na reálném runneru) — ✅ HOTOVO 23.7. (Joe spustil ručně):**
-- Joe spustil `workflow_dispatch` v Actions tabu (`main`, `FORCE=1`). **Výsledek: Success, 42 s celkem
-  (krok `update` 38 s).** Commit `b43ad7f` „chore(data): automaticka obnova jizdnich radu 2026-07-23"
-  — obsahuje jen bump `updatedAt` v `data/data_source_state.json` (`network.json` beze změny, protože
-  zdroj se nezměnil od dřívějšího lokálního `--force` běhu ze stejného dne — build je deterministický).
-  To je očekávané a správné chování: `workflow_dispatch` vždy stáhne+rebuilduje (FORCE obchází
-  Last-Modified pre-check), takže `updatedAt` timestamp se pokaždé liší → guard prošel → commit se
-  udělal, i když věcná data (`network.json`) identická. **Ostrý denní cron (bez FORCE) tohle nedělá** —
-  ten při nezměněném zdroji skončí už v pre-checku (žádné stažení, žádný commit).
-- `data_raw/` se v repu neobjevilo (zůstává gitignored, jak má) — potvrzeno, že v commitu `b43ad7f`
-  jsou jen očekávané soubory.
-- **Drobný nález (neblokující):** GitHub Actions log hlásí 1 warning — `actions/checkout@v4` a
-  `actions/setup-node@v4` s `node-version: '20'` se spouští na Node 20, který je deprecated; runner ho
-  vynuceně přepnul na Node 24. Funkčně bez dopadu (běh proběhl OK), ale stálo by za zvážení příště
-  bumpnout `node-version` na `'22'` nebo `'24'` v `update-data.yml`, ať warning zmizí. Zapsáno jako
-  nápad do `TASK.md` (mimo scope této předávky — jen konstatuji, neopravuji bez zadání).
-- **J8 jako celek (J8a + J8-fix + J8b) je tímto HOTOVÝ end-to-end**, včetně reálného ověření na
-  GitHub Actions runneru. Automatická denní obnova dat běží bez nutnosti lidského zásahu, guard chrání
-  `main` před špatnými daty, keepalive chrání workflow před tichým vypnutím.
-
-**Problémy/nápady:** žádné blokující. Otevřené (mimo scope, do budoucna): licence GTFS atribuce (už v
-`TASK.md`), drobný Node 20→22/24 bump v `update-data.yml` (viz výše, kosmetický warning).
+**Co ověřit Joeovi (dle handoff pozn.):** finální ověření na reálném GH Actions runneru — spustit
+`workflow_dispatch` ručně (Actions tab, `main`) a zkontrolovat, že scheduled/manuální běh teď
+projde bez `FORCE` i s ním. Očekávané chování: guard by měl projít i na dalším ostrém denním cronu,
+protože kontroly už nezávisí na konkrétním snímku dat.
