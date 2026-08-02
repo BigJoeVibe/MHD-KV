@@ -147,3 +147,13 @@ jako jeho krok.
 `workflow_dispatch` ručně (Actions tab, `main`) a zkontrolovat, že scheduled/manuální běh teď
 projde bez `FORCE` i s ním. Očekávané chování: guard by měl projít i na dalším ostrém denním cronu,
 protože kontroly už nezávisí na konkrétním snímku dat.
+
+**Poznámka k push (2026-08-02):** `git push` byl zprvu odmítnut — `origin/main` mezitím obsahoval
+7 nových automatických commitů `chore(data): automaticka obnova jizdnich radu` (28.7.–2.8., dělal
+je scheduled workflow bez zásahu). Provedeno `git pull --rebase origin main`; jediný konflikt byl
+kosmetický (`updatedAt` timestamp v `data_source_state.json` — `data/network.json` bylo bajtově
+identické, protože zdroj GTFS se mezi mým `--force` under a posledním automatickým během nezměnil),
+vyřešeno ponecháním hodnoty z automatického běhu. Po rebase znovu spuštěno
+`node scripts/verify_network.js` na výsledném stromu → **PASS: 20, FAIL: 0** → pushnuto jako
+`440a2dc` (na `429a71d`). Finální stav na GitHubu obsahuje fix i nejnovější automaticky stažená
+data zároveň.
