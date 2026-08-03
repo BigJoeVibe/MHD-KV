@@ -301,8 +301,7 @@ function search(net, A, B, opts = {}) {
   return deduped;
 }
 
-module.exports = { search, stopsAfter, patternsThrough, resolveStopId, lineOf, HUBS, coLocatedGroups };
+const MHDRouting = { search, resolveStopId, lineOf, forwardSegments, HUBS, coLocatedGroups, stopsAfter, patternsThrough };
 
-if (typeof window !== "undefined") {
-  window.MHDRouting = { search, resolveStopId };
-}
+if (typeof module !== "undefined" && module.exports) module.exports = MHDRouting;
+if (typeof window !== "undefined") window.MHDRouting = MHDRouting;

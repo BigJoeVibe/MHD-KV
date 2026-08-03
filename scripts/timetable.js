@@ -2,7 +2,8 @@
 // Zadne zavislosti. Pouzitelne v Node (test) i v prohlizeci (pozdeji J4).
 // POZOR: zatim se NEintegruje do routing.js search() — to je az KROK B.
 
-const { resolveStopId } = require("./routing.js");
+const routing = (typeof require !== "undefined" && typeof module !== "undefined") ? require("./routing.js") : window.MHDRouting;
+const { resolveStopId } = routing;
 
 function isServiceActive(service, dateStr) {
   if (service.rem.includes(dateStr)) return false;
@@ -79,8 +80,7 @@ function nextDepartures(net, stopIdOrName, dateStr, nowMin, opts = {}) {
   return results.slice(0, limit);
 }
 
-module.exports = { isServiceActive, activeServicesOn, patternDeparturesOn, nextDepartures };
+const MHDTimetable = { isServiceActive, activeServicesOn, patternDeparturesOn, nextDepartures };
 
-if (typeof window !== "undefined") {
-  window.MHDTimetable = { nextDepartures };
-}
+if (typeof module !== "undefined" && module.exports) module.exports = MHDTimetable;
+if (typeof window !== "undefined") window.MHDTimetable = MHDTimetable;

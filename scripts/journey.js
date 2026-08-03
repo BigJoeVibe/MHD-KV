@@ -3,8 +3,10 @@
 // Zadne zavislosti, Node i prohlizec. Jadro je deterministicke — dostava `date` +
 // `nowMin` jako vstup, samo necte systemovy cas (to resi UI v J4).
 
-const { search, resolveStopId } = require("./routing.js");
-const { activeServicesOn } = require("./timetable.js");
+const routing = (typeof require !== "undefined" && typeof module !== "undefined") ? require("./routing.js") : window.MHDRouting;
+const timetable = (typeof require !== "undefined" && typeof module !== "undefined") ? require("./timetable.js") : window.MHDTimetable;
+const { search, resolveStopId } = routing;
+const { activeServicesOn } = timetable;
 
 const DAY_MIN = 1440;
 
@@ -187,8 +189,7 @@ function planJourney(net, A, B, opts = {}) {
   return deduped.slice(0, limit);
 }
 
-module.exports = { planJourney };
+const MHDJourney = { planJourney };
 
-if (typeof window !== "undefined") {
-  window.MHDJourney = { planJourney };
-}
+if (typeof module !== "undefined" && module.exports) module.exports = MHDJourney;
+if (typeof window !== "undefined") window.MHDJourney = MHDJourney;
