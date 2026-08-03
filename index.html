@@ -1085,6 +1085,7 @@ function renderSearch() {
   html += `<div id="search-results"></div>`;
 
   document.getElementById('content').innerHTML = html;
+  renderSearchResults();
 }
 
 function onSearchFieldChange(which, value) {
@@ -1100,8 +1101,69 @@ function swapSearchStops() {
   render();
 }
 
+const KNOWN_LINE_CLASSES = new Set(['3', '9', '13', '15', '51']);
+
+function fmtJourneyTime(totalMin) {
+  const m = ((totalMin % 1440) + 1440) % 1440;
+  return formatTime(Math.floor(m / 60), m % 60);
+}
+
 function doSearch() {
-  // TODO J4-5: napojit na planJourney + vykreslit vysledky.
+  const from = document.getElementById('searchFromInput').value.trim();
+  const to = document.getElementById('searchToInput').value.trim();
+  searchFrom = from;
+  searchTo = to;
+
+  const stopA = window.MHDRouting.resolveStopId(NET, from);
+  const stopB = window.MHDRouting.resolveStopId(NET, to);
+  if (!stopA || !stopB) {
+    searchResults = [];
+    searchMessage = 'Zastávku nenašel.';
+    render();
+    return;
+  }
+
+  const now = getNow();
+  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+
+  searchResults = window.MHDJourney.planJourney(NET, from, to, { date, nowMin, sort: 'departure', limit: 8 });
+  searchMessage = searchResults.length === 0 ? 'Žádné spojení v daném čase.' : '';
+  render();
+}
+
+function renderSearchResults() {
+  const el = document.getElementById('search-results');
+  if (!el) return;
+  if (searchResults === null) { el.innerHTML = ''; return; }
+  if (searchResults.length === 0) {
+    el.innerHTML = `<div class="search-empty">${searchMessage}</div>`;
+    return;
+  }
+
+  const vClass = useCustomTime ? ' violet' : '';
+  let html = '';
+  for (const it of searchResults) {
+    const plusDay = it.arrMin >= 1440 ? `<span class="plusday">+1 d</span>` : '';
+    html += `<div class="journey-card${vClass}">`;
+    html += `<div class="journey-times">${fmtJourneyTime(it.depMin)} <span class="arrow">→</span> ${fmtJourneyTime(it.arrMin)} ${plusDay}</div>`;
+    html += `<div class="journey-duration">${it.totalMin} min · ${it.transfers === 0 ? 'přímo' : it.transfers + ' přestup'}</div>`;
+    html += `<div class="journey-legs">`;
+    it.legs.forEach((leg, i) => {
+      if (i > 0) html += `<span class="arrow-sep">→</span>`;
+      const cls = KNOWN_LINE_CLASSES.has(leg.line) ? `line-${leg.line}` : '';
+      html += `<div class="line-badge ${cls}" style="min-width:34px;height:34px;font-size:0.85rem;border-radius:8px"><span>${leg.line}</span></div>`;
+    });
+    html += `</div>`;
+    if (it.transfers > 0) {
+      const transferStop = NET.stops[it.transferStop];
+      const transferName = transferStop ? stopDisplayName(transferStop.n) : '';
+      const walkNote = it.walkMin === 0 ? 'stejné místo' : `${it.walkMin} min pěšky`;
+      html += `<div class="journey-transfer-info">Přestup: ${transferName} · čekání ${it.waitMin} min (${walkNote})</div>`;
+    }
+    html += `</div>`;
+  }
+  el.innerHTML = html;
 }
 
 // ============================================================
