@@ -2,6 +2,13 @@
 // Zadne zavislosti. Pouzitelne v Node (test) i v prohlizeci (J4) — funkce dostavaji
 // `net` (naparsovany network.json) jako parametr, modul si data sam nenacita.
 
+// IIFE: v prohlizeci se routing.js/timetable.js/journey.js nacitaji jako 3 samostatne
+// <script src> tagy, ktere v klasickem (non-module) rezimu sdileji jeden top-level
+// scope. Bez obalu by top-level jmena (search, resolveStopId, ...) kolidovala s
+// destrukturovanymi consty stejneho jmena v timetable.js/journey.js (SyntaxError:
+// identifier already declared). Obal jen izoluje scope, verejne je porad jen window.MHD*.
+(function () {
+
 const HUBS = ["Rozcestí u Koníčka", "Tržnice", "Stadion ZM", "Horní nádraží"];
 
 function normalizeName(name) {
@@ -305,3 +312,5 @@ const MHDRouting = { search, resolveStopId, lineOf, forwardSegments, HUBS, coLoc
 
 if (typeof module !== "undefined" && module.exports) module.exports = MHDRouting;
 if (typeof window !== "undefined") window.MHDRouting = MHDRouting;
+
+})();

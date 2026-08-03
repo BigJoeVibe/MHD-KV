@@ -3,6 +3,9 @@
 // Zadne zavislosti, Node i prohlizec. Jadro je deterministicke — dostava `date` +
 // `nowMin` jako vstup, samo necte systemovy cas (to resi UI v J4).
 
+// IIFE: viz routing.js — izoluje top-level jmena od ostatnich <script src> modulu.
+(function () {
+
 const routing = (typeof require !== "undefined" && typeof module !== "undefined") ? require("./routing.js") : window.MHDRouting;
 const timetable = (typeof require !== "undefined" && typeof module !== "undefined") ? require("./timetable.js") : window.MHDTimetable;
 const { search, resolveStopId } = routing;
@@ -193,3 +196,5 @@ const MHDJourney = { planJourney };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MHDJourney;
 if (typeof window !== "undefined") window.MHDJourney = MHDJourney;
+
+})();

@@ -2,6 +2,9 @@
 // Zadne zavislosti. Pouzitelne v Node (test) i v prohlizeci (pozdeji J4).
 // POZOR: zatim se NEintegruje do routing.js search() — to je az KROK B.
 
+// IIFE: viz routing.js — izoluje top-level jmena od ostatnich <script src> modulu.
+(function () {
+
 const routing = (typeof require !== "undefined" && typeof module !== "undefined") ? require("./routing.js") : window.MHDRouting;
 const { resolveStopId } = routing;
 
@@ -84,3 +87,5 @@ const MHDTimetable = { isServiceActive, activeServicesOn, patternDeparturesOn, n
 
 if (typeof module !== "undefined" && module.exports) module.exports = MHDTimetable;
 if (typeof window !== "undefined") window.MHDTimetable = MHDTimetable;
+
+})();
