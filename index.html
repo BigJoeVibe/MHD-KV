@@ -249,6 +249,7 @@ body {
   font-weight: 700;
   font-size: 1.2rem;
   flex-shrink: 0;
+  background: var(--bg4);
 }
 .line-badge span { color: #fff; }
 .line-3  { background: #1e4080; }
@@ -376,6 +377,110 @@ body {
 /* ===== SEARCH ===== */
 .search-loading, .search-error, .search-empty { text-align: center; color: var(--text2); font-size: 0.85rem; padding: 20px; }
 .search-error { color: var(--warning); }
+
+.search-form {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--bg3);
+  box-shadow: var(--shadow);
+  transition: background 0.3s, border-color 0.3s;
+}
+.search-form.violet { background: #151030; border-color: rgba(143,112,243,0.18); }
+
+.search-field label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+}
+.search-field input {
+  width: 100%;
+  padding: 11px 12px;
+  background: var(--bg);
+  border: 1px solid var(--bg3);
+  color: var(--text);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+.search-field input:focus { outline: none; border-color: var(--blue1); }
+.search-form.violet .search-field input:focus { border-color: var(--violet); }
+
+.search-swap-row { display: flex; justify-content: center; margin: 2px 0; }
+.search-swap {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--bg3);
+  border: 1px solid var(--bg4);
+  color: var(--blue2);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.search-loc-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px dashed var(--bg4);
+  color: var(--text3);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: not-allowed;
+}
+
+.search-submit {
+  width: 100%;
+  padding: 13px;
+  margin-bottom: 14px;
+  background: var(--blue1);
+  border: none;
+  color: #fff;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.journey-card {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid var(--bg3);
+  box-shadow: var(--shadow);
+  transition: background 0.3s, border-color 0.3s;
+}
+.journey-card.violet { background: #151030; border-color: rgba(143,112,243,0.18); }
+.journey-times {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.journey-times .arrow { color: var(--text3); font-size: 1rem; font-weight: 400; }
+.journey-times .plusday {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--indigo-soft);
+  background: rgba(124,91,240,0.15);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+.journey-duration { font-size: 0.78rem; color: var(--text2); margin-top: 2px; }
+.journey-legs { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.journey-legs .arrow-sep { color: var(--text3); font-size: 0.9rem; }
+.journey-transfer-info { font-size: 0.72rem; color: var(--text2); margin-top: 8px; }
 
 /* ===== SETTINGS ===== */
 .settings-section {
@@ -932,8 +1037,71 @@ function renderTimetable() {
 // ============================================================
 // SEARCH
 // ============================================================
+function stopDisplayName(name) { return name.replace(/^Karlovy Vary,/, ''); }
+
 function renderSearch() {
-  document.getElementById('content').innerHTML = `<div class="search-loading">Připravuji hledání…</div>`;
+  const vClass = useCustomTime ? ' violet' : '';
+
+  if (netStatus === 'loading') {
+    document.getElementById('content').innerHTML = `<div class="search-loading">Načítám síť…</div>`;
+    return;
+  }
+  if (netStatus === 'error') {
+    document.getElementById('content').innerHTML = `<div class="search-error">Data se nepodařilo načíst.</div>`;
+    return;
+  }
+
+  const stopNames = [...new Set(Object.values(NET.stops).map(s => stopDisplayName(s.n)))]
+    .sort((a, b) => a.localeCompare(b, 'cs'));
+  const stopOptions = stopNames.map(n => `<option value="${n}">`).join('');
+
+  let html = `<div class="search-form${vClass}">`;
+  html += `<div class="search-field"><label>Odkud</label>`;
+  html += `<input type="text" id="searchFromInput" list="stopList" value="${searchFrom}" placeholder="Zastávka…" oninput="onSearchFieldChange('from', this.value)"></div>`;
+  html += `<div class="search-swap-row"><button class="search-swap" onclick="swapSearchStops()" title="Prohodit směr">⇅</button></div>`;
+  html += `<div class="search-field"><label>Kam</label>`;
+  html += `<input type="text" id="searchToInput" list="stopList" value="${searchTo}" placeholder="Zastávka…" oninput="onSearchFieldChange('to', this.value)"></div>`;
+  html += `<datalist id="stopList">${stopOptions}</datalist>`;
+  html += `<button class="search-loc-btn" disabled>📍 Moje poloha (brzy)</button>`;
+  html += `</div>`;
+
+  html += `<div class="time-toggle${vClass}">`;
+  html += `<div class="time-toggle-header">`;
+  html += `<button class="time-toggle-btn ${!useCustomTime ? 'active-now' : ''}" onclick="setTimeMode('now')">Teď</button>`;
+  html += `<button class="time-toggle-btn ${useCustomTime ? 'active-custom' : ''}" onclick="setTimeMode('custom')">Jindy</button>`;
+  html += `</div>`;
+  html += `<div class="custom-time-picker ${useCustomTime ? 'visible' : ''}">`;
+  html += `<div class="custom-time-row">`;
+  html += `<input type="date" id="customDate" value="${customDate}" onchange="onCustomDateChange(this.value)">`;
+  html += `<input type="time" id="customTime" value="${customTime}" onchange="onCustomTimeChange(this.value)">`;
+  html += `</div>`;
+  if (useCustomTime && customDate && customTime) {
+    const sim = getNow();
+    html += `<div class="custom-time-info"><span class="badge">${getDayTypeLabel(getDayType(sim))}</span><span>${formatCzechDate(sim)}</span></div>`;
+  }
+  html += `</div></div>`;
+
+  html += `<button class="search-submit" onclick="doSearch()">Hledat spojení</button>`;
+  html += `<div id="search-results"></div>`;
+
+  document.getElementById('content').innerHTML = html;
+}
+
+function onSearchFieldChange(which, value) {
+  if (which === 'from') searchFrom = value; else searchTo = value;
+}
+
+function swapSearchStops() {
+  const from = document.getElementById('searchFromInput').value;
+  const to = document.getElementById('searchToInput').value;
+  searchFrom = to;
+  searchTo = from;
+  searchResults = null;
+  render();
+}
+
+function doSearch() {
+  // TODO J4-5: napojit na planJourney + vykreslit vysledky.
 }
 
 // ============================================================
