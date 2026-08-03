@@ -7,6 +7,24 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-08-03 (2) — v0.1.0 (J4-fix: noční přestup přes půlnoc — zápor v `journey.js`)
+
+- **Nález (manager, vizuální test J4 na Pages):** noční hledání (pozdní odjezd leg1, přestup na
+  leg2 až ráno druhý den) vracelo **záporné `totalMin`** a řadilo se úplně nahoru — `transferItineraries`
+  počítala časy nohou nezávisle přes `nightAdjust` s pevným prahem místo jednotné osy.
+- **`scripts/journey.js` — `transferItineraries` přepsána na monotónní osu** (`dep1 ≤ arr1 ≤ dep2 ≤ arr2`
+  vždy): `dep1`/`dep2` = nejbližší odjezd na sdílené ose (cyklus `+= 1440`, dokud není `>=` prahu),
+  `arr1`/`arr2` dopočteny z rozdílu offsetů (ne samostatný `nightAdjust`). Aktivní služby 2. nohy se
+  teď posuzují **per-trip** pro kalendářní den `addDays(date, ⌊dep2/1440⌋)` — nahrazuje starý
+  jednorázový `dateStr2`/`dayOffset2` patchwork, který nezvládal různé posuny dne pro různé spoje.
+  `planJourney` má navíc pojistku, co zahodí `arrMin<=depMin`/`waitMin<0` (nikdy se v testech
+  neuplatnila, ale je levná).
+- **`scripts/journey.test.js`** — nový scénář „noční hledání" (23:22, přestup až ráno), assert že
+  každý vrácený itinerář má `arrMin>depMin`, `totalMin>0`, `waitMin>=0`.
+- **Ověřeno:** repro z `handoff.md` po fixu vrací `totalMin 15` (přímo linka 51) místo `-975`;
+  `journey.test.js` (nový noční test PASS) i `verify_network.js` (20/20 PASS, smoke test
+  Krátká→Tržnice beze změny) v pořádku. HTML se neměnilo.
+
 ## 2026-08-03 — v0.1.0 (J4 Předávka 1: UI „Hledat spojení" — 4. tab v appce)
 
 - **UMD obal jádra (J4-1):** `scripts/routing.js`/`timetable.js`/`journey.js` teď fungují i jako
