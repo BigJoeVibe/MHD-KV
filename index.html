@@ -373,6 +373,10 @@ body {
 .timetable-grid.violet .timetable-row.current-hour { background: rgba(143,112,243,0.10); }
 .timetable-grid.violet .timetable-row.current-hour .timetable-hour { color: #c4b5fd; background: rgba(143,112,243,0.22); }
 
+/* ===== SEARCH ===== */
+.search-loading, .search-error, .search-empty { text-align: center; color: var(--text2); font-size: 0.85rem; padding: 20px; }
+.search-error { color: var(--warning); }
+
 /* ===== SETTINGS ===== */
 .settings-section {
   background: var(--bg2);
@@ -426,6 +430,7 @@ body {
 <div class="tabs mode-now" id="tabBar">
   <button class="tab active" onclick="showTab('departures')">Odjezdy</button>
   <button class="tab" onclick="showTab('timetable')">Jízdní řády</button>
+  <button class="tab" onclick="showTab('search')">Hledat</button>
   <button class="tab" onclick="showTab('settings')">Nastavení</button>
 </div>
 
@@ -763,7 +768,7 @@ function updateClockForMode() {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', ['departures','timetable','settings'][i] === tab);
+    t.classList.toggle('active', ['departures','timetable','search','settings'][i] === tab);
   });
   render();
 }
@@ -773,6 +778,7 @@ function render() {
   switch (currentTab) {
     case 'departures': renderDepartures(); break;
     case 'timetable':  renderTimetable();  break;
+    case 'search':     renderSearch();     break;
     case 'settings':   renderSettings();   break;
   }
 }
@@ -921,6 +927,13 @@ function renderTimetable() {
   document.getElementById('content').innerHTML = html;
   if (document.getElementById('tt-route')) document.getElementById('tt-route').value = routeIdx;
   if (document.getElementById('tt-daytype')) document.getElementById('tt-daytype').value = dtVal;
+}
+
+// ============================================================
+// SEARCH
+// ============================================================
+function renderSearch() {
+  document.getElementById('content').innerHTML = `<div class="search-loading">Připravuji hledání…</div>`;
 }
 
 // ============================================================
