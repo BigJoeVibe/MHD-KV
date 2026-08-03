@@ -39,7 +39,7 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 
 | # | Úkol | Pozn. |
 |---|------|-------|
-| J4 | UI „Hledat spojení" (From/To) | nová obrazovka; **appka musí `network.json` fetchovat za běhu** (ne inline jako F1) |
+| J4 | UI „Hledat spojení" (From/To) | **⭐ TEĎ — Předávka 1** (spec v `handoff.md`): 4. tab „Hledat" do F1 appky, UMD moduly v prohlížeči + `fetch('data/network.json')`, formulář Odkud/Kam (datalist) + Teď/Jindy + karty spojení z `planJourney`. Mockup schválen. **Poloha (GPS) + doladění = Předávka 2.** |
 | J5 | Poloha: klik do mapy / GPS / paste GPS → nejbližší zastávka | coords už v datech; mapa = zvážit Leaflet |
 | J6 | Favourites = body 1–3 (domov↔centrum, ↔Západní, ↔nádraží) jako uložené dotazy | nahrazuje ruční F2 |
 | J7 | Sloučení se starou appkou F1 / osud „odjezdové tabule" | rozhodnout |
