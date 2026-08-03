@@ -78,55 +78,61 @@ function transferItineraries(net, variant, dateStr, nowMin, minTransfer) {
   const trips2 = net.trips[leg2.patternId] || [];
   const out = [];
 
+  // Cache aktivnich sluzeb per kalendarni den — dep2 (viz nize) muze pro ruzne
+  // spoje 2. nohy padnout na ruzne kalendarni dny, activeServicesOn se pak muze
+  // pro stejny den volat vicekrat.
+  const activeCache = new Map();
+  function activeOn(d) {
+    if (!activeCache.has(d)) activeCache.set(d, activeServicesOn(net, d));
+    return activeCache.get(d);
+  }
+
   for (const trip1 of trips1) {
     if (!active1.has(trip1[1])) continue;
-    const [dep1Raw, arrTRaw] = tripTimes(net, leg1.patternId, trip1, idxFrom1, idxT1);
-    const depMin1 = nightAdjust(nowMin, dep1Raw);
-    if (depMin1 < nowMin) continue;
-    const arrT = nightAdjust(nowMin, arrTRaw);
+    const [dep1Raw, arr1Raw] = tripTimes(net, leg1.patternId, trip1, idxFrom1, idxT1);
 
-    // Predel typu dne pres pulnoc (otevrene tema 1): kdyz dojezd na uzel prestupu
-    // padne az po pulnoci, 2. noha jede k nasledujicimu kalendarnimu dni.
-    let dateStr2 = dateStr;
-    let arrTForCompare = arrT;
-    let dayOffset2 = 0;
-    if (arrT >= DAY_MIN) {
-      dateStr2 = addDays(dateStr, 1);
-      arrTForCompare = arrT - DAY_MIN;
-      dayOffset2 = DAY_MIN;
-    }
+    // Monotonni osa (FIX-A): dep1 = prvni odjezd >= nowMin (posun o cele dny,
+    // dokud neplati). arr1 dopocitan z rozdilu offsetu, takze arr1 >= dep1 vzdy
+    // z konstrukce (offy podel patternu jsou neklesajici).
+    let dep1 = dep1Raw;
+    while (dep1 < nowMin) dep1 += DAY_MIN;
+    const arr1 = dep1 + (arr1Raw - dep1Raw);
 
-    const active2 = activeServicesOn(net, dateStr2);
     let best = null;
 
     for (const trip2 of trips2) {
-      if (!active2.has(trip2[1])) continue;
-      const [dep2Raw, arrBRaw] = tripTimes(net, leg2.patternId, trip2, idxT2, idxB2);
-      // Ve stejnem dni jeste muze jit o nocni presah (nowMin kontext); v ramu
-      // nasledujiciho dne uz srovnavame primo v jeho vlastnim rozsahu 0-1439.
-      const dep2Cmp = dayOffset2 === 0 ? nightAdjust(nowMin, dep2Raw) : dep2Raw;
-      if (dep2Cmp < arrTForCompare + minTransfer) continue;
-      if (!best || dep2Cmp < best.dep2Cmp) {
-        const arrBCmp = dayOffset2 === 0 ? nightAdjust(nowMin, arrBRaw) : arrBRaw;
-        best = { dep2Cmp, arrBCmp };
+      const [dep2Raw, arr2Raw] = tripTimes(net, leg2.patternId, trip2, idxT2, idxB2);
+
+      // Nejblizsi odjezd 2. nohy na stejne ose >= arr1 + minTransfer (posun o
+      // cele dny, dokud neplati) — nahrazuje puvodni dateStr2/dayOffset2/nightAdjust patchwork.
+      let dep2 = dep2Raw;
+      while (dep2 < arr1 + minTransfer) dep2 += DAY_MIN;
+
+      // Aktivni sluzby 2. nohy se posuzuji pro kalendarni den, na ktery dep2
+      // realne padne (muze byt ruzny spoj od spoje — proto kontrola az tady, ne
+      // jednou pred smyckou).
+      const dayOffset2 = Math.floor(dep2 / DAY_MIN);
+      const dateStr2 = dayOffset2 === 0 ? dateStr : addDays(dateStr, dayOffset2);
+      if (!activeOn(dateStr2).has(trip2[1])) continue;
+
+      if (!best || dep2 < best.dep2) {
+        const arr2 = dep2 + (arr2Raw - dep2Raw);
+        best = { dep2, arr2 };
       }
     }
     if (!best) continue;
 
-    const depMin2 = best.dep2Cmp + dayOffset2;
-    const arrB = best.arrBCmp + dayOffset2;
-
     out.push({
       transfers: 1,
-      depMin: depMin1,
-      arrMin: arrB,
-      totalMin: arrB - depMin1,
+      depMin: dep1,
+      arrMin: best.arr2,
+      totalMin: best.arr2 - dep1,
       legs: [
-        { line: leg1.line, headsign: leg1.headsign, patternId: leg1.patternId, from: leg1.from, to: leg1.to, depMin: depMin1, arrMin: arrT, hops: leg1.hops },
-        { line: leg2.line, headsign: leg2.headsign, patternId: leg2.patternId, from: leg2.from, to: leg2.to, depMin: depMin2, arrMin: arrB, hops: leg2.hops },
+        { line: leg1.line, headsign: leg1.headsign, patternId: leg1.patternId, from: leg1.from, to: leg1.to, depMin: dep1, arrMin: arr1, hops: leg1.hops },
+        { line: leg2.line, headsign: leg2.headsign, patternId: leg2.patternId, from: leg2.from, to: leg2.to, depMin: best.dep2, arrMin: best.arr2, hops: leg2.hops },
       ],
       transferStop: leg1.to,
-      waitMin: depMin2 - arrT,
+      waitMin: best.dep2 - arr1,
       // Vsechny prestupy v teto predavce jsou "same-place" — bud doslova stejna
       // zastavka, nebo H1d co-located sourozenec (<=30 m). Pesi presun mezi
       // ruznymi oznacniky (30-200 m) je az epic J9, do te doby vzdy 0.
@@ -180,6 +186,10 @@ function planJourney(net, A, B, opts = {}) {
   const seen = new Set();
   const deduped = [];
   for (const it of itineraries) {
+    // FIX-B: pojistka proti chybnym itinerarum (nikdy by nemely projit, ale
+    // levna zachranna sit, kdyby neco proklouzlo).
+    if (it.arrMin <= it.depMin) continue;
+    if (it.waitMin != null && it.waitMin < 0) continue;
     const key = itineraryKey(it);
     if (!seen.has(key)) {
       seen.add(key);

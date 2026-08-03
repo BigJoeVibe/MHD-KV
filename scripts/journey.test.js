@@ -77,3 +77,21 @@ runCase("duration", "Krátká", "Tržnice", WORKDAY, 8 * 60, { sort: "duration",
 // 20 <-> S116 linky 2/11/52). Bez H1d by se toto spojeni vubec nenaslo (jine ID).
 console.log("\n--- H1d: co-located přestup (Lázně I, linka 20 ⇄ 2/11/52) ---");
 runCase("Parkoviště KOME → Tržnice přes Lázně I", "Parkoviště KOME", "Tržnice", WORKDAY, 9 * 60, { limit: 3 });
+
+// J4-fix: nocni prestup (leg1 pozde vecer -> leg2 az rano nasledujici den) drive
+// vracel zaporne totalMin (viz handoff.md repro, hledani ve 23:22). FIX-A ma
+// zarucit monotonni osu dep1 <= arr1 <= dep2 <= arr2 vzdy.
+console.log("\n--- J4-fix: noční hledání (23:22, přestup až ráno) ---");
+const NIGHT_NOW = 23 * 60 + 22;
+const nightResults = planJourney(net, "Krátká", "Tržnice", { date: WORKDAY, nowMin: NIGHT_NOW, limit: 8 });
+if (nightResults.length === 0) {
+  console.log("  (žádné spojení nenalezeno)");
+} else {
+  let allOk = true;
+  for (const it of nightResults) {
+    const ok = it.arrMin > it.depMin && it.totalMin > 0 && (it.waitMin == null || it.waitMin >= 0);
+    if (!ok) allOk = false;
+    console.log((ok ? "  OK   " : "  FAIL ") + fmtItinerary(it));
+  }
+  console.log(allOk ? "OK: všechny noční itineráře mají arrMin > depMin, totalMin > 0, waitMin >= 0" : "FAIL: noční itinerář porušuje invariant (arrMin > depMin, totalMin > 0, waitMin >= 0)");
+}
