@@ -431,6 +431,9 @@ body {
 
 <div class="content" id="content"></div>
 
+<script src="scripts/routing.js"></script>
+<script src="scripts/timetable.js"></script>
+<script src="scripts/journey.js"></script>
 <script>
 // ============================================================
 // DATA
@@ -611,6 +614,28 @@ function getNow() {
   if (useCustomTime && customDate && customTime) return new Date(customDate + 'T' + customTime);
   return getRealNow();
 }
+
+// ============================================================
+// SEARCH (J4) — sit z network.json, nacita se na pozadi
+// ============================================================
+let NET = null;
+let netStatus = 'loading'; // 'loading' | 'ready' | 'error'
+let searchFrom = '';
+let searchTo = '';
+let searchResults = null; // null = jeste nehledano
+let searchMessage = '';
+
+fetch('data/network.json')
+  .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+  .then(net => {
+    NET = net;
+    netStatus = 'ready';
+    if (currentTab === 'search') render();
+  })
+  .catch(() => {
+    netStatus = 'error';
+    if (currentTab === 'search') render();
+  });
 
 // ============================================================
 // DAY TYPE
