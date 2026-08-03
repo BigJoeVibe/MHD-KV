@@ -133,4 +133,41 @@ Do `#content` vykresli (ve stylu appky, reuse tříd kde to jde):
 ---
 
 ## VÝSLEDEK (vyplní executor)
-_(sem: co hotové, jak ověřeno, otevřené UX body)_
+
+**Předávka 1 HOTOVÁ, 5 commitů (J4-1 až J4-5) + 1 bugfix commit, vše pushnuto.**
+
+- **J4-1 (UMD obal):** `routing.js`/`timetable.js`/`journey.js` teď fungují i jako `<script src>`
+  v prohlížeči (`window.MHDRouting`/`window.MHDTimetable`/`window.MHDJourney`), beze změny logiky.
+  Node testy (`journey.test.js`, `verify_network.js`) dál 20/20 PASS.
+- **🔴 Nález + oprava (mimo psaní spec, ale nutná pro funkčnost):** UMD kód přesně dle zadání
+  (`const routing = require(...) || window.MHDRouting; const { resolveStopId } = routing;`) v
+  prohlížeči **koliduje** — 3 `<script src>` tagy bez `type="module"` sdílejí jeden top-level scope,
+  takže `const resolveStopId` v `timetable.js`/`journey.js` naráží na `function resolveStopId` už
+  deklarovanou v `routing.js` → `SyntaxError: Identifier 'resolveStopId' has already been declared`,
+  celý modul by se v prohlížeči vůbec nenačetl. Opraveno obalením obsahu všech 3 souborů do IIFE
+  (`(function () { ... })();`) — izoluje scope, ven uniká jen `window.MHD*`, Node cesta (`module.exports`)
+  beze změny. Zapsán samostatný commit `fix: J4-1 dodatek`.
+- **Jak ověřeno (bez GUI prohlížeče v tomto prostředí — chromium-cli/Playwright tu nejsou nainstalované):**
+  napsán jednorázový DOM shim (`vm.runInThisContext`, ne jsdom — žádná nová dependency, jen ve
+  scratchpadu, necommitnuto), který věrně napodobuje sdílený top-level scope víc `<script>` tagů tak,
+  jak to dělá skutečný prohlížeč. Nad ním spuštěno: načtení sítě (fake `fetch` čte `network.json` ze
+  souboru), `showTab('search')` → formulář, `doSearch()` pro Krátká→Tržnice (Teď, reálný čas) i
+  Krátká→Růžový vrch (Jindy 2.2.2026 08:00, přestup) → karty s liniovými odznaky, časy, přestupem a
+  violet módem sedí; test neexistující zastávky → „Zastávku nenašel."; `swapSearchStops()` funguje.
+  Diffnuto i to, že žádný řádek v `renderDepartures`/`renderTimetable`/`renderSettings` nebyl změněn
+  (jen `showTab` tabs-pole rozšířeno o `'search'`) — staré taby by měly být nedotčené.
+  **NEOVĚŘENO vizuálně v reálném prohlížeči** (chybí nástroj v tomto prostředí) — **Joe prosím
+  otestuj vizuálně na mobilní šířce dle sekce „Test (Joe)" výše**, hlavně: rozložení `search-form`
+  (Odkud/Kam/swap kolečko) na ~380 px, čitelnost datalist našeptávače na mobilu (nativní chování
+  prohlížeče, nelze plně ověřit mimo něj), a že 4 taby v `.tabs` (teď `flex:1` × 4) nejsou moc
+  natěsno na malém displeji.
+- **Otevřené UX drobnosti pro Joea:**
+  1. Pořadí tabů: Odjezdy, Jízdní řády, **Hledat**, Nastavení — pokud mockup chtěl jiné pořadí, dej vědět.
+  2. Badge neznámé linky (mimo 3/9/13/15/51) nemá barvu z `.line-X` (ta existuje jen pro těch 5) —
+     padá na neutrální `var(--bg4)` fallback. Pokud to bude rušit, můžeme příště domalovat paletu.
+  3. Časový toggle Teď/Jindy je **sdílený globální stav** (stejně jako v Odjezdech) — přepnutí v
+     tabu Hledat ovlivní i tab Odjezdy a naopak. Odpovídá existující konvenci appky, ne nový bug.
+  4. Staré výsledky hledání zůstanou zobrazené i po změně Teď/Jindy nebo přepnutí pryč a zpět na tab
+     — nepřepočítávají se automaticky, dokud uživatel neklikne znovu „Hledat spojení". Záměr (minimální
+     scope), ne bug.
+  5. „Moje poloha" je vykreslené jako disabled tlačítko s textem „(brzy)" — GPS logika viz Předávka 2.

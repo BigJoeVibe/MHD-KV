@@ -7,6 +7,30 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-08-03 — v0.1.0 (J4 Předávka 1: UI „Hledat spojení" — 4. tab v appce)
+
+- **UMD obal jádra (J4-1):** `scripts/routing.js`/`timetable.js`/`journey.js` teď fungují i jako
+  `<script src>` v prohlížeči (`window.MHDRouting`/`MHDTimetable`/`MHDJourney`), beze změny logiky.
+  **Nález + oprava:** UMD kód dle spec (`const routing = require(...) || window.MHDRouting`) v
+  prohlížeči kolidoval — 3 `<script src>` tagy sdílejí top-level scope, `const resolveStopId`
+  narážel na `function resolveStopId` z `routing.js` → `SyntaxError`, modul by se v prohlížeči
+  vůbec nenačetl. Opraveno obalením obsahu všech 3 souborů do IIFE (izoluje scope, ven jen
+  `window.MHD*`). Ověřeno DOM shimem (`vm.runInThisContext`, věrně napodobuje sdílený scope
+  `<script>` tagů) — před opravou SyntaxError, po ní funkční end-to-end.
+- **Síť za běhu (J4-2):** appka na startu fetchne `data/network.json` (`let NET`), neblokuje
+  ostatní taby (Odjezdy/Jízdní řády jedou dál na inline `DATA`).
+- **4. tab „Hledat" (J4-3–J4-5):** pořadí Odjezdy/Jízdní řády/Hledat/Nastavení. Formulář
+  Odkud/Kam s datalist našeptávačem (názvy zastávek z `NET.stops`), swap tlačítko, sdílený
+  Teď/Jindy toggle (`useCustomTime`), „Moje poloha" jako disabled placeholder (GPS = Předávka 2).
+  `doSearch()` volá `planJourney(NET, from, to, {date, nowMin, sort:'departure', limit:8})`,
+  karty výsledků: čas odjezd→příjezd (mono), celková doba, liniové odznaky, info o přestupu
+  (zastávka, čekání, „stejné místo" pro co-located), „+1 d" pro přesah půlnoci.
+- **Diffnuto, že staré taby (Odjezdy/Jízdní řády/Nastavení) zůstaly beze změny** — jediná úprava
+  mimo nový kód je rozšíření pole tabů v `showTab` o `'search'`.
+- **Neověřeno vizuálně v reálném prohlížeči** (chromium-cli/Playwright v tomto prostředí chybí) —
+  logika ověřena DOM shimem nad reálnými daty (Krátká→Tržnice přímo, Krátká→Růžový vrch s
+  přestupem, neexistující zastávka, swap). Joe otestuje vizuálně na mobilu dle `handoff.md`.
+
 ## 2026-07-23 (6) — v0.1.0 (J8b-4: ověřeno na reálném GH Actions runneru — J8 kompletní)
 
 - Joe spustil `workflow_dispatch` ručně (Actions tab, `main`, `FORCE=1`). **Výsledek: Success, 42 s**
