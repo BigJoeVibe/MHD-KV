@@ -14,12 +14,29 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
 - **Repo (GitHub):** `BigJoeVibe/MHD-KV`, branch `main`
 - **Aktuální verze:** v0.1.0 (F1 komplet). Schéma: 0.x = vývojové/testovací
   verze; 1.0.0 přijde, až appka pokryje širší cíl (rozhodnuto 17. 7. 2026).
-- **Stav:** F1 běží na GitHub Pages. Repo napojené na GitHub, git dělá Claude Code (executor).
-  **Aktivní směr (od 19. 7. 2026): jádro vyhledávání A→B** nad síťovým modelem z KV GTFS.
-  **J1 (síťový model) HOTOVO** — `data/network.json` + `scripts/build_network.js`.
-  **J2 (routing A→B) HOTOVO 21.7.** — `scripts/routing.js` (+`routing.test.js`, `verify_network.js` 14/14). Zrevidováno, pushnuto.
-  **J8 (auto-obnova dat) NAVRŽENO** (GitHub Actions) — viz `docs/DATA_SOURCES.md`.
-  Další: **J3 — časová vrstva**. Viz `TASK.md` (sekce TEĎ); `handoff.md` je mezi úkoly uzavřená (spec J3 připraví manager po schválení).
+- **Stav (k 3. 8. 2026):** appka běží na GitHub Pages, git dělá Claude Code (executor).
+  **Jádro vyhledávání A→B je hotové a ověřené:** **J1** síťový model (`data/network.json`),
+  **J2** routing (`routing.js`), **J3** časová vrstva (`timetable.js` + `journey.js`/`planJourney`),
+  **JH** zpevnění jádra (bez Pareto, 2 přestupy, smyčky, co-located ≤30 m).
+  **J8** automatická denní obnova dat (GitHub Actions + guard) **BĚŽÍ** — lekce: neklíčovat na
+  volatilní `JDFS-`/`S#`/`P#` (J8-fix), guard testuje jen build-invarianty, ne snímek (J8-hotfix).
+  **J4 (UI „Hledat spojení") — Předávka 1 HOTOVÁ** (4. tab, formulář Odkud/Kam, karty z `planJourney`;
+  moduly v prohlížeči přes IIFE). **Běží J4-fix** (noční přestup přes půlnoc vracel zápornou dobu).
+  Další: dokončit J4-fix → **J4 Předávka 2** (GPS „Moje poloha" + doladění). Detail: `TASK.md` (sekce TEĎ),
+  poslední `changelog.md`, aktivní `handoff.md`.
+
+## Předávka dalšímu manažerovi (2026-08-03)
+
+- **Rozpracováno:** `handoff.md` má spec **J4-fix** — bug v `journey.js`: noční přestup přes půlnoc
+  (leg1 pozdě večer → leg2 až ráno) vracel **zápornou dobu jízdy** a řadil se nahoru. Executor to dělá.
+  **Nejdřív přečti jeho `VÝSLEDEK` v `handoff.md` + poslední `changelog.md`, ověř** (noční hledání
+  Krátká→Tržnice nesmí mít žádný záporný `totalMin`), teprve pak pokračuj.
+- **Pak:** **J4 Předávka 2** = GPS „Moje poloha" (→ nejbližší zastávka) + doladění vzhledu karet
+  (řazení/filtry `planJourney` už umí přes `opts.sort`). Rozhodnutí a mockup jsou v historii `TASK.md`
+  (řádek J4) a v gitu.
+- **Pozor (procesní):** Cowork manager **NIKDY nespouští git** (viz sekce Git a verzování). **Vizuální
+  test UI** dělá manager sám v prohlížeči přes GitHub Pages (`bigjoevibe.github.io/MHD-KV`) — executor
+  prohlížeč nemá. Joe je finální arbitr UX.
 
 ## Dělba rolí
 
