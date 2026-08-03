@@ -171,3 +171,9 @@ Do `#content` vykresli (ve stylu appky, reuse tříd kde to jde):
      — nepřepočítávají se automaticky, dokud uživatel neklikne znovu „Hledat spojení". Záměr (minimální
      scope), ne bug.
   5. „Moje poloha" je vykreslené jako disabled tlačítko s textem „(brzy)" — GPS logika viz Předávka 2.
+
+**Poznámka k push (2026-08-03):** `git push` zprvu odmítnut — `origin/main` mezitím dostal 1 nový
+automatický commit (`chore(data): automaticka obnova jizdnich radu 2026-08-03`). `git pull --rebase
+origin main` proběhl bez konfliktů (žádný z 8 mých commitů se datového souboru nedotýkal). Po
+rebase znovu `node scripts/verify_network.js` → PASS 20/20, `node scripts/journey.test.js` OK →
+pushnuto (`cf74e7f` na `4db2c9f`).
