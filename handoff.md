@@ -249,4 +249,65 @@ napiš to do `VÝSLEDEK` a nedolaďuj čísla limitů na vlastní pěst.
 
 ## VÝSLEDEK (vyplní executor)
 
-_(zatím prázdné)_
+**Hotovo, dle specu, nic nad zadání.** Commitnuto: `scripts/journey.js`, `scripts/journey.test.js`,
+`index_raw.html`, `index.html`.
+
+### Co se změnilo v `planJourney` (`scripts/journey.js`)
+
+- Nové `opts` s defaulty: `windowMin=90`, `maxTotal=75`, `maxWait=40` (1a).
+- Nový `SORTERS.smart` (přímé napřed → dřívější odjezd → dřívější příjezd → míň přestupů) a je to
+  nový default místo `departure` (1b). Staré klíče (`departure`/`arrival`/`duration`/`transfers`)
+  beze změny.
+- `itineraryKey` přepsán na `depMin|arrMin|linky` (bez per-leg časů) + nová `mergeDuplicates()` —
+  první výskyt = reprezentant, další duplicity přidají svoji `transferStop` do `it.viaStops`
+  (jen když je aspoň jedna duplicita; `transferStop` zůstává beze změny) (1c).
+- Nové `applyCaps()` (zahodí `totalMin > 75` nebo `waitMin > 40`, u přímých se `waitMin` neaplikuje) (1d).
+- Nové `applyWindowLadder()` — zkusí `windowMin` (90) → 240 → `Infinity`, vezme první neprázdný
+  výsledek (1e).
+- Pořadí v `planJourney` přesně dle 1f: sestavení → FIX-B invariant → merge → stropy → okno+žebřík →
+  `SORTERS[sortKey]` → `slice(0, limit)`. Limit je teď fakt až na konci.
+- `scripts/routing.js`, `scripts/timetable.js` ani nic v „Co NESAHAT" nedotčeno.
+
+### Žebřík oken — chovalo se přesně podle specu
+
+Oba scénáře, které manager předem označil jako „základní okno prázdné → žebřík zafungoval", se
+chovaly přesně takhle i v implementaci: noc 23:44 (Krátká→Tržnice) i hluché období (Globus→Nádraží
+Dalovice) obě potřebovaly rozšíření na 240 min, než se něco našlo. Žádné překvapení oproti specu.
+
+### KROK 2 (`index_raw.html`)
+
+- `doSearch`: `sort: 'departure'` odstraněno z volání `planJourney` (2a), přidáno `searchNowMin`
+  (ukládá `nowMin` použitý při hledání, potřebné pro hlášku 2b).
+- Nová konstanta `SEARCH_WINDOW_MIN = 90` nahoře u `let NET = null;` bloku.
+- `renderSearchResults`: když `searchResults[0].depMin > searchNowMin + SEARCH_WINDOW_MIN`, vloží
+  se řádek `<div class="search-empty">Nejbližší spoj až v HH:MM.</div>` nad karty (2b, žádné nové
+  CSS — recyklováno `.search-empty`).
+- Karta přestupu (2c): místo jedné `transferStop` teď vypisuje všechny `it.viaStops` (fallback na
+  `[it.transferStop]`, když `viaStops` chybí) přes existující `stopDisplayName()`, oddělené ` / `.
+- `index.html` zkopírován z `index_raw.html` (`diff` čistý).
+
+### KROK 3 (testy)
+
+Do `scripts/journey.test.js` přidán blok „J4-sort: pravidla malého města" se všemi scénáři z tabulky
+v zadání (den ráno, den odpoledne, noc/žebřík, sloučení duplicit, hluché období) + globální kontrola
+invariantů (`arrMin>depMin`, `0<totalMin<=75`, `waitMin` buď `null`, nebo `0..40`). Všechny scénáře
+sedí přesně na čísla z manager sekce „Ověřeno managerem předem".
+
+### DŮKAZ
+
+1. `node scripts/journey.test.js` → 0 FAIL, `OK: J4-sort — všechny scénáře a invarianty prošly`.
+2. `node scripts/routing.test.js`, `node scripts/timetable.test.js` → beze změny, PASS.
+3. `node scripts/verify_network.js` → **20/20 PASS** (ne 26/26 — baseline se snížil už v J8-hotfixu
+   2.8., kdy H1a-d testy přešly z guardu do `routing.test.js`; guard samotný jsem nesahal, číslo
+   20/20 je aktuální nezměněný stav, ne regrese). Zapisuji, protože zadání čekalo „dál 26/26" — je to
+   jen zastaralá reference v handoffu, ne problém v implementaci.
+4. Ruční kontrola (Tržnice→Okružní, `20260804` 8:00): první karta **přímo linka 13, 08:06 → 08:18**,
+   v celém výstupu (8 karet) max `totalMin` je **44** — žádná karta nad 75. Přesný výstup viz commit.
+
+### Nálezy
+
+- Žádné odchylky od specu — spec seděl na první pokus, jen jsem musel opravit vlastní chybu v testu
+  (porovnání `leg.line` jako string vs. number — `line` je v datech `number`, ne string; opraveno
+  přes `String(...)`, netýká se produkčního kódu).
+- Necommitnuté manager docs (`CLAUDE.md`, `TASK.md`, `handoff.md`) byly na začátku session — commitnuty
+  samostatně jako první commit, než začala samotná J4-sort práce (dle bodu 3 „Jak začít").

@@ -7,6 +7,33 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-08-04 — v0.1.0 (J4-sort: pravidla malého města ve výsledcích hledání)
+
+- **`scripts/journey.js` — nové domain limity a přepracované pořadí operací v `planJourney`**
+  (spec `handoff.md`, rozhodnutí Joe 4. 8.): nové `opts.windowMin` (90), `opts.maxTotal` (75),
+  `opts.maxWait` (40); nový výchozí `SORTERS.smart` (přímé spoje napřed, pak chronologicky podle
+  odjezdu/příjezdu/počtu přestupů) nahrazuje `departure` jako default. Staré klíče řazení beze změny.
+- **Sloučení identických jízd** — `itineraryKey` přepsán na `depMin|arrMin|linky` (bez per-leg časů,
+  jinak by se tři jízdy lišící se jen přestupní zastávkou nesloučily); nová `mergeDuplicates()`
+  sbírá přestupní zastávky duplicit do `it.viaStops`, `transferStop` zůstává pro zpětnou kompatibilitu.
+- **Tvrdé stropy** (`applyCaps`) a **odjezdové okno se žebříkem rozšíření** 90 → 240 → bez omezení
+  (`applyWindowLadder`) — řeší noc (přímý spoj 91 min daleko, mimo základní okno) i hluchá období
+  (Globus→Nádraží Dalovice, první spoj až za 104 min). **Limit `slice(0, limit)` přesunut na úplný
+  konec** pořadí operací — byla to přímá příčina původní chyby (limitovalo se, než se stihlo filtrovat
+  podle času).
+- **`index_raw.html`/`index.html`** — `doSearch` už neposílá `sort:'departure'` (bere nový default);
+  nová hláška „Nejbližší spoj až v HH:MM." nad kartami, když první výsledek odjíždí až za oknem
+  (recyklováno `.search-empty`, žádné nové CSS); karta přestupu vypisuje všechny `viaStops` místo
+  jedné zastávky.
+- **`scripts/journey.test.js`** — nový blok scénářů „J4-sort" (den ráno/odpoledne, noc s žebříkem
+  oken, sloučení duplicit, hluché období) + globální invarianty (`totalMin<=75`, `waitMin<=40`).
+  Všechny sedí přesně na čísla, která si manager předem nasimuloval nad daty bez zásahu do kódu.
+- **Ověřeno:** `journey.test.js` 0 FAIL, `routing.test.js`/`timetable.test.js` beze změny PASS,
+  `verify_network.js` 20/20 PASS (guard nedotčen; 20/20 je současný baseline od J8-hotfixu, ne
+  regrese — `handoff.md` čekal zastaralé „26/26"). Ruční kontrola Tržnice→Okružní 8:00: 1. karta
+  přímo linka 13 08:06→08:18, žádná z 8 karet nemá `totalMin > 75`. Detail v `handoff.md` → VÝSLEDEK.
+- **Neověřeno vizuálně na Pages** (executor prohlížeč nemá) — dělá manager/Joe.
+
 ## 2026-08-03 (2) — v0.1.0 (J4-fix: noční přestup přes půlnoc — zápor v `journey.js`)
 
 - **Nález (manager, vizuální test J4 na Pages):** noční hledání (pozdní odjezd leg1, přestup na

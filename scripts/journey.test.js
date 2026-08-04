@@ -95,3 +95,95 @@ if (nightResults.length === 0) {
   }
   console.log(allOk ? "OK: všechny noční itineráře mají arrMin > depMin, totalMin > 0, waitMin >= 0" : "FAIL: noční itinerář porušuje invariant (arrMin > depMin, totalMin > 0, waitMin >= 0)");
 }
+
+// ============================================================
+// J4-sort: pravidla maleho mesta (okno 90 min + zebrik, stropy 75/40,
+// smart razeni "prime napred", slouceni duplicit do viaStops)
+// ============================================================
+console.log("\n--- J4-sort: pravidla malého města ---");
+
+let j4sortAllOk = true;
+
+function checkGlobalInvariants(label, results) {
+  let ok = true;
+  for (const it of results) {
+    const invOk =
+      it.arrMin > it.depMin &&
+      it.totalMin > 0 &&
+      it.totalMin <= 75 &&
+      (it.waitMin == null || (it.waitMin >= 0 && it.waitMin <= 40));
+    if (!invOk) {
+      ok = false;
+      console.log(`  FAIL invariant (${label}): ` + fmtItinerary(it));
+    }
+  }
+  if (!ok) j4sortAllOk = false;
+  return ok;
+}
+
+function checkFirst(label, results, expect) {
+  const first = results[0];
+  const ok =
+    first &&
+    first.transfers === 0 &&
+    first.depMin === expect.depMin &&
+    first.arrMin === expect.arrMin &&
+    String(first.legs[0].line) === String(expect.line);
+  console.log(
+    (ok ? "  OK   " : "  FAIL ") +
+      `${label}: 1. výsledek ` +
+      (first ? fmtItinerary(first) : "(žádný)") +
+      (ok ? "" : ` — očekáváno přímo linka ${expect.line}, ${fmt(expect.depMin)} → ${fmt(expect.arrMin)}`)
+  );
+  if (!ok) j4sortAllOk = false;
+}
+
+// den ráno — přímý spoj 13 má vyhrát nad dřívějšími odjezdy přestupů (smart: přímé napřed)
+const morningResults = planJourney(net, "Tržnice", "Okružní", { date: "20260804", nowMin: 8 * 60 });
+checkFirst("den ráno (Tržnice→Okružní, 8:00)", morningResults, { depMin: 8 * 60 + 6, arrMin: 8 * 60 + 18, line: "13" });
+checkGlobalInvariants("den ráno", morningResults);
+
+// den odpoledne
+const afternoonResults = planJourney(net, "Tržnice", "Okružní", { date: "20260804", nowMin: 15 * 60 + 30 });
+checkFirst("den odpoledne (Tržnice→Okružní, 15:30)", afternoonResults, { depMin: 15 * 60 + 30, arrMin: 15 * 60 + 42, line: "13" });
+checkGlobalInvariants("den odpoledne", afternoonResults);
+
+// noc — základní okno 90 min je prázdné (nejbližší přímý spoj 51 je 91 min daleko), žebřík rozšíří na 240
+const nightWindowResults = planJourney(net, "Krátká", "Tržnice", { date: "20260803", nowMin: 23 * 60 + 44 });
+checkFirst("noc — žebřík oken (Krátká→Tržnice, 23:44)", nightWindowResults, { depMin: 25 * 60 + 15, arrMin: 25 * 60 + 30, line: "51" });
+checkGlobalInvariants("noc — žebřík oken", nightWindowResults);
+
+// slučování duplicit — tři jízdy 3→2 lišící se jen přestupní zastávkou se mají sloučit do jedné karty
+const mergeResults = planJourney(net, "Stará Role", "Lázně I", { date: "20260809", nowMin: 14 * 60 });
+const merged = mergeResults.find((it) => it.depMin === 14 * 60 + 26 && it.arrMin === 15 * 60 + 9);
+const mergeOk = !!merged && Array.isArray(merged.viaStops) && merged.viaStops.length === 3;
+console.log(
+  (mergeOk ? "  OK   " : "  FAIL ") +
+    "sloučení duplicit (Stará Role→Lázně I, ne 14:00): 14:26 → 15:09 s viaStops.length===3" +
+    (merged ? ` (skutečně ${merged.viaStops ? merged.viaStops.length : 0})` : " (výsledek nenalezen)")
+);
+if (!mergeOk) j4sortAllOk = false;
+// zadne dva vysledky nemaji shodnou trojici (depMin, arrMin, linky) — merge musi byt uplny
+const keysSeen = new Set();
+let noDupKeys = true;
+for (const it of mergeResults) {
+  const k = `${it.depMin}|${it.arrMin}|${it.legs.map((l) => l.line).join(">")}`;
+  if (keysSeen.has(k)) noDupKeys = false;
+  keysSeen.add(k);
+}
+console.log((noDupKeys ? "  OK   " : "  FAIL ") + "žádné dva výsledky nemají shodnou trojici (depMin, arrMin, linky)");
+if (!noDupKeys) j4sortAllOk = false;
+checkGlobalInvariants("sloučení duplicit", mergeResults);
+
+// hluché období — žebřík rozšíří okno, výsledky nejsou prázdné, 1. odjezd 09:44 (spouští hlášku v UI)
+const deadPeriodResults = planJourney(net, "Globus", "Nádraží Dalovice", { date: "20260804", nowMin: 8 * 60 });
+const deadPeriodOk = deadPeriodResults.length > 0 && deadPeriodResults[0].depMin === 9 * 60 + 44;
+console.log(
+  (deadPeriodOk ? "  OK   " : "  FAIL ") +
+    "hluché období (Globus→Nádraží Dalovice, 8:00): výsledky nejsou prázdné, 1. odjezd 09:44" +
+    (deadPeriodResults.length > 0 ? ` (skutečně ${fmt(deadPeriodResults[0].depMin)})` : " (žádné výsledky)")
+);
+if (!deadPeriodOk) j4sortAllOk = false;
+checkGlobalInvariants("hluché období", deadPeriodResults);
+
+console.log(j4sortAllOk ? "\nOK: J4-sort — všechny scénáře a invarianty prošly" : "\nFAIL: J4-sort — některý scénář nebo invariant selhal (viz výše)");

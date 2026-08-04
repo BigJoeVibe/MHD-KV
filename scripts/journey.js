@@ -142,19 +142,74 @@ function transferItineraries(net, variant, dateStr, nowMin, minTransfer) {
   return out;
 }
 
+// J4-sort: klic NESMI obsahovat casy jednotlivych nohou — kdyz se prestoupi na
+// jine zastavce, nastupuje se do 2. autobusu o jinou minutu, takze per-leg klic
+// by tri identicke jizdy (stejna linka, jen jiny presedaci bod) nesloucil.
 function itineraryKey(it) {
-  return it.legs.map((l) => `${l.line}:${l.depMin}`).join("|");
+  return `${it.depMin}|${it.arrMin}|${it.legs.map((l) => l.line).join(">")}`;
+}
+
+// Slouceni identickych jizd (J4-sort 1c) — linky jedouci kus trasy spolecne
+// generuji N vysledku lisicich se jen presedaci zastavkou (stejny autobus,
+// stejny autobus, jen jina volba, kde presednout). Prvni vyskyt = reprezentant,
+// z dalsich se sbiraji jen presedaci zastavky do it.viaStops. transferStop
+// zustava (= viaStops[0]) kvuli zpetne kompatibilite. U primych spoju a u
+// prestupovych bez duplicity viaStops nenastavuje (fallback na transferStop).
+function mergeDuplicates(itineraries) {
+  const seen = new Map();
+  const out = [];
+  for (const it of itineraries) {
+    const key = itineraryKey(it);
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, it);
+      out.push(it);
+    } else if (it.transfers === 1) {
+      if (!existing.viaStops) existing.viaStops = [existing.transferStop];
+      if (!existing.viaStops.includes(it.transferStop)) existing.viaStops.push(it.transferStop);
+    }
+  }
+  return out;
+}
+
+// Tvrde stropy (J4-sort 1d) — "pravidla maleho mesta": nic realneho v KV
+// nepresahne ~55 min jizdy, strop 75 je rezerva. U primych je waitMin null ->
+// strop cekani se neaplikuje.
+function applyCaps(itineraries, maxTotal, maxWait) {
+  return itineraries.filter((it) => it.totalMin <= maxTotal && (it.waitMin == null || it.waitMin <= maxWait));
+}
+
+// Odjezdove okno se zebrikem rozsireni (J4-sort 1e) — kdyz je zaklad prazdny
+// (hluche obdobi / noc), zkusi se sirsi okno, az uplne bez omezeni.
+const WINDOW_LADDER_STEP = 240;
+function applyWindowLadder(itineraries, nowMin, windowMin) {
+  for (const w of [windowMin, WINDOW_LADDER_STEP, Infinity]) {
+    const filtered = itineraries.filter((it) => it.depMin <= nowMin + w);
+    if (filtered.length > 0) return filtered;
+  }
+  return [];
 }
 
 // Prepinatelne razeni (H2) — pripravene pro UI filtry (prijezd / delka / prestupy),
 // aniz by se muselo sahat do jadra. Kazdy klic ma sekundarni tie-break, aby razeni
-// bylo stabilni i pri shode hlavniho kriteria. Vychozi je 'departure' (Joe: zatim
-// prio nejblizsi odjezd).
+// bylo stabilni i pri shode hlavniho kriteria. Vychozi je 'smart' (J4-sort, Joe
+// 4.8.: v malem meste uvnitr odjezdoveho okna nejdriv prime spoje, pak prestupy,
+// obojí chronologicky podle odjezdu).
 const SORTERS = {
   departure: (a, b) => (a.depMin !== b.depMin ? a.depMin - b.depMin : a.totalMin !== b.totalMin ? a.totalMin - b.totalMin : a.transfers - b.transfers),
   arrival: (a, b) => (a.arrMin !== b.arrMin ? a.arrMin - b.arrMin : a.totalMin !== b.totalMin ? a.totalMin - b.totalMin : a.transfers - b.transfers),
   duration: (a, b) => (a.totalMin !== b.totalMin ? a.totalMin - b.totalMin : a.depMin - b.depMin),
   transfers: (a, b) => (a.transfers !== b.transfers ? a.transfers - b.transfers : a.depMin - b.depMin),
+  smart: (a, b) =>
+    (a.transfers === 0) !== (b.transfers === 0)
+      ? a.transfers === 0
+        ? -1
+        : 1 // prime napred
+      : a.depMin !== b.depMin
+      ? a.depMin - b.depMin // pak drivejsi odjezd
+      : a.arrMin !== b.arrMin
+      ? a.arrMin - b.arrMin // pak drivejsi prijezd
+      : a.transfers - b.transfers,
 };
 
 function planJourney(net, A, B, opts = {}) {
@@ -162,7 +217,10 @@ function planJourney(net, A, B, opts = {}) {
   const minTransfer = opts.minTransfer != null ? opts.minTransfer : 3;
   const limit = opts.limit != null ? opts.limit : 8;
   const maxTransfers = opts.maxTransfers != null ? opts.maxTransfers : 1;
-  const sortKey = opts.sort && SORTERS[opts.sort] ? opts.sort : "departure";
+  const sortKey = opts.sort && SORTERS[opts.sort] ? opts.sort : "smart";
+  const windowMin = opts.windowMin != null ? opts.windowMin : 90;
+  const maxTotal = opts.maxTotal != null ? opts.maxTotal : 75;
+  const maxWait = opts.maxWait != null ? opts.maxWait : 40;
 
   const stopA = resolveStopId(net, A);
   const stopB = resolveStopId(net, B);
@@ -183,23 +241,19 @@ function planJourney(net, A, B, opts = {}) {
     // preskakuje, aby nevracel nekompletni/spatny itinerar (jen 2 ze 3 nohou).
   }
 
-  const seen = new Set();
-  const deduped = [];
-  for (const it of itineraries) {
-    // FIX-B: pojistka proti chybnym itinerarum (nikdy by nemely projit, ale
-    // levna zachranna sit, kdyby neco proklouzlo).
-    if (it.arrMin <= it.depMin) continue;
-    if (it.waitMin != null && it.waitMin < 0) continue;
-    const key = itineraryKey(it);
-    if (!seen.has(key)) {
-      seen.add(key);
-      deduped.push(it);
-    }
-  }
+  // FIX-B: pojistka proti chybnym itinerarum (nikdy by nemely projit, ale
+  // levna zachranna sit, kdyby neco proklouzlo).
+  itineraries = itineraries.filter((it) => it.arrMin > it.depMin && (it.waitMin == null || it.waitMin >= 0));
 
-  deduped.sort(SORTERS[sortKey]);
+  // Poradi 1f (J4-sort, zavazne): slouceni -> stropy -> okno+zebrik -> razeni -> limit.
+  // Limit az uplne na konci — jinak se filtruje uz useknuty seznam.
+  itineraries = mergeDuplicates(itineraries);
+  itineraries = applyCaps(itineraries, maxTotal, maxWait);
+  itineraries = applyWindowLadder(itineraries, nowMin, windowMin);
 
-  return deduped.slice(0, limit);
+  itineraries.sort(SORTERS[sortKey]);
+
+  return itineraries.slice(0, limit);
 }
 
 const MHDJourney = { planJourney };

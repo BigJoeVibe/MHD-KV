@@ -734,6 +734,8 @@ let searchFrom = '';
 let searchTo = '';
 let searchResults = null; // null = jeste nehledano
 let searchMessage = '';
+let searchNowMin = null; // nowMin pouzity pri poslednim hledani (pro hlasku "mimo okno")
+const SEARCH_WINDOW_MIN = 90; // musi sedet s defaultem windowMin v journey.js
 
 fetch('data/network.json')
   .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
@@ -1127,7 +1129,8 @@ function doSearch() {
   const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
-  searchResults = window.MHDJourney.planJourney(NET, from, to, { date, nowMin, sort: 'departure', limit: 8 });
+  searchResults = window.MHDJourney.planJourney(NET, from, to, { date, nowMin, limit: 8 });
+  searchNowMin = nowMin;
   searchMessage = searchResults.length === 0 ? 'Žádné spojení v daném čase.' : '';
   render();
 }
@@ -1143,6 +1146,9 @@ function renderSearchResults() {
 
   const vClass = useCustomTime ? ' violet' : '';
   let html = '';
+  if (searchNowMin != null && searchResults[0].depMin > searchNowMin + SEARCH_WINDOW_MIN) {
+    html += `<div class="search-empty">Nejbližší spoj až v ${fmtJourneyTime(searchResults[0].depMin)}.</div>`;
+  }
   for (const it of searchResults) {
     const plusDay = it.arrMin >= 1440 ? `<span class="plusday">+1 d</span>` : '';
     html += `<div class="journey-card${vClass}">`;
@@ -1156,8 +1162,11 @@ function renderSearchResults() {
     });
     html += `</div>`;
     if (it.transfers > 0) {
-      const transferStop = NET.stops[it.transferStop];
-      const transferName = transferStop ? stopDisplayName(transferStop.n) : '';
+      const viaIds = it.viaStops || [it.transferStop];
+      const transferName = viaIds.map(id => {
+        const s = NET.stops[id];
+        return s ? stopDisplayName(s.n) : '';
+      }).join(' / ');
       const walkNote = it.walkMin === 0 ? 'stejné místo' : `${it.walkMin} min pěšky`;
       html += `<div class="journey-transfer-info">Přestup: ${transferName} · čekání ${it.waitMin} min (${walkNote})</div>`;
     }
