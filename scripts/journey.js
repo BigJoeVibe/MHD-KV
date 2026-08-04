@@ -122,6 +122,15 @@ function transferItineraries(net, variant, dateStr, nowMin, minTransfer) {
     }
     if (!best) continue;
 
+    // throughService (J4-sort-2, label only): transfer stop is literally the
+    // last stop of leg1's pattern AND the first stop of leg2's pattern — bus
+    // is standing there and leaving now. NOT proof of "same vehicle" (block_id
+    // is empty in the source data); a H1d co-located sibling never counts,
+    // since it is a different stop ID by construction.
+    const p1 = net.patterns[leg1.patternId];
+    const p2 = net.patterns[leg2.patternId];
+    const throughService = p1.stops[p1.stops.length - 1] === leg1.to && p2.stops[0] === leg2.from;
+
     out.push({
       transfers: 1,
       depMin: dep1,
@@ -137,6 +146,7 @@ function transferItineraries(net, variant, dateStr, nowMin, minTransfer) {
       // zastavka, nebo H1d co-located sourozenec (<=30 m). Pesi presun mezi
       // ruznymi oznacniky (30-200 m) je az epic J9, do te doby vzdy 0.
       walkMin: 0,
+      throughService,
     });
   }
   return out;
@@ -190,6 +200,30 @@ function applyWindowLadder(itineraries, nowMin, windowMin) {
   return [];
 }
 
+// Pareto filtr (J4-sort-2, 1c) — zahodi kazdy itinerar, ke kteremu existuje jiny,
+// co odjizdi stejne/pozdeji A prijizdi stejne/driv (horsi v obou rozmerech).
+// Jeden pruchod misto O(n^2): serad sestupne podle depMin (vzestupne podle arrMin
+// pri shode), pak projizdi skupiny stejneho depMin a sleduje nejlepsi arrMin
+// zprava (od nejpozdejsiho odjezdu). Skupina se stejnym depMin i arrMin (ruzne
+// linky) je legitimni alternativa a zustava cela.
+function paretoFilter(itineraries) {
+  const sorted = itineraries.slice().sort((a, b) => (b.depMin !== a.depMin ? b.depMin - a.depMin : a.arrMin - b.arrMin));
+  const out = [];
+  let minArr = Infinity;
+  let i = 0;
+  while (i < sorted.length) {
+    let j = i;
+    while (j < sorted.length && sorted[j].depMin === sorted[i].depMin) j++;
+    const gMin = sorted[i].arrMin; // skupina je uz serazena vzestupne podle arrMin
+    if (gMin < minArr) {
+      for (let k = i; k < j && sorted[k].arrMin === gMin; k++) out.push(sorted[k]);
+      minArr = gMin;
+    }
+    i = j;
+  }
+  return out;
+}
+
 // Prepinatelne razeni (H2) — pripravene pro UI filtry (prijezd / delka / prestupy),
 // aniz by se muselo sahat do jadra. Kazdy klic ma sekundarni tie-break, aby razeni
 // bylo stabilni i pri shode hlavniho kriteria. Vychozi je 'smart' (J4-sort, Joe
@@ -200,21 +234,25 @@ const SORTERS = {
   arrival: (a, b) => (a.arrMin !== b.arrMin ? a.arrMin - b.arrMin : a.totalMin !== b.totalMin ? a.totalMin - b.totalMin : a.transfers - b.transfers),
   duration: (a, b) => (a.totalMin !== b.totalMin ? a.totalMin - b.totalMin : a.depMin - b.depMin),
   transfers: (a, b) => (a.transfers !== b.transfers ? a.transfers - b.transfers : a.depMin - b.depMin),
+  // J4-sort-2: cas rozhoduje, kategorie je jen rozstrel pri shode (Joeuv nalez
+  // 4.8. — "prime napred" jako hlavni pravidlo skryvalo prestup, co odjizdel
+  // i prijizdel drive nez kazdy primy spoj).
   smart: (a, b) =>
-    (a.transfers === 0) !== (b.transfers === 0)
-      ? a.transfers === 0
-        ? -1
-        : 1 // prime napred
-      : a.depMin !== b.depMin
-      ? a.depMin - b.depMin // pak drivejsi odjezd
+    a.depMin !== b.depMin
+      ? a.depMin - b.depMin // drivejsi odjezd
       : a.arrMin !== b.arrMin
       ? a.arrMin - b.arrMin // pak drivejsi prijezd
-      : a.transfers - b.transfers,
+      : a.transfers !== b.transfers
+      ? a.transfers - b.transfers // pak prime vyhrava
+      : a.totalMin - b.totalMin,
 };
 
 function planJourney(net, A, B, opts = {}) {
   const { date, nowMin } = opts;
-  const minTransfer = opts.minTransfer != null ? opts.minTransfer : 3;
+  // J4-sort-2: 0 = zadny ochranny okraj na prestupu (Joeovo rozhodnuti 4.8. — viz
+  // handoff.md). Terminus->origin heuristika (throughService) je jen popisek v
+  // karte, nikdy filtr.
+  const minTransfer = opts.minTransfer != null ? opts.minTransfer : 0;
   const limit = opts.limit != null ? opts.limit : 8;
   const maxTransfers = opts.maxTransfers != null ? opts.maxTransfers : 1;
   const sortKey = opts.sort && SORTERS[opts.sort] ? opts.sort : "smart";
@@ -245,11 +283,13 @@ function planJourney(net, A, B, opts = {}) {
   // levna zachranna sit, kdyby neco proklouzlo).
   itineraries = itineraries.filter((it) => it.arrMin > it.depMin && (it.waitMin == null || it.waitMin >= 0));
 
-  // Poradi 1f (J4-sort, zavazne): slouceni -> stropy -> okno+zebrik -> razeni -> limit.
-  // Limit az uplne na konci — jinak se filtruje uz useknuty seznam.
+  // Poradi 1e (J4-sort-2, zavazne): slouceni -> stropy -> okno+zebrik -> Pareto -> razeni -> limit.
+  // Pareto az PO okne — varianta mimo okno nesmi smazat viditelnou (a limit az
+  // uplne na konci, jinak se filtruje uz useknuty seznam).
   itineraries = mergeDuplicates(itineraries);
   itineraries = applyCaps(itineraries, maxTotal, maxWait);
   itineraries = applyWindowLadder(itineraries, nowMin, windowMin);
+  itineraries = paretoFilter(itineraries);
 
   itineraries.sort(SORTERS[sortKey]);
 

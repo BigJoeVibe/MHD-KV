@@ -1,313 +1,275 @@
-# Handoff — EXECUTOR spec (J4-sort: pravidla malého města ve výsledcích hledání)
+# Handoff — EXECUTOR spec (J4-sort-2: Pareto ordering + through-running services)
 
-> 🔴 **AKTIVNÍ ZADÁNÍ (manager, 2026-08-04).** Jádro počítá časy správně (J4-fix drží).
-> Problém je **výhradně v pořadí, filtrování a slučování výsledků** — appka v malém městě
-> nabízí spoje s dobou jízdy 200–900 min a přímý spoj tlačí pod přestupy.
-> Rozhodnutí padla s Joem 4. 8. 2026, čísla jsou naměřená v datech (viz „Proč zrovna tahle čísla").
+> **LANGUAGE:** this file, your code comments, commit messages and the `RESULT` section below are
+> **English**. Czech stays only in: stop names (they come from the data), UI strings shown to the
+> user, and the project docs `CLAUDE.md` / `TASK.md` / `docs/*.md` (those are the owner's, do not
+> translate them). Work internally in English.
 
-> **Předávka pro nižšího CC (executor).** Implementuj dle bodů, **nic nad zadání**. Git děláš ty.
-> Malé kroky, kód jako **diff**, commit + test.
+> 🔴 **ACTIVE SPEC (manager, 2026-08-04, evening).** J4-sort is done, pushed and works as specified —
+> good job. Joe then tested it live and found two things the previous spec got wrong. This is the
+> follow-up. **Both fixes sit above the core; the J4-fix time logic stays untouched.**
 
-## Jak začít
-1. „Použij skill **kod-jadro**."
-2. Přečti `CLAUDE.md`, `scripts/journey.js` (celý — hlavně `planJourney`, `itineraryKey`, `SORTERS`),
-   `scripts/journey.test.js`, `index_raw.html` (funkce `doSearch` ~ř. 1111 a `renderSearchResults` ~ř. 1135),
-   tento soubor.
-3. Zkontroluj, jestli nejsou necommitnuté manager docs — pokud ano, commitni je jako první.
+> **Handoff for the lower CC (executor).** Implement per the bullets, **nothing beyond the spec**.
+> You do the git. Small steps, code as a **diff**, commit + test.
 
----
-
-## Rozhodnutí, které to celé řídí (Joe, 4. 8. 2026)
-
-**Appka je pro Karlovy Vary, ne pro obecné město.** Motor dosud neměl žádné domain limity a hledal,
-jako by šlo o Prahu. Nová pravidla, v tomto pořadí:
-
-1. **Odjezdové okno 90 minut** — zobrazují se spoje, které odjíždějí do 90 min od času hledání.
-   Pojmenování pro UI i dokumentaci: **„odjezdové okno"**.
-2. **Uvnitř okna: nejdřív přímé spoje, pak přestupy.** Přestup je alternativa, ne rovnocenná varianta.
-3. **Strop celkové doby jízdy 75 min** a **strop čekání na přestupu 40 min.**
-4. **Sloučení identických jízd** do jedné karty s výčtem možných přestupních zastávek.
-5. **Když v okně nic není** → okno se automaticky rozšíří a UI to řekne nahlas.
-
-**Řazení podle příjezdu (`arrival`) se NEPOUŽIJE jako default** — bylo v úvahách 4. 8., ale s odjezdovým
-oknem ztrácí smysl. `SORTERS.arrival` v kódu **zůstává** (budoucí přepínač řazení v UI).
-
-### Proč zrovna tahle čísla (měření managera, 4. 8., 104 náhodných dvojic zastávek, po 8:00)
-
-| | medián | p90 | maximum |
-|---|---|---|---|
-| přímý spoj | 10 min | 18 min | **22 min** |
-| s přestupem | 26 min | 41 min | **52 min** |
-
-Nejhorší reálná jízda po KV je 52 min → strop 75 min má rezervu na výluky a řídké víkendové jízdní řády
-a neuřízne nic reálného. **Všechny tři limity jsou parametry, ne konstanty** — až přibudou příměstské
-linky (Ostrov, Nejdek), zvedne se číslo, ne logika.
+## How to start
+1. "Use skill **kod-jadro**."
+2. Read `CLAUDE.md`, `scripts/journey.js`, `scripts/journey.test.js`,
+   `index_raw.html` (`renderSearchResults` ~line 1135), and this file.
 
 ---
 
-## KROK 1 — `scripts/journey.js`: nové volby a nové pořadí operací
+## What Joe found (Tue 2026-08-04, 11:21, Okružní → Tržnice)
 
-### 1a) Nové `opts` v `planJourney` (s defaulty)
+The Departures tab shows a bus at 11:42 (line 13) that reaches Tržnice at 11:55 — 13 minutes.
+The search did not offer it at all. In the data it exists as:
+
+```
+11:42 → 11:55 | 13 min | 13→11 @Horní nádraží | wait 0 min
+```
+
+Line 13 **terminates** at Horní nádraží, line 11 **starts** there, and the wait is 0 minutes — the
+bus effectively continues under a different number. Two problems came out of this:
+
+**Problem A — `minTransfer: 3` throws it away.** The connection has a 0-minute wait, so it never
+survives. What is left are far worse variants (13→15 via Rozcestí u Koníčka, 24 min).
+
+**Problem B — "direct first" is the wrong primary rule.** Even if the journey survived, `SORTERS.smart`
+would push it below every direct connection — although it **departs earlier (11:42 vs 11:54) and
+arrives earlier (11:55 vs 12:06)** than the first direct one. Category must not beat time.
+
+### Data check done by the manager (do not redo it)
+
+- GTFS `block_id` — the standard "this vehicle continues" field — is **empty for all 10 151 trips**,
+  so through-running cannot be read from the data.
+- Across 280 queries (4 times of day × 70 random stop pairs) there are **89 transfers with a 0–2 min
+  wait**; only **8 (9 %)** are terminus-to-origin like 13→11, the other **81 (91 %)** are mid-route
+  (e.g. `6→12 @Tržnice wait 0`, `19→22 @Elite wait 1`).
+- **Joe's decision (2026-08-04), aware of that number: lower `minTransfer` to 0 across the board.**
+  Rationale: it is his personal app, the parameter is one line to revert, and the tight cases will be
+  re-evaluated once GPS and walking distances land (J5 / J9). **Do not implement a heuristic filter
+  instead — the decision is deliberate.** The terminus-to-origin detection below is used **only for
+  the UI label**, never for filtering.
+
+---
+
+## STEP 1 — `scripts/journey.js`
+
+### 1a) Default `minTransfer` 3 → 0
 
 ```js
-const windowMin  = opts.windowMin  != null ? opts.windowMin  : 90;  // odjezdové okno
-const maxTotal   = opts.maxTotal   != null ? opts.maxTotal   : 75;  // strop celkové doby jízdy
-const maxWait    = opts.maxWait    != null ? opts.maxWait    : 40;  // strop čekání na přestupu
+const minTransfer = opts.minTransfer != null ? opts.minTransfer : 0;
 ```
-`minTransfer`, `limit`, `maxTransfers`, `sort` zůstávají jak jsou.
+Stays a parameter. Nothing else about transfers changes.
 
-### 1b) Nový default řazení `smart`
+### 1b) `throughService` flag (label only, no filtering)
 
-Do `SORTERS` přidej klíč (**stávající klíče neměň, jsou v testech a v budoucím UI přepínači**):
+When building a transfer itinerary, mark whether the transfer stop is the **last** stop of leg 1's
+pattern and the **first** stop of leg 2's pattern:
+
+```js
+const p1 = net.patterns[leg1.patternId];
+const p2 = net.patterns[leg2.patternId];
+it.throughService = p1.stops[p1.stops.length - 1] === leg1.to && p2.stops[0] === leg2.from;
+```
+Note this is inherently limited to a literally identical stop ID, so a co-located sibling (H1d, ≤30 m)
+never counts as through-running. Direct journeys do not get the field.
+
+⚠️ The flag means **"a bus is standing at that stop and leaving now"**, NOT "same vehicle" — that
+cannot be proven from the data. Keep the wording of the UI string (2b) exactly as specified.
+
+### 1c) Pareto filter over (departure, arrival) — NEW step
+
+Drop every itinerary for which another one exists that **departs no earlier and arrives no later**.
+Such an itinerary is worse in both dimensions and must never be shown.
+
+Implement as a single sweep, not O(n²):
+
+```
+1. sort descending by depMin, ascending by arrMin as tie-break
+2. minArr = Infinity
+3. walk the list in groups of equal depMin:
+     gMin = smallest arrMin in the group
+     if (gMin < minArr):
+         keep every member of the group whose arrMin === gMin
+         minArr = gMin
+     else:
+         drop the whole group
+```
+
+Two itineraries with the **same** departure and the **same** arrival but different lines are genuine
+alternatives and both stay (e.g. line 13 and line 15 leaving and arriving at the same minute).
+Within one departure minute, later arrivals are dropped — same departure, worse arrival.
+
+### 1d) `SORTERS.smart` — time decides, direct is only a tie-break
 
 ```js
 smart: (a, b) =>
-  (a.transfers === 0) !== (b.transfers === 0)
-    ? (a.transfers === 0 ? -1 : 1)                 // přímé napřed
-    : a.depMin !== b.depMin ? a.depMin - b.depMin  // pak dřívější odjezd
-    : a.arrMin !== b.arrMin ? a.arrMin - b.arrMin  // pak dřívější příjezd
-    : a.transfers - b.transfers,
+  a.depMin !== b.depMin ? a.depMin - b.depMin      // earlier departure
+    : a.arrMin !== b.arrMin ? a.arrMin - b.arrMin  // then earlier arrival
+    : a.transfers !== b.transfers ? a.transfers - b.transfers  // then direct wins
+    : a.totalMin - b.totalMin,
 ```
-a změň výchozí hodnotu `sortKey` z `"departure"` na `"smart"`.
+The "all direct journeys first" block is **removed**. Other `SORTERS` keys stay untouched.
 
-### 1c) Sloučení duplicit — nahrazuje stávající dedup přes `itineraryKey`
-
-**Proč:** linky, které jedou kus trasy společně, generují N identických výsledků lišících se jen
-přestupní zastávkou. Příklad z dat (Stará Role → Lázně I, neděle 14:26): tři výsledky `3→2`,
-všechny `14:26 → 15:09`, liší se přestupem na Tržnici × Stadionu ZM × Nemocnici. Je to **jedna jízda**
-(stejný autobus 3, stejný autobus 2), jen s volbou, kde přesednout.
-
-⚠️ **Pozor na klíč** — manager na tom naletěl při přípravě ukázky: klíč **nesmí** obsahovat časy
-jednotlivých nohou. Když přestoupíš na jiné zastávce, nastupuješ do druhého autobusu o jinou minutu,
-takže per-leg klíč tři identické jízdy **nesloučí**. Správný klíč:
-
-```js
-function itineraryKey(it) {
-  return `${it.depMin}|${it.arrMin}|${it.legs.map((l) => l.line).join(">")}`;
-}
-```
-
-Slučování zachovej jako jeden průchod: první výskyt je reprezentant, z ostatních se sbírají jen
-přestupní zastávky. Reprezentant dostane nové pole:
-
-```js
-it.viaStops = [ /* pole stop ID, pořadí = pořadí výskytu */ ];
-```
-`transferStop` **zachovej** (= `viaStops[0]`) kvůli zpětné kompatibilitě s testy a UI.
-U přímých spojů `viaStops` nenastavuj (zůstane `undefined`).
-
-### 1d) Tvrdé stropy
-
-Po sloučení zahoď každý itinerář, kde `totalMin > maxTotal` nebo `waitMin > maxWait`
-(u přímých je `waitMin == null` → strop čekání se neaplikuje).
-
-### 1e) Odjezdové okno s automatickým rozšířením
-
-Na výsledek po stropech aplikuj `depMin <= nowMin + windowMin`. **Když je výsledek prázdný**,
-zkus žebřík dalších oken a vezmi první, které něco vrátí:
+### 1e) Order of operations in `planJourney` — updated, binding
 
 ```
-windowMin (90)  →  240  →  bez omezení
+1. build itineraries                       (unchanged)
+2. FIX-B invariant                         (unchanged)
+3. merge duplicates → viaStops             (unchanged)
+4. hard caps (maxTotal / maxWait)          (unchanged)
+5. departure window + widening ladder      (unchanged)
+6. PARETO filter                           (NEW, 1c)
+7. sort via SORTERS[sortKey]               (1d)
+8. slice(0, limit)                         (unchanged)
 ```
-
-Žebřík řeší i noc: hledání ve 23:44 z Krátké má nejbližší přímý spoj 51 až v 01:15, což je
-91 minut — o minutu mimo základní okno. Bez rozšíření by appka v noci nenašla nic.
-
-Ladění pro večer/víkend (Joe: „ještě doladíme") se pak dělá **jen změnou těch tří čísel**,
-ne zásahem do logiky.
-
-### 1f) Pořadí operací v `planJourney` — závazné
-
-```
-1. sestavení itinerářů (beze změny)
-2. invariant FIX-B: zahoď arrMin <= depMin, waitMin < 0   (beze změny)
-3. sloučení duplicit  (1c)
-4. tvrdé stropy       (1d)
-5. odjezdové okno + žebřík rozšíření (1e)
-6. řazení SORTERS[sortKey]  (default 'smart')
-7. slice(0, limit)
-```
-**Limit až úplně na konci** — jinak se filtruje už useknutý seznam (přesně tahle chyba je
-za dnešním chováním).
+**Pareto runs after the window**, never before — an itinerary outside the window must not delete a
+visible one.
 
 ---
 
-## KROK 2 — `index_raw.html`: volání a zobrazení
+## STEP 2 — `index_raw.html` + `index.html`
 
-### 2a) `doSearch` (~ř. 1130)
+### 2a) No change to `doSearch`
 
-```diff
--  searchResults = window.MHDJourney.planJourney(NET, from, to, { date, nowMin, sort: 'departure', limit: 8 });
-+  searchResults = window.MHDJourney.planJourney(NET, from, to, { date, nowMin, limit: 8 });
-```
-(Bez `sort` → použije se nový default `smart`. Limity ber z defaultů jádra, do UI je zatím nepiš —
-ať je na ně jedno místo.)
+The call stays as it is; the new behaviour comes from the core defaults.
 
-### 2b) Hláška „mimo okno"
+### 2b) Transfer line in the card — distinguish the wait
 
-Když výsledky jsou, ale první odjíždí až za okamžikem hledání + 90 min, ukaž nad kartami řádek:
+Extend the existing transfer info line (~lines 1158–1163). **Czech UI strings, keep verbatim:**
 
-```
-Nejbližší spoj až v 09:44.
-```
-Detekce v UI, bez změny API jádra: `searchResults[0].depMin > nowMin + 90`.
-Konstantu `90` dej do jedné proměnné nahoře v UI (`const SEARCH_WINDOW_MIN = 90;`), ať se to nerozejde
-s jádrem. Styl řádku vezmi ze stávajícího `.search-empty` nebo obdobného — **nový CSS nevymýšlej**,
-Joe je arbitr vzhledu a doladí si to.
+| condition | string |
+|---|---|
+| `throughService === true` | `Přestup: Horní nádraží · bus navazuje okamžitě` |
+| `waitMin <= 2` and not through | `Přestup: Tržnice · čekání 0 min — velmi těsné` |
+| otherwise | `Přestup: Tržnice / Nemocnice · čekání 12 min (stejné místo)` (today's format) |
 
-Reálný případ, na kterém to otestuj: Globus → Nádraží Dalovice, pondělí 8:00 → první spoj 09:44.
-Není to chyba, tam prostě dřív nic nejede — ale appka to musí říct, jinak vypadá rozbitě.
+Stop names still come from `viaStops` via `stopDisplayName()`, joined by ` / `.
+No new CSS — reuse what the card already uses. Joe is the UX arbiter and will tune the look himself.
 
-### 2c) Přestupní zastávky v kartě (~ř. 1158–1163)
+### 2c) `index.html`
 
-Místo jedné zastávky vypiš všechny z `viaStops`, oddělené ` / `:
-
-```
-Přestup: Tržnice / Stadion ZM / Nemocnice · čekání 43 min (stejné místo)
-```
-Použij stávající `stopDisplayName()`. Když `viaStops` chybí (starší data / přímý spoj), chovej se
-jako dnes (fallback na `transferStop`).
-
-### 2d) `index.html`
-
-Po dokončení zkopíruj `index_raw.html` → `index.html` (jsou identické) a **commitni oba**.
+Copy `index_raw.html` → `index.html` and **commit both**.
 
 ---
 
-## KROK 3 — testy (`scripts/journey.test.js`)
+## STEP 3 — tests (`scripts/journey.test.js`)
 
-Přidej scénáře; formát a tolerantní výpis drž jako u stávajících testů (tenhle soubor **není** guard,
-takže smí být přísnější než `verify_network.js`).
+Extend the J4-sort block. Keep the existing scenarios; they must still pass except where noted.
 
-| scénář | vstup | očekávání |
+| scenario | input | expectation |
 |---|---|---|
-| den ráno | Tržnice→Okružní, `20260804` 8:00 | 1. výsledek **přímo linka 13, 08:06 → 08:18** |
-| den odpoledne | Tržnice→Okružní, `20260804` 15:30 | 1. výsledek **přímo linka 13, 15:30 → 15:42** |
-| noc (žebřík oken) | Krátká→Tržnice, `20260803` 23:44 | 1. výsledek **přímo linka 51, 01:15 → 01:30** |
-| sloučení duplicit | Stará Role→Lázně I, `20260809` (ne) 14:00 | existuje výsledek `14:26 → 15:09` s **`viaStops.length === 3`**; žádné dva výsledky nemají shodnou trojici (depMin, arrMin, linky) |
-| hluché období | Globus→Nádraží Dalovice, `20260804` 8:00 | výsledky nejsou prázdné, 1. odjezd **09:44** (test podmínky pro hlášku) |
-| **invarianty globálně** | všechny scénáře výše | každý výsledek: `arrMin > depMin`, `totalMin > 0`, `totalMin <= 75`, `waitMin == null \|\| (waitMin >= 0 && waitMin <= 40)` |
+| **Joe's case** | Okružní→Tržnice, `20260804` 11:21 | 1st result **11:42 → 11:55, 13 min, lines 13→11, `throughService === true`, `waitMin === 0`** |
+| morning (regression) | Tržnice→Okružní, `20260804` 08:00 | 1st result direct line 13, 08:06 → 08:18 |
+| night (regression) | Krátká→Tržnice, `20260803` 23:44 | 1st result direct line 51, 01:15 → 01:30 |
+| dead period (regression) | Globus→Nádraží Dalovice, `20260804` 08:00 | 1st departure 09:44 |
+| **Pareto invariant** | all scenarios | for no result does another result exist with `depMin >= mine && arrMin < mine` |
+| invariants (keep) | all scenarios | `arrMin > depMin`, `totalMin ∈ (0; 75]`, `waitMin == null \|\| (0 ≤ waitMin ≤ 40)` |
 
-Noční invariant z J4-fix ponech, ať nezmizí regresní pojistka.
+⚠️ **The "duplicate merging" scenario (Stará Role→Lázně I, Sunday 14:00) changes** — with
+`minTransfer: 0` and Pareto the previous `14:26 → 15:09 / viaStops.length === 3` result is dominated
+and disappears. Rewrite that assertion: check merging on whatever result the new pipeline returns
+(any itinerary with `viaStops.length > 1`), or move the check to a scenario where merging still
+occurs. **Do not weaken the merging logic to keep the old test green.**
 
 ---
 
-## DŮKAZ / ověření
+## PROOF / verification
 
-1. `node scripts/journey.test.js` → všechny scénáře PASS (staré i nové).
-2. `node scripts/routing.test.js` a `node scripts/timetable.test.js` → beze změny (sanity check).
-3. `node scripts/verify_network.js` → **dál 26/26 PASS**. Guard se nemění a měnit nesmí.
-4. Ruční kontrola v Node, výpis vlož do `VÝSLEDEK`:
+1. `node scripts/journey.test.js` → all scenarios PASS.
+2. `node scripts/routing.test.js`, `node scripts/timetable.test.js` → unchanged.
+3. `node scripts/verify_network.js` → **20/20 PASS** (this is the correct baseline after J8-hotfix;
+   the previous spec said 26/26, that was the manager's error).
+4. Manual check, paste into `RESULT`:
    ```
    node -e "const {planJourney}=require('./scripts/journey.js');const net=require('./data/network.json');
-   console.log(planJourney(net,'Tržnice','Okružní',{date:'20260804',nowMin:480}))"
+   console.log(planJourney(net,'Okružní','Tržnice',{date:'20260804',nowMin:681}))"
    ```
-   První karta musí být přímá linka 13 v 08:06, v celém výstupu žádný `totalMin > 75`.
 5. Commit: `scripts/journey.js`, `scripts/journey.test.js`, `index_raw.html`, `index.html`.
-6. Do `VÝSLEDEK`: co se změnilo v `planJourney`, jestli žebřík oken někde zafungoval jinak,
-   než spec předpokládá, a případné nálezy.
+6. Into `RESULT`: what changed, and whether the Pareto sweep removed anything you did not expect.
 
-**Vizuální test na GitHub Pages dělá manager / Joe — ty prohlížeč nemáš.**
+**Visual testing on GitHub Pages is done by the manager / Joe — you have no browser.**
 
-## Co NESAHAT
+## DO NOT TOUCH
 
 - `scripts/routing.js`, `scripts/timetable.js`, `scripts/build_network.js`, `scripts/verify_network.js`,
   `scripts/update_data.js`, `.github/workflows/update-data.yml`, `data/`.
-- Stávající klíče v `SORTERS` (`departure`, `arrival`, `duration`, `transfers`) — jen přidáváš `smart`.
-- Logiku `transferItineraries` / `directItineraries` z J4-fix (monotónní časová osa). Filtrování
-  a řazení je až nad nimi.
-- Vzhled karet nad rámec bodů 2b a 2c — Joe je arbitr UX a doladí si to sám.
+- `transferItineraries` / `directItineraries` time logic from J4-fix (monotonic time axis).
+- The window ladder, the caps and the merging from J4-sort — they work, only the two steps above change.
+- `SORTERS` keys `departure`, `arrival`, `duration`, `transfers`.
 
-## Ověřeno managerem předem (4. 8. 2026) — takhle to má vypadat
+## Verified by the manager in advance (2026-08-04) — this is what it should look like
 
-Manager si celý spec (pořadí operací 1f včetně žebříku oken a `smart` řazení) nasimuloval nad
-`data/network.json` **bez zásahu do kódu**. Tohle jsou reálné výstupy — testy v KROKU 3 na ně sedí:
+Simulated against `data/network.json` with the exact pipeline from 1e, **without touching the code**:
 
 ```
-### den ráno   Tržnice→Okružní   okno=90
-   08:06 → 08:18 | 12m | PŘÍMO 13
-   08:29 → 08:39 | 10m | PŘÍMO 15
-   08:40 → 08:52 | 12m | PŘÍMO 13
-   …
-   08:06 → 08:39 | 33m | přestup 13→15 @Rozcestí u Koníčka/Pivovar/Keramická škola (čekání 21)
+### Joe's case   Okružní→Tržnice, Tue 11:21
+   11:42 → 11:55 | 13m | THROUGH 13→11 @Horní nádraží (wait 0)   ← was missing entirely
+   11:54 → 12:06 | 12m | DIRECT 15
+   12:14 → 12:26 | 12m | DIRECT 15
+   12:14 → 12:26 | 12m | transfer 15→12 @Pivovar (wait 0)
+   12:22 → 12:35 | 13m | DIRECT 13
+   12:34 → 12:46 | 12m | DIRECT 15
 
-### noc 23:44   Krátká→Tržnice   okno=240  (základní 90 min bylo prázdné → žebřík zafungoval)
-   01:15 → 01:30 | 15m | PŘÍMO 51
-   03:05 → 03:20 | 15m | PŘÍMO 51
-   03:05 → 03:54 | 49m | přestup 51→6 @Prašná/Drahomíra (čekání 20)
-
-### neděle 14:00   Stará Role→Lázně I   okno=90   (kontrola slučování)
-   14:26 → 15:09 | 43m | přestup 3→2 @Tržnice/Stadion ZM/Nemocnice (čekání 15)   ← viaStops.length === 3
-
-### hluché období   Globus→Nádraží Dalovice   okno=240
-   09:44 → 10:31 | 47m | přestup 1→19 @Tržnice (čekání 3)   ← spouští hlášku „Nejbližší spoj až v 09:44"
+### morning      Tržnice→Okružní, 08:00      1st: 08:06 → 08:18 DIRECT 13
+### night        Krátká→Tržnice, 23:44       1st: 01:15 → 01:30 DIRECT 51 (window ladder → 240)
+### dead period  Globus→Nádraží Dalovice     1st: 09:44 → 10:31 transfer 1→19 @Tržnice
+### Sunday       Stará Role→Lázně I, 14:00   1st: 14:01 → 14:29 transfer 15→2 @Tržnice (wait 0)
 ```
 
-Ve všech pěti scénářích prošly invarianty (`arrMin > depMin`, `totalMin ∈ (0; 75]`,
-`waitMin ∈ [0; 40]`). **Když ti něco z tohohle nevyjde, je chyba v implementaci, ne v datech** —
-napiš to do `VÝSLEDEK` a nedolaďuj čísla limitů na vlastní pěst.
+Pareto invariant held in all five. The `wait 0` entries at Pivovar and Tržnice are the expected
+consequence of `minTransfer: 0` — Joe accepted that trade-off knowingly, do not filter them out.
 
-## VÝSLEDEK (vyplní executor)
+## RESULT (filled in by the executor)
 
-**Hotovo, dle specu, nic nad zadání.** Commitnuto: `scripts/journey.js`, `scripts/journey.test.js`,
-`index_raw.html`, `index.html`.
+**Done, all steps per spec.**
 
-### Co se změnilo v `planJourney` (`scripts/journey.js`)
+- **`scripts/journey.js`:**
+  - `minTransfer` default `3 → 0` (1a), one-line change, stays a parameter.
+  - `throughService` flag added to transfer itineraries (1b) — literal last-stop-of-leg1 /
+    first-stop-of-leg2 comparison, label only, never used for filtering.
+  - New `paretoFilter()` (1c) — single sweep as specified (sort desc by `depMin`/asc `arrMin`,
+    walk equal-`depMin` groups, keep while `arrMin` strictly improves). Verified against the
+    manual invariant check in tests (no result dominated by another with `depMin >= mine && arrMin
+    < mine`).
+  - `SORTERS.smart` rewritten (1d) — `depMin → arrMin → transfers → totalMin`. The old "all direct
+    first" block is gone; `transfers` is now only the tie-break, exactly at the position the spec
+    describes.
+  - `planJourney` order of operations updated (1e): merge → caps → window ladder → **Pareto** →
+    sort → `slice(limit)`. Pareto runs after the window, as required.
+- **`index_raw.html` / `index.html`:** transfer line now branches on `throughService` /
+  `waitMin <= 2` / default, exact Czech strings from the spec table. Copied and diffed identical.
+- **`scripts/journey.test.js`:** added the "Joe's case" scenario (Okružní→Tržnice, 11:21) asserting
+  the exact through-service result; added `checkParetoInvariant()` and ran it on every J4-sort
+  scenario; rewrote the duplicate-merging assertion per the spec's warning — the old `viaStops.length
+  === 3` result at 14:26→15:09 is now dominated and gone (expected, not a regression), the check now
+  asserts any result with `viaStops.length > 1` exists (currently 14:01→14:29, length 2) and keeps
+  the existing "no duplicate (depMin,arrMin,lines) keys" and invariant checks.
 
-- Nové `opts` s defaulty: `windowMin=90`, `maxTotal=75`, `maxWait=40` (1a).
-- Nový `SORTERS.smart` (přímé napřed → dřívější odjezd → dřívější příjezd → míň přestupů) a je to
-  nový default místo `departure` (1b). Staré klíče (`departure`/`arrival`/`duration`/`transfers`)
-  beze změny.
-- `itineraryKey` přepsán na `depMin|arrMin|linky` (bez per-leg časů) + nová `mergeDuplicates()` —
-  první výskyt = reprezentant, další duplicity přidají svoji `transferStop` do `it.viaStops`
-  (jen když je aspoň jedna duplicita; `transferStop` zůstává beze změny) (1c).
-- Nové `applyCaps()` (zahodí `totalMin > 75` nebo `waitMin > 40`, u přímých se `waitMin` neaplikuje) (1d).
-- Nové `applyWindowLadder()` — zkusí `windowMin` (90) → 240 → `Infinity`, vezme první neprázdný
-  výsledek (1e).
-- Pořadí v `planJourney` přesně dle 1f: sestavení → FIX-B invariant → merge → stropy → okno+žebřík →
-  `SORTERS[sortKey]` → `slice(0, limit)`. Limit je teď fakt až na konci.
-- `scripts/routing.js`, `scripts/timetable.js` ani nic v „Co NESAHAT" nedotčeno.
+**Pareto sweep — what it actually removed:** exactly what the spec predicted, nothing more. Manually
+diffed the Okružní→Tržnice 11:21 case against the manager's pre-verified simulation table — the six
+survivors match it exactly, including the transfer-via-Pivovar entry merged to `viaStops.length ===
+2`. In the duplicate-merge scenario (Stará Role→Lázně I, Sun 14:00) Pareto removed the slower/later
+`14:26→15:09` triple-merge in favor of the earlier-and-faster `14:01→14:29` pair — the "vedlejší
+efekt" TASK.md already flagged as expected fallout of `minTransfer: 0`, now made visible by Pareto
+too. No other scenario lost a result that looked like it belonged.
 
-### Žebřík oken — chovalo se přesně podle specu
+**PROOF:**
+1. `node scripts/journey.test.js` → all scenarios OK (`OK: J4-sort — všechny scénáře a invarianty
+   prošly`), including the new Joe's-case and Pareto-invariant checks.
+2. `node scripts/routing.test.js`, `node scripts/timetable.test.js` → unchanged, no FAIL.
+3. `node scripts/verify_network.js` → **20/20 PASS** (confirmed baseline, matches spec).
+4. Manual check (`planJourney(net,'Okružní','Tržnice',{date:'20260804',nowMin:681})`) — first result:
+   `depMin:702 (11:42), arrMin:715 (11:55), totalMin:13, transfers:1, legs 13→11, transferStop:'S12',
+   waitMin:0, throughService:true`. Matches the manager's simulated table exactly, entry for entry
+   (through-13→11 first, then direct 15, direct 15, transfer 15→12 @Pivovar, direct 13, direct 15).
+5. Commit: `scripts/journey.js`, `scripts/journey.test.js`, `index_raw.html`, `index.html`, plus the
+   manager's already-pending `CLAUDE.md`/`TASK.md` doc updates and this `handoff.md` (bundled per the
+   usual "next executor run commits pending docs" pattern), and `changelog.md`.
 
-Oba scénáře, které manager předem označil jako „základní okno prázdné → žebřík zafungoval", se
-chovaly přesně takhle i v implementaci: noc 23:44 (Krátká→Tržnice) i hluché období (Globus→Nádraží
-Dalovice) obě potřebovaly rozšíření na 240 min, než se něco našlo. Žádné překvapení oproti specu.
+Not touched: `scripts/routing.js`, `scripts/timetable.js`, `scripts/build_network.js`,
+`scripts/verify_network.js`, `scripts/update_data.js`, workflow, `data/`, the J4-fix time logic, the
+window ladder / caps / merging, or `SORTERS.departure/arrival/duration/transfers`.
 
-### KROK 2 (`index_raw.html`)
-
-- `doSearch`: `sort: 'departure'` odstraněno z volání `planJourney` (2a), přidáno `searchNowMin`
-  (ukládá `nowMin` použitý při hledání, potřebné pro hlášku 2b).
-- Nová konstanta `SEARCH_WINDOW_MIN = 90` nahoře u `let NET = null;` bloku.
-- `renderSearchResults`: když `searchResults[0].depMin > searchNowMin + SEARCH_WINDOW_MIN`, vloží
-  se řádek `<div class="search-empty">Nejbližší spoj až v HH:MM.</div>` nad karty (2b, žádné nové
-  CSS — recyklováno `.search-empty`).
-- Karta přestupu (2c): místo jedné `transferStop` teď vypisuje všechny `it.viaStops` (fallback na
-  `[it.transferStop]`, když `viaStops` chybí) přes existující `stopDisplayName()`, oddělené ` / `.
-- `index.html` zkopírován z `index_raw.html` (`diff` čistý).
-
-### KROK 3 (testy)
-
-Do `scripts/journey.test.js` přidán blok „J4-sort: pravidla malého města" se všemi scénáři z tabulky
-v zadání (den ráno, den odpoledne, noc/žebřík, sloučení duplicit, hluché období) + globální kontrola
-invariantů (`arrMin>depMin`, `0<totalMin<=75`, `waitMin` buď `null`, nebo `0..40`). Všechny scénáře
-sedí přesně na čísla z manager sekce „Ověřeno managerem předem".
-
-### DŮKAZ
-
-1. `node scripts/journey.test.js` → 0 FAIL, `OK: J4-sort — všechny scénáře a invarianty prošly`.
-2. `node scripts/routing.test.js`, `node scripts/timetable.test.js` → beze změny, PASS.
-3. `node scripts/verify_network.js` → **20/20 PASS** (ne 26/26 — baseline se snížil už v J8-hotfixu
-   2.8., kdy H1a-d testy přešly z guardu do `routing.test.js`; guard samotný jsem nesahal, číslo
-   20/20 je aktuální nezměněný stav, ne regrese). Zapisuji, protože zadání čekalo „dál 26/26" — je to
-   jen zastaralá reference v handoffu, ne problém v implementaci.
-4. Ruční kontrola (Tržnice→Okružní, `20260804` 8:00): první karta **přímo linka 13, 08:06 → 08:18**,
-   v celém výstupu (8 karet) max `totalMin` je **44** — žádná karta nad 75. Přesný výstup viz commit.
-
-### Nálezy
-
-- Žádné odchylky od specu — spec seděl na první pokus, jen jsem musel opravit vlastní chybu v testu
-  (porovnání `leg.line` jako string vs. number — `line` je v datech `number`, ne string; opraveno
-  přes `String(...)`, netýká se produkčního kódu).
-- Necommitnuté manager docs (`CLAUDE.md`, `TASK.md`, `handoff.md`) byly na začátku session — commitnuty
-  samostatně jako první commit, než začala samotná J4-sort práce (dle bodu 3 „Jak začít").
+Visual testing on GitHub Pages not done (no browser here) — over to manager/Joe.

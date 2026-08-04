@@ -29,8 +29,12 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
 
 ## Předávka dalšímu manažerovi (2026-08-04, aktualizováno večer)
 
-- **`handoff.md` je ZADANÁ, nevyčerpaná** — obsahuje spec **J4-sort** pro Claude Code. Do kódu se
-  zatím nesáhlo; čeká se, až Joe spustí executora.
+- **J4-sort HOTOVÝ a pushnutý** (executor, 4. 8.). **`handoff.md` je ZADANÁ znovu — spec `J4-sort-2`**
+  z Joeova živého testu: `minTransfer` plošně na 0 (průjezdné spoje typu 13→11 na Horním nádraží),
+  **Pareto filtr** místo pravidla „přímé napřed", příznak `throughService` pro popisek v kartě.
+  Detail a naměřená rizika v `TASK.md` → „J4-sort-2".
+- **Baseline `verify_network.js` je 20/20, ne 26/26** — J8-hotfix přesunul H1a–d do `routing.test.js`.
+  (V předchozím zadání jsem měl 26/26 chybně, executor to udělal správně.)
 - **Rozhodnutí J4-sort (Joe, 4. 8.) — „pravidla malého města":** odjezdové okno 90 min (žebřík
   rozšíření 90 → 240 → bez omezení), uvnitř okna **nejdřív přímé spoje, pak přestupy**, strop jízdy
   75 min a čekání 40 min (vše jako parametry), sloučení identických jízd do jedné karty.
@@ -76,6 +80,24 @@ Práce běží přes dvě „Claude" plochy; sdílený kanál = **soubory v tét
 
 **Pravidla:** na souborech pracuje **jen jeden agent naráz** (mezi úkoly je
 `handoff.md` „prázdná"). Executor nepřidává nic nad zadání; nápady → `TASK.md`.
+
+## Jazyková dělba (od 2026-08-04)
+
+Čeština stojí [ODHAD] 1,8–2,5× víc tokenů než stejný obsah anglicky a executor si při každém
+běhu načítá desítky kB dokumentace. Proto:
+
+| Anglicky | Česky |
+|---|---|
+| `handoff.md` (zadání i sekce `RESULT`) | komunikace Joe ↔ manager |
+| komentáře v kódu, commit messages | `CLAUDE.md`, `TASK.md`, `docs/*.md` |
+| zápisy executora do `changelog.md` | zápisy managera do `changelog.md` |
+| interní práce executora | **všechny stringy v UI a názvy zastávek** |
+
+- **Nikdy nepřekládej:** texty, které vidí uživatel v appce (`Nejbližší spoj až v 09:44`,
+  `Přestup: …`, názvy tabů), názvy zastávek a linek z dat, a pojmy, na kterých se Joe dohodl
+  česky („odjezdové okno").
+- V `handoff.md` má hlavičku pravidlo o jazyce hned nahoře, ať to executor nepřehlédne.
+- Manager (Cowork) mluví s Joem **vždy česky**, interní práci vede anglicky.
 
 ## Jak pracovat
 

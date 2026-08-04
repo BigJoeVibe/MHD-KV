@@ -7,6 +7,31 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-08-05 — v0.1.0 (J4-sort-2: Pareto ordering + through-running services)
+
+- **`scripts/journey.js`:** `minTransfer` default `3 → 0` (Joe's decision 2026-08-04 — tight
+  terminus-to-origin transfers like line 13→11 @Horní nádraží no longer get thrown away). New
+  `throughService` flag on transfer itineraries (last stop of leg1's pattern === first stop of
+  leg2's pattern) — label only, never a filter, since GTFS `block_id` is empty for all trips and
+  can't prove same-vehicle. New `paretoFilter()`: drops any itinerary dominated by another that
+  departs no earlier and arrives no later; single sweep, not O(n²). `SORTERS.smart` rewritten —
+  time decides first (`depMin`, then `arrMin`), direct-vs-transfer is now only the tie-break
+  instead of the primary rule. `planJourney` pipeline order: merge → caps → window ladder →
+  **Pareto** (new) → sort → limit; Pareto runs after the window so an out-of-window itinerary can
+  never delete a visible one.
+- **`index_raw.html` / `index.html`:** transfer card label now distinguishes `throughService`
+  ("bus navazuje okamžitě"), a tight `waitMin <= 2` wait ("velmi těsné"), and the normal case.
+- **`scripts/journey.test.js`:** added Joe's live-test scenario (Okružní→Tržnice, Tue 11:21) —
+  asserts the 13→11 through-transfer is now first, with `throughService === true` and `waitMin ===
+  0`. Added a Pareto-invariant check (no result dominated by another) run across every J4-sort
+  scenario. Rewrote the duplicate-merge assertion — with `minTransfer: 0` the old
+  14:26→15:09/`viaStops.length===3` result is now itself dominated and gone (expected, not a
+  regression); the check now asserts merging still happens on whatever the pipeline returns.
+- **Verified:** `journey.test.js` all scenarios OK; `routing.test.js`/`timetable.test.js` unchanged;
+  `verify_network.js` 20/20 PASS. Manual check against the manager's pre-verified simulation table
+  for Okružní→Tržnice 11:21 matches exactly, all six results in the same order. Detail in
+  `handoff.md` → RESULT.
+
 ## 2026-08-04 — v0.1.0 (J4-sort: pravidla malého města ve výsledcích hledání)
 
 - **`scripts/journey.js` — nové domain limity a přepracované pořadí operací v `planJourney`**

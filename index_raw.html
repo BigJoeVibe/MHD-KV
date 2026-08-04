@@ -1167,8 +1167,16 @@ function renderSearchResults() {
         const s = NET.stops[id];
         return s ? stopDisplayName(s.n) : '';
       }).join(' / ');
-      const walkNote = it.walkMin === 0 ? 'stejné místo' : `${it.walkMin} min pěšky`;
-      html += `<div class="journey-transfer-info">Přestup: ${transferName} · čekání ${it.waitMin} min (${walkNote})</div>`;
+      let transferLine;
+      if (it.throughService) {
+        transferLine = `Přestup: ${transferName} · bus navazuje okamžitě`;
+      } else if (it.waitMin <= 2) {
+        transferLine = `Přestup: ${transferName} · čekání ${it.waitMin} min — velmi těsné`;
+      } else {
+        const walkNote = it.walkMin === 0 ? 'stejné místo' : `${it.walkMin} min pěšky`;
+        transferLine = `Přestup: ${transferName} · čekání ${it.waitMin} min (${walkNote})`;
+      }
+      html += `<div class="journey-transfer-info">${transferLine}</div>`;
     }
     html += `</div>`;
   }

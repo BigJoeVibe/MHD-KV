@@ -52,7 +52,40 @@ Krátká→Tržnice ve 23:44 i denní scénáře (8:00, 15:30, 15:51, sobota 10:
 `arr > dep`, `total > 0`, `wait ≥ 0`. Žádná záporná doba jízdy, konzole bez chyb, „Jindy" i „Teď"
 fungují. Regrese žádná.
 
-**✅ J4-sort — ROZHODNUTO 4. 8. 2026 (Joe), spec v `handoff.md`, ⭐ čeká na executora.**
+**🔴 J4-sort-2 — ROZHODNUTO 4. 8. 2026 večer (Joe) po živém testu, spec v `handoff.md`, ⭐ čeká na executora.**
+
+J4-sort je nasazený a funguje dle zadání, ale Joeův test (út 4. 8., 11:21, Okružní → Tržnice) odhalil
+dvě chyby v samotném zadání:
+
+- **Chyba A — `minTransfer: 3` zahazuje průjezdné spoje.** Spoj `11:42 → 11:55 | 13→11 @Horní nádraží |
+  čekání 0` v hledání vůbec nebyl, přestože v Odjezdech je. Linka 13 na Horním nádraží končí, linka 11
+  tam začíná — bus fakticky pokračuje pod jiným číslem.
+- **Chyba B — pravidlo „přímé napřed" je špatné.** Ten spoj odjíždí dřív (11:42 × 11:54) **i** přijíždí
+  dřív (11:55 × 12:06) než první přímý, a přesto by skončil pod všemi přímými. **Rozhodovat musí čas,
+  kategorie až při shodě.** → zavádí se **Pareto filtr** (zahoď variantu, ke které existuje jiná, co
+  odjíždí stejně/později a přijíždí stejně/dřív) + chronologické řazení.
+
+**Zjištění k datům (manager, 4. 8.):** GTFS `block_id` (standardní pole „vůz pokračuje") je **prázdné
+u všech 10 151 spojů** → průjezdnost se z dat vyčíst nedá. Změřeno na 280 dotazech: přestupů s čekáním
+0–2 min je 89, z toho **8 (9 %) průjezdných** (konečná + výchozí) a **81 (91 %) uprostřed trasy**
+(`6→12 @Tržnice 0 min`, `19→22 @Elite 1 min`) — ty jsou reálně nechytatelné.
+
+**ROZHODNUTÍ (Joe, se znalostí toho čísla): `minTransfer` plošně na 0.** Zdůvodnění: osobní appka,
+parametr je jednořádkový návrat, těsné případy se vyhodnotí, až přibude GPS a dochozí vzdálenosti
+(J5 / J9). Heuristika „konečná + výchozí" se **nepoužije jako filtr**, jen jako příznak
+`throughService` pro popisek v kartě (`Přestup: … · bus navazuje okamžitě` × `čekání 0 min — velmi těsné`).
+Popisek záměrně netvrdí „stejný vůz" — to z dat nevíme.
+
+**Vedlejší efekt k pozorování v provozu:** v neděli 14:00 (Stará Role → Lázně I) je nově první výsledek
+`14:01 → 14:29, přestup 15→2 @Tržnice, čekání 0` — přesně ten typ, který Pareto vytáhne nahoru, protože
+je nejrychlejší. Tohle je materiál pro rozhodnutí u J5/J9.
+
+📌 **Nedořešeno:** průjezdný spoj, který mění číslo linky **uprostřed trasy** (ne na konečné), příznak
+`throughService` nenajde. Jestli takový v KV existuje, z dat nezjistíme — ukáže až test v terénu.
+
+---
+
+**✅ J4-sort — ROZHODNUTO 4. 8. 2026 (Joe), HOTOVO a pushnuto 4. 8. (executor).**
 
 **Pravidla malého města** — motor dostane domain limity, protože KV nejsou Praha:
 
