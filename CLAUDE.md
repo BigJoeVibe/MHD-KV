@@ -14,23 +14,33 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
 - **Repo (GitHub):** `BigJoeVibe/MHD-KV`, branch `main`
 - **Aktuální verze:** v0.1.0 (F1 komplet). Schéma: 0.x = vývojové/testovací
   verze; 1.0.0 přijde, až appka pokryje širší cíl (rozhodnuto 17. 7. 2026).
-- **Stav (k 3. 8. 2026):** appka běží na GitHub Pages, git dělá Claude Code (executor).
+- **Stav (k 4. 8. 2026):** appka běží na GitHub Pages, git dělá Claude Code (executor).
   **Jádro vyhledávání A→B je hotové a ověřené:** **J1** síťový model (`data/network.json`),
   **J2** routing (`routing.js`), **J3** časová vrstva (`timetable.js` + `journey.js`/`planJourney`),
   **JH** zpevnění jádra (bez Pareto, 2 přestupy, smyčky, co-located ≤30 m).
   **J8** automatická denní obnova dat (GitHub Actions + guard) **BĚŽÍ** — lekce: neklíčovat na
   volatilní `JDFS-`/`S#`/`P#` (J8-fix), guard testuje jen build-invarianty, ne snímek (J8-hotfix).
   **J4 (UI „Hledat spojení") — Předávka 1 HOTOVÁ** (4. tab, formulář Odkud/Kam, karty z `planJourney`;
-  moduly v prohlížeči přes IIFE). **Běží J4-fix** (noční přestup přes půlnoc vracel zápornou dobu).
-  Další: dokončit J4-fix → **J4 Předávka 2** (GPS „Moje poloha" + doladění). Detail: `TASK.md` (sekce TEĎ),
+  moduly v prohlížeči přes IIFE). **J4-fix HOTOVÝ** (noční přestup přes půlnoc vracel zápornou dobu)
+  **a ověřený na Pages 4. 8.** — invariant drží v noci i ve dne, regrese žádná.
+  Další: **J4-sort ✅ ROZHODNUTO 4. 8., spec v `handoff.md`, čeká na executora** → **J4 Předávka 2**
+  (GPS „Moje poloha" + doladění). Detail: `TASK.md` (sekce TEĎ),
   poslední `changelog.md`, aktivní `handoff.md`.
 
-## Předávka dalšímu manažerovi (2026-08-03)
+## Předávka dalšímu manažerovi (2026-08-04, aktualizováno večer)
 
-- **Rozpracováno:** `handoff.md` má spec **J4-fix** — bug v `journey.js`: noční přestup přes půlnoc
-  (leg1 pozdě večer → leg2 až ráno) vracel **zápornou dobu jízdy** a řadil se nahoru. Executor to dělá.
-  **Nejdřív přečti jeho `VÝSLEDEK` v `handoff.md` + poslední `changelog.md`, ověř** (noční hledání
-  Krátká→Tržnice nesmí mít žádný záporný `totalMin`), teprve pak pokračuj.
+- **`handoff.md` je ZADANÁ, nevyčerpaná** — obsahuje spec **J4-sort** pro Claude Code. Do kódu se
+  zatím nesáhlo; čeká se, až Joe spustí executora.
+- **Rozhodnutí J4-sort (Joe, 4. 8.) — „pravidla malého města":** odjezdové okno 90 min (žebřík
+  rozšíření 90 → 240 → bez omezení), uvnitř okna **nejdřív přímé spoje, pak přestupy**, strop jízdy
+  75 min a čekání 40 min (vše jako parametry), sloučení identických jízd do jedné karty.
+  Řazení podle `arrival` se **nepoužije** — s oknem ztrácí smysl.
+- **Podklad:** naměřeno na 104 dvojicích zastávek — přímý spoj max 22 min, s přestupem max 52 min.
+  Nic legitimního v KV nepřesáhne ~55 min, strop 75 je rezerva.
+- **Rozpor v zadání (`TASK.md` ř. 17 × ř. 23), který chybu způsobil, je SJEDNOCENÝ** — platí jediná
+  formulace v „J4-sort — ROZHODNUTO".
+- **Nová TODO z téhle session** (v `TASK.md`, tabulka NEDOŘEŠENÉ): docházka do celkové doby (až bude
+  GPS), asymetrie přímé × přestupy v `journey.js`, večerní/víkendová tolerance okna, stránkování.
 - **Pak:** **J4 Předávka 2** = GPS „Moje poloha" (→ nejbližší zastávka) + doladění vzhledu karet
   (řazení/filtry `planJourney` už umí přes `opts.sort`). Rozhodnutí a mockup jsou v historii `TASK.md`
   (řádek J4) a v gitu.

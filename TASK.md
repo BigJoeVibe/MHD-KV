@@ -14,13 +14,15 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 
 **J3 — postup (rozhodnuto 2026-07-22, C→B):**
 - **KROK C — ✅ HOTOVO 23.7.:** `scripts/timetable.js` (`nextDepartures` ze zastávky k datu/času, směrově, noční 51) + `timetable.test.js` + 4 časové kontroly ve `verify_network.js` (18/18 PASS). Ověřeno proti reálnému JŘ DPKV (linka 3 08:27; linka 51 přes půlnoc 22:46/23:26/01:16/03:06). **Nález:** ~45 % spojů má vlastní `offs` (`trips[…][2]`) → čas počítat `trip[2] || pattern.off`.
-- **KROK B — ⭐ TEĎ (spec v `handoff.md`):** nový `scripts/journey.js` — `planJourney(net, A, B, opts)` nad `search()` + `timetable.js`: reálné časy, garantovaná návaznost přestupu (≥ minTransfer), přesah dne. Výstup = konkrétní časová spojení (**1A**), řazení podle odjezdu + celková délka jízdy (**2B**).
+- **KROK B — ✅ HOTOVO:** nový `scripts/journey.js` — `planJourney(net, A, B, opts)` nad `search()` + `timetable.js`: reálné časy, garantovaná návaznost přestupu (≥ minTransfer), přesah dne. Výstup = konkrétní časová spojení (**1A**).
+  ⚠️ **Řazení tady původně stálo „podle odjezdu + celková délka jízdy (2B)", což si odporovalo s ř. 23 („rozhoduje celkový čas"). Rozpor způsobil chybu J4-sort. SJEDNOCENO 4. 8. 2026 — platí jediná věta:** *výsledky se filtrují odjezdovým oknem 90 min a stropy 75/40 min, uvnitř okna jdou nejdřív přímé spoje, pak přestupy, obojí chronologicky podle odjezdu.* Viz „J4-sort — ROZHODNUTO".
 - **Varianty zadávání (motor staví B, UI/pozici řeší později):** čas **nejbližší teď × konkrétní datum+čas** = pro jádro jen jiný `date`+`nowMin` (dosadí UI, J4). Směr **z mé pozice → cíl × opačně** = prohození A↔B (jádro směrové, zadarmo). Poloha = zastávka/mapa/GPS → **J5**. Oblíbené/časté + tabule à la F1 → **J6/J7**.
 - **Otevřená témata u B:** (1) předěl typu dne přes půlnoc = ŘEŠÍ B (2. noha k `date+1`); (2) svátky/prázdniny/víkend = aktivita každé nohy k jejímu datu; (3) letní/zimní čas = teď NEřešit, zapsat jako známé omezení; (4) min. přestup = ✅ **3–5 min** (default 3).
 
 **JH — Zpevnění jádra (rozhodnuto 2026-07-23, pořadí B→J8→A přehodnoceno na: zpevnit → J8 → J4):**
 - **Předávka 1 (⭐ TEĎ, spec v `handoff.md`):** H0 data-integrita (7 zastávek mělo GPS `0,0` — override v `build_network.js` + zpřísnění `verify_network.js`), H1 routing (zrušit topologický Pareto → o pořadí rozhoduje čas; 2 přestupy; smyčky; propojení totožných zastávek ≤ 30 m), H2 řazení podle času s přepínatelnými klíči pro budoucí UI filtry, H4 testy.
 - **Rozhodnutí (Joe):** rozhoduje **celkový čas** (nejdřív odjezd, nejdřív příjezd), přestupy nízká priorita; default řazení podle odjezdu, ostatní klíče připravit pro UI; stavět robustně kvůli budoucím příměstským linkám.
+  ⚠️ **PŘEKONÁNO 4. 8. 2026 (J4-sort).** „Robustně kvůli příměstským linkám" znamenalo, že motor neměl žádné domain limity a hledal, jako by KV byly Praha — odtud spoje za 200–900 min. Nově: limity **ano**, ale jako **parametry** (`windowMin` / `maxTotal` / `maxWait`), takže příměstské linky se vyřeší změnou čísel, ne logiky. Platná formulace řazení je v „J4-sort — ROZHODNUTO".
 - **GPS override (Joe 23.7., mapy.cz)** — klíč = zdrojové `JDFS-` id, provizorní single-point (přesné směrové pozice → epic J9):
   Kpt.Jaroše `JDFS-10020` 50.225355,12.839125 (střed 2 označníků ~90 m) · Mattoniho nábřeží `JDFS-14283` 50.239712,12.889429 (2 MHD; příměstský 3. bod → J9) · Nádraží Dalovice `JDFS-16310` 50.255920,12.885421 · Na Pasece `JDFS-16311` 50.252510,12.882424 · Globus `JDFS-18345` 50.217823,12.806296 · Tesco `JDFS-32745` 50.226009,12.823021 · Lázně I `JDFS-36827` 50.219270,12.880980 (= poloha S116).
 - **ODLOŽENO do epicu J9** (`docs/ROADMAP.md`): pěší přestup 30–200 m + směrové pozice označníků + navádění „kam jít" + mapa. Datový lead: **DPKV interaktivní mapa** má puntíky označníků s popisem (Dvory 1/2/3 + linka + směr) bez GPS exportu → Joe zkusí oslovit DPKV.
@@ -39,11 +41,80 @@ Detail v `docs/ROADMAP.md`, datová základna v `docs/DATA_SOURCES.md`.
 
 | # | Úkol | Pozn. |
 |---|------|-------|
-| J4 | UI „Hledat spojení" (From/To) | **P1 ✅ HOTOVO** (tab Hledat, formulář, karty; moduly v prohlížeči přes IIFE — shared-scope kolize `resolveStopId`). Manager ověřil vizuálně na Pages. **⭐ J4-fix TEĎ:** noční přestup přes půlnoc vracel zápornou dobu (`journey.js`), spec v `handoff.md`. Pak **Předávka 2** (GPS poloha + doladění). |
+| J4 | UI „Hledat spojení" (From/To) | **P1 ✅ HOTOVO** (tab Hledat, formulář, karty; moduly v prohlížeči přes IIFE — shared-scope kolize `resolveStopId`). Manager ověřil vizuálně na Pages. **J4-fix ✅ HOTOVO 3.8.**, ověřeno na Pages 4.8. (viz níže). **⭐ TEĎ: J4-sort** — rozhodnout default řazení výsledků (viz „J4-sort" níže), pak **Předávka 2** (GPS poloha + doladění). |
 | J5 | Poloha: klik do mapy / GPS / paste GPS → nejbližší zastávka | coords už v datech; mapa = zvážit Leaflet |
 | J6 | Favourites = body 1–3 (domov↔centrum, ↔Západní, ↔nádraží) jako uložené dotazy | nahrazuje ruční F2 |
 | J7 | Sloučení se starou appkou F1 / osud „odjezdové tabule" | rozhodnout |
 | **J8** | **Automatizace obnovy dat** (GitHub Actions, bez lokálu) — viz `docs/DATA_SOURCES.md` | J8a + J8-fix + J8b nasazené; **⭐ J8-hotfix TEĎ** (první ostrý běh selhal — brittle kontroly v guardu, viz níže) |
+
+**✅ J4-fix HOTOVO 3.8., OVĚŘENO NA PAGES 4.8.** (manager, vizuálně + v Node): noční hledání
+Krátká→Tržnice ve 23:44 i denní scénáře (8:00, 15:30, 15:51, sobota 10:00) drží invariant
+`arr > dep`, `total > 0`, `wait ≥ 0`. Žádná záporná doba jízdy, konzole bez chyb, „Jindy" i „Teď"
+fungují. Regrese žádná.
+
+**✅ J4-sort — ROZHODNUTO 4. 8. 2026 (Joe), spec v `handoff.md`, ⭐ čeká na executora.**
+
+**Pravidla malého města** — motor dostane domain limity, protože KV nejsou Praha:
+
+1. **Odjezdové okno 90 min** — zobrazí se, co odjíždí do 90 min od času hledání (Joeovo pojmenování,
+   používat i v UI). Když v okně nic není, žebřík rozšíření `90 → 240 → bez omezení` a UI to řekne
+   („Nejbližší spoj až v 09:44"). Žebřík řeší i noc — přímý noční 51 z Krátké je ve 23:44 přesně
+   91 min daleko, tj. o minutu mimo základní okno.
+2. **Uvnitř okna: nejdřív přímé spoje, pak přestupy**, obojí chronologicky podle odjezdu
+   (nový `SORTERS.smart`). Přestup je alternativa, ne rovnocenná varianta.
+3. **Strop celkové doby jízdy 75 min**, **strop čekání na přestupu 40 min**. Vše jako parametry.
+4. **Sloučení identických jízd** do jedné karty s výčtem přestupních zastávek.
+5. **Řazení podle `arrival` se NEPOUŽIJE** jako default (bylo v úvahách 4. 8.) — s odjezdovým oknem
+   ztrácí smysl. `SORTERS.arrival` v kódu zůstává pro budoucí přepínač v UI.
+
+**Podklad k limitům (měření managera 4. 8., 104 náhodných dvojic zastávek, pondělí 8:00):**
+přímý spoj medián 10 / p90 18 / **max 22 min**; s přestupem medián 26 / p90 41 / **max 52 min**.
+→ Nejhorší reálná jízda po KV je 52 min, strop 75 min má rezervu a neuřízne nic reálného.
+
+**Sloučení duplicit — proč a pozor na klíč:** linky jedoucí kus trasy společně generují N identických
+výsledků lišících se jen přestupní zastávkou. Příklad z dat: Stará Role → Lázně I, neděle 14:26 →
+třikrát `3→2`, všechny `14:26 → 15:09`, přestup Tržnice × Stadion ZM × Nemocnice. Je to **jedna jízda**
+(stejný autobus 3, stejný autobus 2), jen s volbou, kde přesednout — a tři identické karty vytlačí
+ze seznamu reálné alternativy. ⚠️ Klíč **nesmí** obsahovat časy jednotlivých nohou (jiná přestupní
+zastávka = jiná minuta nástupu do druhého autobusu → nesloučí se); správný klíč je
+`depMin | arrMin | posloupnost linek`. Manager na tom naletěl při přípravě ukázky.
+
+---
+
+**Původní nález (4. 8. 2026), pro kontext — jak to vypadalo před rozhodnutím:**
+Jádro počítá správně, ale **pořadí výsledků dělá appku v noci zavádějící**. Konkrétně (noc 3.8. 23:44,
+Krátká→Tržnice, `sort: 'departure'`, `limit: 8`): uživatel vidí 8 variant za 328–405 min s čekáním na
+přestupu 309–388 min, zatímco **přímý spoj linky 51 v 01:15 → 01:30 (15 min) je až 23. v pořadí** a do UI
+se vůbec nedostane. V seznamu jsou i varianty s čekáním **1199 min (20 h)**. Denní provoz zasažen mírně
+(v 8:00 se do TOP 5 dostala varianta `08:06 → 20:06`, 720 min).
+- **Příčina:** `SORTERS.departure` v `scripts/journey.js` řadí **primárně podle `depMin`**; `totalMin` je
+  až rozstřel při shodě. V noci mají všechny špatné varianty shodný odjezd (23:51), takže rozstřel
+  rozhoduje jen mezi špatnými. Žádný strop čekání (`maxWait`) neexistuje. UI volá `sort: 'departure',
+  limit: 8` (`index_raw.html` ř. 1130).
+- **⚠️ Rozpor v zadání (proto to vzniklo):** ř. 23 výše říká „rozhoduje **celkový čas**", ř. 17 říká
+  „řazení **podle odjezdu** + celková délka jízdy (2B)". Implementace sedí na ř. 17. **Po rozhodnutí
+  přepsat na jednu jednoznačnou větu**, ať se to nezopakuje.
+- **Změřeno (manager, 4.8., jen čtení — do kódu nezasaženo):** čisté řazení podle délky (`duration`) je
+  **horší** — v 8:00 nabídne spoj ve 21:14, protože nejkratší jízda je nejkratší kdykoli. Řazení podle
+  **příjezdu (`arrival`)** vychází nejlépe ve všech testech, protože implicitně trestá i pozdní odjezd
+  i dlouhé čekání:
+
+  | scénář | dnes (`departure`) | `arrival` |
+  |---|---|---|
+  | noc 23:44 | 23:51 → 5:19 (328 m) | **1:15 → 1:30 (15 m, přímo)** |
+  | den 8:00 | 8:06 → 8:37 (31 m) | **8:13 → 8:26 (13 m, přímo)** |
+  | den 15:30 | 15:30 → 15:43 (13 m) | beze změny |
+
+  V nočním TOP 8 podle `arrival` už není nic absurdního (nejdelší čekání 130 min místo 1199).
+- **Varianty:** (A) jen `maxWait` filtr + fallback pro hluchá období · (B) přepnout default na `arrival`
+  (jednořádková změna v `index_raw.html` + kopie do `index.html`) · (C) A+B + zpřísnit dedup.
+  **Doporučení managera:** B jako první krok, dedup samostatně; `maxWait` po B nejspíš není potřeba.
+- **Otevřené i po rozhodnutí:** duplicitně vypadající karty — `itineraryKey` je `linka:časOdjezdu` per
+  noha, takže **tentýž spoj s nástupem na jiné přestupní zastávce** (Školní × Stará Role) projde jako dvě
+  karty se stejnými časy i linkami. Pro uživatele šum. Řešení = rozšířit klíč (pozor: agresivní dedup může
+  spolknout skutečně odlišnou variantu → chce test).
+- 📌 **Mimo scope, low-hanging fruit pro J4 P2:** `planJourney` už `opts.sort` umí → přepínač řazení
+  v UI je levný.
 
 **🔴 J8-hotfix (2026-08-02) — první ostrý scheduled běh SELHAL (guard zablokoval zdravá data):** příčina není v datech (25/26 PASS), ale v `verify_network.js` — sekce „Robustnost routingu (H1)" testuje **chování kódu** navázané na konkrétní snímek. Spadlo `H1c` (smyčka linky 12 Pivovar→Trznice: nový build tu trasu jako smyčku nemá → `FAIL`). Kód (`forwardSegments`) je správně. Druhá časovaná bomba: kontrola výluky Bohatice s natvrdo daty `20260901`/`20260915` (spadne po 12.9.). **Web běží dál na starých datech (rollback OK).** Fix (spec v `handoff.md`): guard = jen build-invariantní kontroly; H1a–d přesunout do `routing.test.js` (tolerantně, smyčku hledat dynamicky), nahradit 1 tolerantním smoke testem `planJourney(Krátká→Tržnice)`, odhardcodovat výluku na obecný invariant, audit zbytku. Princip zapsat do `docs/DATA_SOURCES.md`.
 
@@ -120,6 +191,10 @@ GitHub log hlásí deprecation warning (runner vynuceně použil Node 24) — zv
 | Letní/zimní čas | 2×/rok předěl (ne v III/X); kolem 02–03:00 chybějící/dvojitá hodina — ověřit dopad na `startMin` a nejbližší odjezd | do J3-B |
 | ~~.gitignore~~ | `data_raw/` NEcommitovat | ✅ přidáno 19.7. |
 | Mapa v UI | Leaflet = 1. externí závislost (poruší „no-dep") → rozhodnout | do J5 |
+| **Docházka do celkové doby** (Joe 4. 8.) | až bude GPS (J5), přibude čas „než dojdu na zastávku, odkud mi to jede" → **celková doba jízdy se prodlouží** a strop 75 min začne měřit něco jiného. Rozhodnout, jestli se docházka započítává do stropu, nebo se vede zvlášť. Váže se na J9 (pěší přestupy 30–200 m). | do J5 |
+| **Asymetrie přímé × přestupy** (nález managera 4. 8.) | `directItineraries` zahodí odjezd před `nowMin` (kromě nočního okna), zatímco `transferItineraries` posouvá o `+1440` → v hluchých obdobích se nabídnou zítřejší přestupy, ale ne zítřejší přímé spoje. Filtry J4-sort to zamaskují, **neopraví**. | samostatný fix po J4-sort |
+| **Večerní/víkendová tolerance okna** (Joe 4. 8.: „ještě doladíme") | 90 min je laděné na denní provoz; večer a o víkendu jezdí řidčeji. Po nasazení J4-sort proměřit a případně zvednout — jde jen o čísla parametrů, ne o logiku. | po J4-sort, dle testu |
+| **Stránkování výsledků** (Joe 4. 8.) | `limit: 8` je natvrdo. Ve špičce a v centru bude spojů víc → stránkovat / „načíst další". V okrajových oblastech naopak platí opak: každý přestup se hodí. | do J4 P2 |
 | Stará appka | nechat F1 běžet, nebo přepsat na nový model? | do J7 |
 
 **Testovací sada (huby od Joea, na ověření routingu J2):** U koníčka (Rozcestí u Koníčka), Tržnice, Stadion ZM, Horní nádraží.
@@ -128,6 +203,8 @@ GitHub log hlásí deprecation warning (runner vynuceně použil Node 24) — zv
 
 | Otázka | Varianty | Doporučení | Rozhodnuto |
 |--------|----------|------------|------------|
+| **Default řazení výsledků (J4-sort)** | podle odjezdu × podle příjezdu × podle délky × **odjezdové okno + přímé napřed** | okno 90 min + přímé napřed + stropy 75/40 — řazení podle příjezdu s oknem ztrácí smysl | **✅ ANO 4. 8. 2026 (Joe)** |
+| Dedup podobných itinerářů (J4-sort) | nechat × sloučit do jedné karty s výčtem přestupů | sloučit — tři identické karty vytlačí reálné alternativy | **✅ sloučit, 4. 8. 2026** |
 | Mapa v UI | Leaflet+OSM × zatím bez mapy (výběr/GPS/paste) | [ODHAD] v1 bez mapy, mapa v2 | ne |
 | Osud staré appky | běží paralelně × sloučit do jádra | [ODHAD] sloučit, až jádro pojede | ne |
 
