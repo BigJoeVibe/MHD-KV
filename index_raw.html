@@ -533,8 +533,7 @@ body {
 </div>
 
 <div class="tabs mode-now" id="tabBar">
-  <button class="tab active" onclick="showTab('departures')">Odjezdy</button>
-  <button class="tab" onclick="showTab('timetable')">Jízdní řády</button>
+  <button class="tab active" onclick="showTab('departures')">Moje trasy</button>
   <button class="tab" onclick="showTab('search')">Hledat</button>
   <button class="tab" onclick="showTab('settings')">Nastavení</button>
 </div>
@@ -726,7 +725,7 @@ function getNow() {
 }
 
 // ============================================================
-// SEARCH (J4) — sit z network.json, nacita se na pozadi
+// SIT (J4/J7) — network.json, nacita se na pozadi, sdileno Moje trasy + Hledat
 // ============================================================
 let NET = null;
 let netStatus = 'loading'; // 'loading' | 'ready' | 'error'
@@ -737,16 +736,26 @@ let searchMessage = '';
 let searchNowMin = null; // nowMin pouzity pri poslednim hledani (pro hlasku "mimo okno")
 const SEARCH_WINDOW_MIN = 90; // musi sedet s defaultem windowMin v journey.js
 
+// J7-P1: "Moje trasy" — natvrdo zadane skupiny (cloud/localStorage az pozdeji).
+const ROUTE_GROUPS = [
+  {
+    name: "Domov–Centrum",
+    pairs: [["Krátká", "Tržnice"], ["Okružní", "Tržnice"]],
+  },
+];
+let routeGroupReversed = {}; // groupIndex -> bool (Tam/Zpět)
+const boardCache = new Map(); // "gi|reversed|from|to|date|nowMin" -> planBoard() rows, viz 2c
+
 fetch('data/network.json')
   .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
   .then(net => {
     NET = net;
     netStatus = 'ready';
-    if (currentTab === 'search') render();
+    if (currentTab === 'search' || currentTab === 'departures') render();
   })
   .catch(() => {
     netStatus = 'error';
-    if (currentTab === 'search') render();
+    if (currentTab === 'search' || currentTab === 'departures') render();
   });
 
 // ============================================================
@@ -875,7 +884,7 @@ function updateClockForMode() {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', ['departures','timetable','search','settings'][i] === tab);
+    t.classList.toggle('active', ['departures','search','settings'][i] === tab);
   });
   render();
 }
@@ -884,7 +893,6 @@ function render() {
   updateClockForMode();
   switch (currentTab) {
     case 'departures': renderDepartures(); break;
-    case 'timetable':  renderTimetable();  break;
     case 'search':     renderSearch();     break;
     case 'settings':   renderSettings();   break;
   }
@@ -915,125 +923,88 @@ function renderDepartures() {
   renderDepartureCards();
 }
 
+// J7-P1: "Moje trasy" — planBoard() nad network.json nahrazuje DATA.routes,
+// sdili okno/stropy/Pareto/throughService s tabem Hledat (viz journey.js).
+function toggleRouteGroup(gi) {
+  routeGroupReversed[gi] = !routeGroupReversed[gi];
+  renderDepartureCards();
+}
+
+function getBoardRows(gi, reversed, from, to, date, nowMin) {
+  const key = `${gi}|${reversed}|${from}|${to}|${date}|${nowMin}`;
+  if (boardCache.has(key)) return boardCache.get(key);
+  const rows = window.MHDJourney.planBoard(NET, from, to, { date, nowMin });
+  boardCache.set(key, rows);
+  return rows;
+}
+
 function renderDepartureCards() {
+  const el = document.getElementById('departure-cards');
+  if (!el) return;
+
+  if (netStatus === 'loading') {
+    el.innerHTML = `<div class="search-loading">Načítám síť…</div>`;
+    return;
+  }
+  if (netStatus === 'error') {
+    el.innerHTML = `<div class="search-error">Data se nepodařilo načíst.</div>`;
+    return;
+  }
+
   const now = getNow();
-  const dayType = getDayType(now);
+  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
   const vClass = useCustomTime ? ' violet' : '';
   let html = '';
 
-  for (const route of DATA.routes) {
-    const deps = getUpcomingDepartures(route, dayType, now);
-    const activeWarnings = getActiveWarnings(route, now);
-    html += `<div class="route-card${vClass}">`;
-    html += `<div class="route-header" onclick="window.open('${route.dpkvUrl}','_blank')">`;
-    html += `<div class="line-badge ${route.colorClass}"><span>${route.line}</span></div>`;
-    html += `<div class="route-info">`;
-    html += `<div class="from-to">${route.from} → ${route.to}</div>`;
-    html += `<div class="travel-time">Doba jízdy: <span>${route.travelMinutes} min</span></div>`;
-    if (activeWarnings.length > 0) html += `<div class="route-warning">⚠ ${activeWarnings[0].text}</div>`;
+  ROUTE_GROUPS.forEach((group, gi) => {
+    const reversed = !!routeGroupReversed[gi];
+    html += `<div style="display:flex;align-items:center;gap:12px;margin:${gi === 0 ? '0' : '20px'} 0 8px">`;
+    html += `<div class="time-toggle-header" style="width:auto;border-radius:8px;overflow:hidden">`;
+    html += `<button class="time-toggle-btn ${!reversed ? 'active-now' : ''}" onclick="toggleRouteGroup(${gi})" style="padding:6px 14px">Tam</button>`;
+    html += `<button class="time-toggle-btn ${reversed ? 'active-custom' : ''}" onclick="toggleRouteGroup(${gi})" style="padding:6px 14px">Zpět</button>`;
     html += `</div>`;
-    html += `<svg width="16" height="16" fill="none" stroke="#5a6380" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>`;
+    html += `<div style="font-weight:800;font-size:1rem;color:var(--text)">${group.name}</div>`;
     html += `</div>`;
-    html += `<div class="departures-list">`;
-    if (deps.length === 0) {
-      html += `<div class="no-more">V daném čase žádné spoje.</div>`;
-    } else {
-      deps.forEach((dep, i) => {
-        const isNext = i === 0;
-        html += `<div class="departure-row${isNext ? ' next' + vClass : ''}">`;
-        html += `<div class="dep-time">${formatTime(dep.hour, dep.minute)}</div>`;
-        if (dep.noteLetters) html += `<div class="dep-notes"><sup style="color:var(--warning)">${dep.noteLetters}</sup></div>`;
-        html += `<div class="dep-arrival">→ ${formatTime(dep.arrivalH, dep.arrivalM)}</div>`;
-        html += `<div class="dep-countdown ${countdownClass(dep.diff)}">${formatCountdown(dep.diff)}</div>`;
-        html += `</div>`;
-      });
-      // Legenda — jen použitá písmena
-      const usedLetters = [...new Set(deps.flatMap(d => d.noteLetters.split('')).filter(Boolean))];
-      const relevantNotes = usedLetters.filter(l => route.notes[l]);
-      if (relevantNotes.length > 0) {
-        html += `<div class="dep-legend">`;
-        for (const l of relevantNotes) html += `<div class="dep-legend-item"><span>${l}</span> – ${route.notes[l]}</div>`;
-        html += `</div>`;
+
+    group.pairs.forEach(([a, b]) => {
+      const from = reversed ? b : a;
+      const to = reversed ? a : b;
+      const rows = getBoardRows(gi, reversed, from, to, date, nowMin);
+
+      html += `<div class="route-card${vClass}">`;
+      html += `<div class="route-header" style="cursor:default">`;
+      html += `<div class="route-info"><div class="from-to">${from} → ${to}</div></div>`;
+      html += `</div>`;
+      html += `<div class="departures-list">`;
+      if (rows.length === 0) {
+        html += `<div class="no-more">Dnes už nic nejede.</div>`;
+      } else {
+        rows.forEach((row, i) => {
+          const isNext = i === 0;
+          const diff = row.depMin - nowMin;
+          html += `<div class="departure-row${isNext ? ' next' + vClass : ''}" style="flex-direction:column;align-items:stretch;gap:6px">`;
+          html += `<div style="display:flex;align-items:center;gap:8px">`;
+          row.legs.forEach((leg, li) => {
+            if (li > 0) html += `<span class="arrow-sep">→</span>`;
+            const cls = KNOWN_LINE_CLASSES.has(leg.line) ? `line-${leg.line}` : '';
+            html += `<div class="line-badge ${cls}" style="min-width:34px;height:34px;font-size:0.85rem;border-radius:8px"><span>${leg.line}</span></div>`;
+          });
+          html += `<div class="dep-time" style="min-width:0">${fmtJourneyTime(row.depMin)} → ${fmtJourneyTime(row.arrMin)}</div>`;
+          html += `<div class="dep-arrival" style="margin-left:0">${row.totalMin} min</div>`;
+          html += `<div class="dep-countdown ${countdownClass(diff)}">${formatCountdown(diff)}</div>`;
+          html += `</div>`;
+          if (row.transfers > 0) {
+            html += `<div class="journey-transfer-info" style="margin-top:0">${transferInfoLine(row)}</div>`;
+          }
+          html += `</div>`;
+        });
       }
-    }
-    html += `</div></div>`;
-  }
-  document.getElementById('departure-cards').innerHTML = html;
-}
-
-// ============================================================
-// TIMETABLE
-// ============================================================
-function renderTimetable() {
-  const now = getNow();
-  const dayType = getDayType(now);
-  const currentH = now.getHours();
-  const vClass = useCustomTime ? ' violet' : '';
-
-  let html = `<div class="timetable-selector">`;
-  html += `<select id="tt-route" onchange="renderTimetable()">`;
-  DATA.routes.forEach((r, i) => {
-    html += `<option value="${i}">Linka ${r.line}: ${r.from} → ${r.to}</option>`;
-  });
-  html += `</select>`;
-  html += `<select id="tt-daytype" onchange="renderTimetable()">`;
-  html += `<option value="auto">Dnes (${getDayTypeLabel(dayType)})</option>`;
-  html += `<option value="workday">Pracovní den</option>`;
-  html += `<option value="workday_holiday">Pracovní den – prázdniny</option>`;
-  html += `<option value="weekend">Víkend / svátek</option>`;
-  html += `<option value="xmas_night">Vánoce – noční provoz</option>`;
-  html += `<option value="nye_night">Silvestr / Nový rok – noční provoz</option>`;
-  html += `</select></div>`;
-
-  const routeIdx = document.getElementById('tt-route') ? parseInt(document.getElementById('tt-route').value) : 0;
-  const dtVal = document.getElementById('tt-daytype') ? document.getElementById('tt-daytype').value : 'auto';
-  const showDayType = dtVal === 'auto' ? dayType : dtVal;
-  const route = DATA.routes[routeIdx];
-  const effType = getEffectiveDayType(route, showDayType);
-  const deps = route.departures[effType] || {};
-  const ttViolet = dtVal !== 'auto' ? ' violet' : vClass;
-
-  html += `<div style="margin-bottom:8px;font-size:0.8rem;color:var(--text2)">`;
-  html += `Doba jízdy ${route.from} → ${route.to}: <strong style="color:var(--blue3)">${route.travelMinutes} min</strong>`;
-  if (dtVal !== 'auto' && effType !== showDayType) {
-    html += ` <span style="color:var(--warning);font-size:0.7rem">(zobrazeno: ${getDayTypeLabel(effType)})</span>`;
-  }
-  html += `</div>`;
-
-  html += `<div class="timetable-grid${ttViolet}">`;
-  for (let h = 0; h < 24; h++) {
-    const minutes = deps[h] || [];
-    if (minutes.length === 0) continue;
-    const isCurrent = h === currentH && dtVal === 'auto';
-    html += `<div class="timetable-row${isCurrent ? ' current-hour' : ''}">`;
-    html += `<div class="timetable-hour">${h}</div>`;
-    html += `<div class="timetable-minutes">`;
-    minutes.forEach(m => {
-      const hasNote = getNoteLetters(m).length > 0;
-      html += `<span class="min${hasNote ? ' has-note' : ''}">${m}</span>`;
+      html += `</div></div>`;
     });
-    html += `</div></div>`;
-  }
-  html += `</div>`;
+  });
 
-  // Legenda
-  const allNotes = Object.keys(route.notes);
-  if (allNotes.length > 0) {
-    html += `<div class="legend" style="margin-top:8px;border-radius:var(--radius)">`;
-    for (const n of allNotes) html += `<div class="legend-item"><span>${n}</span> – ${route.notes[n]}</div>`;
-    html += `</div>`;
-  }
-
-  // Výluky
-  const activeWarnings = getActiveWarnings(route, now);
-  for (const w of activeWarnings) {
-    html += `<div style="margin-top:8px;padding:8px 12px;background:rgba(245,158,66,0.08);border:1px solid rgba(245,158,66,0.2);border-radius:10px;font-size:0.78rem;color:var(--warning)">⚠ ${w.text}</div>`;
-  }
-
-  html += `<a class="dpkv-link" href="${route.dpkvUrl}" target="_blank">Zobrazit na webu DPKV ↗</a>`;
-  document.getElementById('content').innerHTML = html;
-  if (document.getElementById('tt-route')) document.getElementById('tt-route').value = routeIdx;
-  if (document.getElementById('tt-daytype')) document.getElementById('tt-daytype').value = dtVal;
+  el.innerHTML = html;
 }
 
 // ============================================================
@@ -1162,45 +1133,37 @@ function renderSearchResults() {
     });
     html += `</div>`;
     if (it.transfers > 0) {
-      const viaIds = it.viaStops || [it.transferStop];
-      const transferName = viaIds.map(id => {
-        const s = NET.stops[id];
-        return s ? stopDisplayName(s.n) : '';
-      }).join(' / ');
-      let transferLine;
-      if (it.throughService) {
-        transferLine = `Přestup: ${transferName} · bus navazuje okamžitě`;
-      } else if (it.waitMin <= 2) {
-        transferLine = `Přestup: ${transferName} · čekání ${it.waitMin} min — velmi těsné`;
-      } else {
-        const walkNote = it.walkMin === 0 ? 'stejné místo' : `${it.walkMin} min pěšky`;
-        transferLine = `Přestup: ${transferName} · čekání ${it.waitMin} min (${walkNote})`;
-      }
-      html += `<div class="journey-transfer-info">${transferLine}</div>`;
+      html += `<div class="journey-transfer-info">${transferInfoLine(it)}</div>`;
     }
     html += `</div>`;
   }
   el.innerHTML = html;
 }
 
+// Sdileny popisek prestupu (J4-sort-2 tri varianty) — pouziva Hledat i Moje
+// trasy (J7-P1), aby stejne pole (throughService/waitMin/walkMin) nesla vsude
+// stejny text.
+function transferInfoLine(it) {
+  const viaIds = it.viaStops || [it.transferStop];
+  const transferName = viaIds.map(id => {
+    const s = NET.stops[id];
+    return s ? stopDisplayName(s.n) : '';
+  }).join(' / ');
+  if (it.throughService) {
+    return `Přestup: ${transferName} · bus navazuje okamžitě`;
+  }
+  if (it.waitMin <= 2) {
+    return `Přestup: ${transferName} · čekání ${it.waitMin} min — velmi těsné`;
+  }
+  const walkNote = it.walkMin === 0 ? 'stejné místo' : `${it.walkMin} min pěšky`;
+  return `Přestup: ${transferName} · čekání ${it.waitMin} min (${walkNote})`;
+}
+
 // ============================================================
 // SETTINGS
 // ============================================================
 function renderSettings() {
-  let html = `<div class="settings-section"><div class="settings-title">Sledované linky</div>`;
-  DATA.routes.forEach(r => {
-    const warnings = getActiveWarnings(r, getRealNow());
-    html += `<div class="settings-item">`;
-    html += `<div class="line-badge ${r.colorClass}" style="min-width:36px;height:36px;font-size:1rem;border-radius:8px"><span>${r.line}</span></div>`;
-    html += `<div class="label">${r.from} → ${r.to}<br><span style="font-size:0.7rem;color:var(--text2)">Jízda ${r.travelMinutes} min · platí od ${r.validFrom}</span>`;
-    if (warnings.length > 0) html += `<br><span style="font-size:0.7rem;color:var(--warning)">⚠ ${warnings[0].text}</span>`;
-    html += `</div>`;
-    html += `<a href="${r.dpkvUrl}" target="_blank" style="color:var(--blue3);font-size:0.75rem">dpkv.cz ↗</a>`;
-    html += `</div>`;
-  });
-  html += `</div>`;
-
-  html += `<div class="settings-section"><div class="settings-title">Verze dat</div>`;
+  let html = `<div class="settings-section"><div class="settings-title">Verze dat</div>`;
   html += `<div style="padding:14px;font-size:0.8rem;color:var(--text2);line-height:1.7">`;
   html += `Data sestavena: <strong style="color:var(--text)">12.5.2026</strong><br>`;
   html += `Zdroj: <a href="https://www.dpkv.cz" target="_blank" style="color:var(--blue3)">dpkv.cz ↗</a>`;

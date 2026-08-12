@@ -41,7 +41,7 @@ function tripTimes(net, patternId, trip, idxFrom, idxTo) {
   return [trip[0] + offs[idxFrom], trip[0] + offs[idxTo]];
 }
 
-function directItineraries(net, leg, dateStr, nowMin) {
+function directItineraries(net, leg, dateStr, nowMin, maxDep) {
   const active = activeServicesOn(net, dateStr);
   const trips = net.trips[leg.patternId] || [];
   // leg.fromIdx/leg.toIdx prijdou primo z routing.js (search()) — presna pozice
@@ -54,6 +54,10 @@ function directItineraries(net, leg, dateStr, nowMin) {
     const [depRaw, arrRaw] = tripTimes(net, leg.patternId, trip, idxFrom, idxTo);
     const depMin = nightAdjust(nowMin, depRaw);
     if (depMin < nowMin) continue;
+    // Perf (J7-P1 STEP 1a): usek okna se ridi az z planJourney (zebrik sirsich
+    // oken) — nema smysl stavet itinerare, ktere zaruceni spadnou mimo aktualni
+    // pokus. maxDep == null (posledni prazdny stupen zebriku) = bez omezeni.
+    if (maxDep != null && depMin > maxDep) continue;
     const arrMin = nightAdjust(nowMin, arrRaw);
 
     out.push({
@@ -69,7 +73,7 @@ function directItineraries(net, leg, dateStr, nowMin) {
   return out;
 }
 
-function transferItineraries(net, variant, dateStr, nowMin, minTransfer) {
+function transferItineraries(net, variant, dateStr, nowMin, minTransfer, maxDep) {
   const [leg1, leg2] = variant.legs;
   const active1 = activeServicesOn(net, dateStr);
   const trips1 = net.trips[leg1.patternId] || [];
@@ -96,6 +100,10 @@ function transferItineraries(net, variant, dateStr, nowMin, minTransfer) {
     // z konstrukce (offy podel patternu jsou neklesajici).
     let dep1 = dep1Raw;
     while (dep1 < nowMin) dep1 += DAY_MIN;
+    // Perf (J7-P1 STEP 1a): kdyz uz leg1 odjizdi po hranici okna, cely vnitrni
+    // trip2 cyklus (nejdrazsi cast — az O(trips2) na kazdy trip1) je zbytecny,
+    // vysledek by stejne spadl mimo aktualni pokus zebriku.
+    if (maxDep != null && dep1 > maxDep) continue;
     const arr1 = dep1 + (arr1Raw - dep1Raw);
 
     let best = null;
@@ -190,14 +198,30 @@ function applyCaps(itineraries, maxTotal, maxWait) {
 }
 
 // Odjezdove okno se zebrikem rozsireni (J4-sort 1e) — kdyz je zaklad prazdny
-// (hluche obdobi / noc), zkusi se sirsi okno, az uplne bez omezeni.
+// (hluche obdobi / noc), zkusi se sirsi okno, az uplne bez omezeni. Kroky
+// zebriku (90 / +240 / bez omezeni) — hodnota `null` = maxDep bez omezeni.
 const WINDOW_LADDER_STEP = 240;
-function applyWindowLadder(itineraries, nowMin, windowMin) {
-  for (const w of [windowMin, WINDOW_LADDER_STEP, Infinity]) {
-    const filtered = itineraries.filter((it) => it.depMin <= nowMin + w);
-    if (filtered.length > 0) return filtered;
+
+// Perf (J7-P1 STEP 1a): stavi itinerare pro jeden pokus zebriku — `maxDep`
+// se poda az do direct/transferItineraries, aby se nestavely spoje, ktere
+// stejne spadnou mimo okno (predtim se stavel cely den a zahazoval az
+// applyWindowLadder na hotovem seznamu — zmereno 2509 -> 681 ms na 6 karet).
+function buildItineraries(net, variants, dateStr, nowMin, minTransfer, maxDep) {
+  let itineraries = [];
+  for (const variant of variants) {
+    if (variant.transfers === 0) {
+      itineraries = itineraries.concat(directItineraries(net, variant.legs[0], dateStr, nowMin, maxDep));
+    } else if (variant.transfers === 1) {
+      itineraries = itineraries.concat(transferItineraries(net, variant, dateStr, nowMin, minTransfer, maxDep));
+    }
+    // transfers === 2 (H1b): casova vrstva pro retezec o 2 prestupech zatim
+    // neni implementovana (mimo rozsah teto predavky) — search() s maxTransfers:2
+    // je pripraveny pro budouci UI "dalsi moznosti", journey.js ho zatim
+    // preskakuje, aby nevracel nekompletni/spatny itinerar (jen 2 ze 3 nohou).
   }
-  return [];
+  // FIX-B: pojistka proti chybnym itinerarum (nikdy by nemely projit, ale
+  // levna zachranna sit, kdyby neco proklouzlo).
+  return itineraries.filter((it) => it.arrMin > it.depMin && (it.waitMin == null || it.waitMin >= 0));
 }
 
 // Pareto filtr (J4-sort-2, 1c) — zahodi kazdy itinerar, ke kteremu existuje jiny,
@@ -266,29 +290,20 @@ function planJourney(net, A, B, opts = {}) {
 
   const variants = search(net, stopA, stopB, { maxTransfers });
 
+  // Poradi 1e (J4-sort-2, zavazne): [stavba pro pokus zebriku] -> slouceni ->
+  // stropy -> [dalsi pokus, pokud prazdno] -> Pareto -> razeni -> limit.
+  // Perf (STEP 1a): zebrik ted rika stavbe, kam az stavet (maxDep), misto aby
+  // filtroval hotovy seznam — kazdy pokus je tak levny jako jeho okno, ne
+  // jako cely den. Pareto az PO oknu — varianta mimo okno nesmi smazat
+  // viditelnou (a limit az uplne na konci, jinak se filtruje uz useknuty seznam).
   let itineraries = [];
-  for (const variant of variants) {
-    if (variant.transfers === 0) {
-      itineraries = itineraries.concat(directItineraries(net, variant.legs[0], date, nowMin));
-    } else if (variant.transfers === 1) {
-      itineraries = itineraries.concat(transferItineraries(net, variant, date, nowMin, minTransfer));
-    }
-    // transfers === 2 (H1b): casova vrstva pro retezec o 2 prestupech zatim
-    // neni implementovana (mimo rozsah teto predavky) — search() s maxTransfers:2
-    // je pripraveny pro budouci UI "dalsi moznosti", journey.js ho zatim
-    // preskakuje, aby nevracel nekompletni/spatny itinerar (jen 2 ze 3 nohou).
+  for (const w of [windowMin, WINDOW_LADDER_STEP, null]) {
+    const maxDep = w == null ? null : nowMin + w;
+    itineraries = buildItineraries(net, variants, date, nowMin, minTransfer, maxDep);
+    itineraries = mergeDuplicates(itineraries);
+    itineraries = applyCaps(itineraries, maxTotal, maxWait);
+    if (itineraries.length > 0) break;
   }
-
-  // FIX-B: pojistka proti chybnym itinerarum (nikdy by nemely projit, ale
-  // levna zachranna sit, kdyby neco proklouzlo).
-  itineraries = itineraries.filter((it) => it.arrMin > it.depMin && (it.waitMin == null || it.waitMin >= 0));
-
-  // Poradi 1e (J4-sort-2, zavazne): slouceni -> stropy -> okno+zebrik -> Pareto -> razeni -> limit.
-  // Pareto az PO okne — varianta mimo okno nesmi smazat viditelnou (a limit az
-  // uplne na konci, jinak se filtruje uz useknuty seznam).
-  itineraries = mergeDuplicates(itineraries);
-  itineraries = applyCaps(itineraries, maxTotal, maxWait);
-  itineraries = applyWindowLadder(itineraries, nowMin, windowMin);
   itineraries = paretoFilter(itineraries);
 
   itineraries.sort(SORTERS[sortKey]);
@@ -296,7 +311,48 @@ function planJourney(net, A, B, opts = {}) {
   return itineraries.slice(0, limit);
 }
 
-const MHDJourney = { planJourney };
+// Board rules (J7-P1 STEP 1b) — favourites cards for "Moje trasy": planJourney
+// widened to `limit: 40` first, then narrowed by rules that make sense for a
+// board (not a one-off search): identical-time rows collapse to the fewest-
+// transfer one, transfer rows that are a pointless detour around an existing
+// direct get dropped, sorted purely by departure.
+function planBoard(net, A, B, opts = {}) {
+  const { date, nowMin } = opts;
+  const maxDetour = opts.maxDetour != null ? opts.maxDetour : 10;
+  const limit = opts.limit != null ? opts.limit : 6;
+
+  let rows = planJourney(net, A, B, { date, nowMin, limit: 40, maxTransfers: 1 });
+
+  // Rule 2: rows sharing (depMin, arrMin) — e.g. "15" and "15→12 @Pivovar" both
+  // 10:14 → 10:26 — are the same ride with a pointless option to change buses.
+  // Keep the fewest-transfer one.
+  const byTime = new Map();
+  for (const row of rows) {
+    const key = `${row.depMin}|${row.arrMin}`;
+    const existing = byTime.get(key);
+    if (!existing || row.transfers < existing.transfers) byTime.set(key, row);
+  }
+  rows = Array.from(byTime.values());
+
+  // Rule 3: a transfer is only worth showing if it does not detour far past the
+  // best direct ride. When there is no direct at all (e.g. Krátká → Horní
+  // nádraží), keep every transfer row — otherwise the card would render empty.
+  const directRows = rows.filter((r) => r.transfers === 0);
+  if (directRows.length > 0) {
+    const bestDirect = Math.min(...directRows.map((r) => r.totalMin));
+    rows = rows.filter((r) => r.transfers === 0 || r.totalMin <= bestDirect + maxDetour);
+  }
+
+  rows.sort((a, b) => a.depMin - b.depMin);
+
+  return rows.slice(0, limit);
+}
+
+// buildItineraries/mergeDuplicates/applyCaps/paretoFilter/SORTERS exposed for
+// journey.test.js only (same convention as routing.js's internals export) —
+// lets the perf test reconstruct the pre-1a (unpruned) pipeline for an
+// apples-to-apples comparison, without duplicating this module's logic.
+const MHDJourney = { planJourney, planBoard, buildItineraries, mergeDuplicates, applyCaps, paretoFilter, SORTERS };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MHDJourney;
 if (typeof window !== "undefined") window.MHDJourney = MHDJourney;

@@ -29,10 +29,13 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
 
 ## Předávka dalšímu manažerovi (2026-08-04, aktualizováno večer)
 
-- **J4-sort HOTOVÝ a pushnutý** (executor, 4. 8.). **`handoff.md` je ZADANÁ znovu — spec `J4-sort-2`**
-  z Joeova živého testu: `minTransfer` plošně na 0 (průjezdné spoje typu 13→11 na Horním nádraží),
-  **Pareto filtr** místo pravidla „přímé napřed", příznak `throughService` pro popisek v kartě.
-  Detail a naměřená rizika v `TASK.md` → „J4-sort-2".
+- **J4-sort i J4-sort-2 HOTOVÉ a pushnuté** (executor, 4. 8., commit `aee8ea3`). Hledání teď jede na
+  pravidlech malého města: odjezdové okno 90 min, stropy 75/40, Pareto, `minTransfer 0`, průjezdné spoje.
+- **`handoff.md` je ZADANÁ — spec `J7-P1` („Moje trasy")**, tj. **J7 předsazeno před J5/J6**.
+  Spouštěč: tabule ukazovala příjezd 1:28 místo 1:30, protože stará F1 data mají jednu konstantu
+  `travelMinutes` na linku. Migrace tabu Odjezdy na `network.json`, Jízdní řády pryč.
+  **Pozor — v P1 je i výkonový fix jádra** (ořez okna při stavbě itinerářů, naměřeno 2509 → 681 ms
+  pro 6 karet, výsledky identické). Detail a všechna rozhodnutí v `TASK.md` → „J7 PŘEDSAZENO".
 - **Baseline `verify_network.js` je 20/20, ne 26/26** — J8-hotfix přesunul H1a–d do `routing.test.js`.
   (V předchozím zadání jsem měl 26/26 chybně, executor to udělal správně.)
 - **Rozhodnutí J4-sort (Joe, 4. 8.) — „pravidla malého města":** odjezdové okno 90 min (žebřík

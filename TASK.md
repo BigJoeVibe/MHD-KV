@@ -52,7 +52,52 @@ Krátká→Tržnice ve 23:44 i denní scénáře (8:00, 15:30, 15:51, sobota 10:
 `arr > dep`, `total > 0`, `wait ≥ 0`. Žádná záporná doba jízdy, konzole bez chyb, „Jindy" i „Teď"
 fungují. Regrese žádná.
 
-**🔴 J4-sort-2 — ROZHODNUTO 4. 8. 2026 večer (Joe) po živém testu, spec v `handoff.md`, ⭐ čeká na executora.**
+**🔴 J7 PŘEDSAZENO — ROZHODNUTO 5. 8. 2026 (Joe). P1 spec v `handoff.md`, ⭐ čeká na executora.**
+
+**Spouštěč:** tabule ukazovala příjezd 1:28, reálně 1:30. Stará F1 data mají jednu konstantu
+`travelMinutes` na celou linku; u 51 je tam 12, ale Okružní → Tržnice trvá reálně 14 min. Prověřeno
+u všech 5 starých linek: 3, 13, 15 sedí; **51 má +2 min**; **linka 9 z Krátké na Tržnici podle GTFS
+vůbec nejede** (potvrzuje starší poznámku „jezdí jinudy"). Dva datové modely vedle sebe = tyhle
+rozpory budou vylézat dál → migrace.
+
+**Cílový stav:** taby `Moje trasy` · `Tabule` · `Hledat` · `Nastavení`. Jízdní řády **pryč**,
+sekce „Sledované linky" v Nastavení **pryč**.
+
+- **P1 (zadáno) — Moje trasy:** skupiny pojmenované Joem, každá obsahuje páry zastávek; jedna karta
+  na pár, styl jako dnešní odjezdové karty (linka, odjezd → příjezd, doba jízdy, přestup, barevný
+  odpočet s minutovým updatem). Vlevo nahoře u skupiny přepínač `Tam` / `Zpět`, který prohodí všechny
+  páry. Data z `network.json` přes nový `planBoard()`. **Tímhle vzniká i J6 (oblíbené).**
+- **P2 (později) — Tabule:** vybereš zastávku, uvidíš vše, co odtud jede, se směrem. `nextDepartures()`
+  to už umí, je to hlavně UI.
+
+**Rozhodnutí (Joe, 5. 8.):**
+- Uložení tras: **natvrdo v souboru** (`ROUTE_GROUPS`), cloud/localStorage později.
+- První skupina: **Domov–Centrum** = Krátká → Tržnice, Okružní → Tržnice. Horní nádraží až po zjištění,
+  co tam reálně jezdí.
+- **Odchylka přestupu od přímé linky: +10 min**, platí pro oba směry. Když přímý spoj neexistuje
+  (Krátká → Horní nádraží), přestupy se zobrazí bez porovnání — jinak by karta byla prázdná.
+- **Při shodném odjezdu i příjezdu vyhrává varianta s méně přestupy** (nález managera: `15` a
+  `15→12 @Pivovar` obojí `10:14 → 10:26` — druhý řádek je k ničemu).
+- Nastavení: sekce „Sledované linky" smazat.
+
+**Výkon — nález a ověřený fix (manager, 5. 8.):** jeden `planJourney` stojí **~495 ms**, šest karet
+**~2510 ms** (topologie `search()` je jen 6–12 ms, zbytek je časová vrstva). Příčina: itineráře se
+staví pro celý den a teprve pak se filtruje okno. **Fix = ořez podle `nowMin + windowMin` už při
+stavbě** → naměřeno **2509 → 681 ms** a výsledky `JSON.stringify`-identické. Žebřík rozšíření okna
+musí build **zopakovat** s širší hranicí, ne filtrovat hotový seznam.
+
+📌 **Legenda zkratek — proč ji nemigrujeme:** písmena `L`/`T`/`X`/`P` (jede jen do…, nestaví v…) jsou
+v novém modelu **redundantní** — nese je konečná a vlastní pattern každého spoje. Zůstávají jen dvě
+informace: `s` = školní spoj (je v kalendáři, ale nezobrazuje se) a `D`/`A` = „pokračuje jako linka
+11/15". To druhé je mimochodem **potvrzení heuristiky `throughService`** — legenda DPKV u linky 13
+říká doslova „z Horního nádraží pokračuje jako linka 11". Ruční overlay pro tyhle dvě věci
+**zatím neděláme**, zapsáno jako otevřený bod; výluky jsou bezpředmětné (jediná v datech vypršela 30. 6.).
+
+📌 **`DATA.routes` zůstane v souboru jako mrtvý kód** až do konce P2 — kvůli bezpečnému návratu.
+
+---
+
+**✅ J4-sort-2 — ROZHODNUTO 4. 8. 2026 večer (Joe) po živém testu, HOTOVO a pushnuto (commit `aee8ea3`).**
 
 J4-sort je nasazený a funguje dle zadání, ale Joeův test (út 4. 8., 11:21, Okružní → Tržnice) odhalil
 dvě chyby v samotném zadání:

@@ -7,6 +7,51 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-08-12 — v0.1.0 (J7-P1: "Moje trasy" tab on network.json)
+
+- **`scripts/journey.js` — STEP 1a perf fix:** the departure window is now pushed down into the
+  build itself instead of filtering a whole-day itinerary list afterwards. `directItineraries`/
+  `transferItineraries` take a `maxDep` cutoff; a new `buildItineraries(net, variants, date, nowMin,
+  minTransfer, maxDep)` runs one window-ladder step (90 → 240 → unbounded), re-running the build
+  (not re-filtering) when a step comes back empty. Measured on 6 stop pairs (`20260805` 10:00):
+  **689.9 ms pruned vs 2541.2 ms unpruned**, output `JSON.stringify`-identical for all 6 — matches
+  the manager's own pre-check (681 / 2509 ms). `buildItineraries`/`mergeDuplicates`/`applyCaps`/
+  `paretoFilter`/`SORTERS` are now also exported (test-only use, same convention as `routing.js`'s
+  internals export) so the perf test can reconstruct the old pipeline for an apples-to-apples diff
+  instead of duplicating the logic inline.
+- **`scripts/journey.js` — new `planBoard(net, A, B, opts)`:** favourites-board rules on top of
+  `planJourney({limit: 40, maxTransfers: 1})` — rows sharing `(depMin, arrMin)` collapse to the
+  fewest-transfer one (kills the "same ride, pointless option to change buses" duplicate), transfer
+  rows detouring more than `maxDetour` (default 10) past the best direct ride are dropped unless no
+  direct exists at all, sorted by `depMin`, `limit: 6` by default.
+- **`index_raw.html`/`index.html` — `Odjezdy` tab replaced by `Moje trasy`** (internal id
+  `departures` kept unchanged): renders a hardcoded `ROUTE_GROUPS` ("Domov–Centrum": Krátká↔Tržnice,
+  Okružní↔Tržnice) as one card per pair via `planBoard`, replacing the old `DATA.routes` /
+  `travelMinutes` loop that caused the wrong-arrival-time bug (board said 1:28, reality 1:30). Each
+  group gets a `Tam`/`Zpět` toggle (reuses the Teď/Jindy toggle markup) that swaps every pair in the
+  group and re-renders. Rows are cached per render minute, keyed
+  `groupIndex|reversed|from|to|date|nowMin`. `Jízdní řády` tab removed (button, `case 'timetable'`,
+  `renderTimetable`); "Sledované linky" removed from Nastavení. `DATA.routes` and its helpers
+  (`getUpcomingDepartures`, `getActiveWarnings`, `getEffectiveDayType`, `getNoteLetters`) are left in
+  the file, now fully dead — confirmed via grep, no remaining call sites — kept for a safe rollback
+  until J7-P2 per spec.
+- **Extracted `transferInfoLine(it)`** (shared by the Hledat search-results card and the new board
+  cards) out of `renderSearchResults`'s previously inline three-branch transfer-label logic — pure
+  refactor, identical output, avoids the board and search cards drifting apart on the same fields.
+- **`scripts/journey.test.js`** — new "J7-P1 STEP 1a" block (pruned-vs-unpruned byte-identical check
+  + timing) and "J7-P1 STEP 1b" block (board-midday all-direct/5–6 rows/first-row check, board-morning
+  first-row, no-direct-exists returns non-empty all-transfer rows for Krátká→Horní nádraží, no two
+  rows share `(depMin, arrMin)`, no transfer row breaches the detour cap — checked across every
+  scenario). All existing scenarios unchanged and still passing.
+- **Verified:** `journey.test.js`/`routing.test.js`/`timetable.test.js` all exit 0,
+  `verify_network.js` 20/20 PASS (guard untouched). Additionally ran the real `index_raw.html` inline
+  script plus the three `<script src>` modules together through a Node `vm` context with a minimal
+  `document`/`fetch` shim (ad hoc, not committed) — confirms the new render path executes without
+  throwing, produces the expected group/card/toggle markup in both directions, and that Nastavení/
+  Hledat still render correctly. **Not a substitute for the manager's visual pass on Pages** — no
+  layout/CSS assessment was possible from here. Detail and open flags (toggle placement guess, kept
+  the walk-note in the board's transfer sub-line) in `handoff.md` → RESULT.
+
 ## 2026-08-05 — v0.1.0 (J4-sort-2: Pareto ordering + through-running services)
 
 - **`scripts/journey.js`:** `minTransfer` default `3 → 0` (Joe's decision 2026-08-04 — tight

@@ -2,7 +2,8 @@
 // Citelny vypis planovanych spojeni (primo + 1 prestup + noc/pulnoc + H2 razeni + H1d co-located).
 
 const path = require("path");
-const { planJourney } = require("./journey.js");
+const { planJourney, planBoard, buildItineraries, mergeDuplicates, applyCaps, paretoFilter, SORTERS } = require("./journey.js");
+const { search: routingSearch, resolveStopId } = require("./routing.js");
 const net = require(path.join(__dirname, "..", "data", "network.json"));
 
 function fmt(m) {
@@ -240,3 +241,157 @@ checkGlobalInvariants("hluché období", deadPeriodResults);
 checkParetoInvariant("hluché období", deadPeriodResults);
 
 console.log(j4sortAllOk ? "\nOK: J4-sort — všechny scénáře a invarianty prošly" : "\nFAIL: J4-sort — některý scénář nebo invariant selhal (viz výše)");
+
+// ============================================================
+// J7-P1 STEP 1a: perf pruning — pruned build (planJourney after the fix) must
+// be JSON-identical to the pre-1a (unpruned) pipeline, only faster. Pre-1a
+// pipeline reconstructed from the internals journey.js exports for exactly
+// this purpose (buildItineraries/mergeDuplicates/applyCaps/paretoFilter/
+// SORTERS) — same convention as routing.js exposing its internals for tests.
+// ============================================================
+console.log("\n--- J7-P1 STEP 1a: perf pruning — pruned vs unpruned output ---");
+
+function unprunedPlan(net, A, B, opts = {}) {
+  const date = opts.date, nowMin = opts.nowMin;
+  const minTransfer = opts.minTransfer != null ? opts.minTransfer : 0;
+  const limit = opts.limit != null ? opts.limit : 8;
+  const maxTransfers = opts.maxTransfers != null ? opts.maxTransfers : 1;
+  const sortKey = opts.sort && SORTERS[opts.sort] ? opts.sort : "smart";
+  const windowMin = opts.windowMin != null ? opts.windowMin : 90;
+  const maxTotal = opts.maxTotal != null ? opts.maxTotal : 75;
+  const maxWait = opts.maxWait != null ? opts.maxWait : 40;
+
+  const stopA = resolveStopId(net, A);
+  const stopB = resolveStopId(net, B);
+  if (!stopA || !stopB) return [];
+
+  const variants = routingSearch(net, stopA, stopB, { maxTransfers });
+
+  // Pre-1a behaviour: build itineraries for the WHOLE day (maxDep=null), THEN
+  // filter the already-built list by window — this is exactly what planJourney
+  // did before STEP 1a folded the window into the build itself.
+  let itineraries = buildItineraries(net, variants, date, nowMin, minTransfer, null);
+  itineraries = mergeDuplicates(itineraries);
+  itineraries = applyCaps(itineraries, maxTotal, maxWait);
+  for (const w of [windowMin, 240, Infinity]) {
+    const filtered = itineraries.filter((it) => it.depMin <= nowMin + w);
+    itineraries = filtered;
+    if (filtered.length > 0) break;
+  }
+  itineraries = paretoFilter(itineraries);
+  itineraries.sort(SORTERS[sortKey]);
+  return itineraries.slice(0, limit);
+}
+
+const PERF_PAIRS = [
+  ["Krátká", "Tržnice"],
+  ["Okružní", "Tržnice"],
+  ["Tržnice", "Krátká"],
+  ["Tržnice", "Okružní"],
+  ["Krátká", "Horní nádraží"],
+  ["Okružní", "Horní nádraží"],
+];
+const PERF_DATE = "20260805";
+const PERF_NOW = 10 * 60;
+
+let prunedTotalMs = 0;
+let unprunedTotalMs = 0;
+let perfIdentical = true;
+for (const [A, B] of PERF_PAIRS) {
+  const t0 = process.hrtime.bigint();
+  const pruned = planJourney(net, A, B, { date: PERF_DATE, nowMin: PERF_NOW });
+  const t1 = process.hrtime.bigint();
+  const unpruned = unprunedPlan(net, A, B, { date: PERF_DATE, nowMin: PERF_NOW });
+  const t2 = process.hrtime.bigint();
+  prunedTotalMs += Number(t1 - t0) / 1e6;
+  unprunedTotalMs += Number(t2 - t1) / 1e6;
+
+  const same = JSON.stringify(pruned) === JSON.stringify(unpruned);
+  if (!same) {
+    perfIdentical = false;
+    console.log(`  FAIL ${A} → ${B}: pruned/unpruned output differs`);
+  }
+}
+console.log((perfIdentical ? "  OK   " : "  FAIL ") + `pruned vs unpruned output byte-identical for all ${PERF_PAIRS.length} pairs (${PERF_DATE}, ${fmt(PERF_NOW)})`);
+console.log(`  timing: pruned ${prunedTotalMs.toFixed(1)} ms total / unpruned ${unprunedTotalMs.toFixed(1)} ms total (${PERF_PAIRS.length} pairs)`);
+
+// ============================================================
+// J7-P1 STEP 1b: planBoard() — "Moje trasy" rules on top of planJourney
+// ============================================================
+console.log("\n--- J7-P1 STEP 1b: planBoard (Moje trasy) ---");
+let j7p1AllOk = !perfIdentical ? false : true;
+
+function checkBoardFirst(label, rows, expect) {
+  const first = rows[0];
+  const ok =
+    first &&
+    first.transfers === 0 &&
+    first.depMin === expect.depMin &&
+    first.arrMin === expect.arrMin &&
+    String(first.legs[0].line) === String(expect.line);
+  console.log(
+    (ok ? "  OK   " : "  FAIL ") +
+      `${label}: 1. řádek ` +
+      (first ? fmtItinerary(first) : "(žádný)") +
+      (ok ? "" : ` — očekáváno přímo linka ${expect.line}, ${fmt(expect.depMin)} → ${fmt(expect.arrMin)}`)
+  );
+  if (!ok) j7p1AllOk = false;
+}
+
+function checkNoDupTimeKeys(label, rows) {
+  const keys = new Set();
+  let ok = true;
+  for (const r of rows) {
+    const k = `${r.depMin}|${r.arrMin}`;
+    if (keys.has(k)) ok = false;
+    keys.add(k);
+  }
+  console.log((ok ? "  OK   " : "  FAIL ") + `${label}: žádné dva řádky nesdílí (depMin, arrMin)`);
+  if (!ok) j7p1AllOk = false;
+}
+
+function checkDetourCap(label, rows, maxDetour = 10) {
+  const directs = rows.filter((r) => r.transfers === 0);
+  let ok = true;
+  if (directs.length > 0) {
+    const bestDirect = Math.min(...directs.map((r) => r.totalMin));
+    for (const r of rows) {
+      if (r.transfers > 0 && r.totalMin > bestDirect + maxDetour) ok = false;
+    }
+  }
+  console.log((ok ? "  OK   " : "  FAIL ") + `${label}: žádný přestup nepřesahuje nejlepší přímý o víc než ${maxDetour} min`);
+  if (!ok) j7p1AllOk = false;
+}
+
+// board, midday — Okružní → Tržnice, 20260805 10:00
+const boardMidday = planBoard(net, "Okružní", "Tržnice", { date: "20260805", nowMin: 10 * 60 });
+console.log(`  Okružní→Tržnice 10:00 (${boardMidday.length} řádků): ` + boardMidday.map(fmtItinerary).join(" | "));
+const middayAllDirect = boardMidday.every((r) => r.transfers === 0);
+console.log((middayAllDirect ? "  OK   " : "  FAIL ") + "board, midday: všechny řádky přímé");
+if (!middayAllDirect) j7p1AllOk = false;
+const middayCountOk = boardMidday.length >= 5 && boardMidday.length <= 6;
+console.log((middayCountOk ? "  OK   " : "  FAIL ") + `board, midday: 5–6 řádků (skutečně ${boardMidday.length})`);
+if (!middayCountOk) j7p1AllOk = false;
+checkBoardFirst("board, midday (Okružní→Tržnice, 10:00)", boardMidday, { depMin: 10 * 60 + 14, arrMin: 10 * 60 + 26, line: "15" });
+checkNoDupTimeKeys("board, midday", boardMidday);
+checkDetourCap("board, midday", boardMidday);
+
+// board, morning — Krátká → Tržnice, 20260805 06:00
+const boardMorning = planBoard(net, "Krátká", "Tržnice", { date: "20260805", nowMin: 6 * 60 });
+console.log(`  Krátká→Tržnice 06:00 (${boardMorning.length} řádků): ` + boardMorning.map(fmtItinerary).join(" | "));
+checkBoardFirst("board, morning (Krátká→Tržnice, 06:00)", boardMorning, { depMin: 6 * 60 + 6, arrMin: 6 * 60 + 19, line: "3" });
+checkNoDupTimeKeys("board, morning", boardMorning);
+checkDetourCap("board, morning", boardMorning);
+
+// no direct exists — Krátká → Horní nádraží, 20260805 10:00
+const boardNoDirect = planBoard(net, "Krátká", "Horní nádraží", { date: "20260805", nowMin: 10 * 60 });
+console.log(`  Krátká→Horní nádraží 10:00 (${boardNoDirect.length} řádků): ` + boardNoDirect.map(fmtItinerary).join(" | "));
+const noDirectOk = boardNoDirect.length > 0 && boardNoDirect.every((r) => r.transfers === 1);
+console.log(
+  (noDirectOk ? "  OK   " : "  FAIL ") +
+    `no direct exists (Krátká→Horní nádraží, 10:00): ${boardNoDirect.length} řádků, všechny s 1 přestupem`
+);
+if (!noDirectOk) j7p1AllOk = false;
+checkNoDupTimeKeys("no direct exists", boardNoDirect);
+
+console.log(j7p1AllOk ? "\nOK: J7-P1 (perf + planBoard) — všechny scénáře a invarianty prošly" : "\nFAIL: J7-P1 (perf + planBoard) — některý scénář nebo invariant selhal (viz výše)");
