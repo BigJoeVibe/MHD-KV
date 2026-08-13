@@ -67,6 +67,60 @@ Jediný takový případ ze 156 názvů. P2 to řeší pro tabuli přes `resolve
 📌 **Stejnou slepou skvrnu má i Hledat** (zadáš „Lázně I" jako výchozí → linka 20 se neuvažuje).
 Oprava sahá do routing jádra → **samostatná předávka**, do P2 se nepřidává.
 
+---
+
+## 🟢 J7-P2 — REVIZE MANAGERA HOTOVÁ (14. 8. 2026), NAVAZUJE POŘADÍ D → C → B
+
+**Revize (manager, 14. 8., ověřeno vlastním během, ne jen čtením RESULTu):** všechny 3 test suity
+exit 0, `verify_network.js` 20/20, `index.html` = `index_raw.html` (`diff -q`). `boardDepartures`
+proti reálným datům vrací **řádek po řádku** referenční tabulku z `handoff.md` včetně
+`10:05 linka 20 → Parkoviště KOME` — merge funguje. `resolveStopIds` kopíruje matching pravidlo
+`resolveStopId` 1:1. `routing.js` / `journey.js` fakticky nedotčené (`git diff --ignore-cr-at-eol`
+prázdný; „modified" u 15 souborů je CRLF artefakt mountu, ne změna obsahu). Žádné `localStorage`.
+✅ **Nad rámec spec dobře:** `tick()` volá `renderBoardRows()`, ne `renderBoard()` — minutový tick
+tak nezabije focus ani našeptávač při psaní. Spec to explicitně nepožadovala.
+
+**Rozhodnutí Joea (14. 8.): pořadí dalších kroků `D → C → B`.**
+
+| krok | co | proč v tomhle pořadí |
+|---|---|---|
+| **D** | slepá skvrna stejnojmenných zastávek **v routing jádře** (Hledat) | největší a nejrizikovější, sahá do `search()`; ať je za námi dřív než na ní staví C |
+| **C** | volný text / diakritika při rozlišení zastávky | leží ve stejné vrstvě jako D, ale jde o UX rozhodnutí, ne o jádro |
+| **B** | `KNOWN_LINE_CLASSES` — barevné odznaky linek | kosmetika, dotkne se 3 tabů naráz → až nakonec, na čistém základu |
+
+**Nález managera k D (14. 8., přečteno v kódu):** `search()` v `routing.js` řeší co-located
+sourozence **jen v přestupním uzlu** (`transferPoints`), výchozí a cílová zastávka jdou přes
+`resolveStopId` → jedno id. `planJourney` navíc A/B předrozliší na id, takže expanze **podle názvu**
+by se v `search()` už nechytila (`resolveStopIds` na id vrací jen to id). ⇒ oprava musí expandovat
+**z id na stejnojmenná id**, ne z názvu. Detail a varianty ve specu (`handoff.md`).
+
+**Nález managera k C (14. 8., ověřeno spuštěním):** `matchStopNames` je bez diakritiky, ale
+`resolveStopIds` / `resolveStopId` diakritiku **vyžadují**. Naměřeno: `Krátká` → 3 spoje ·
+`Kratka` → **0 spojů** · `lazne` → **0 spojů**. Když uživatel na mobilu napíše text bez diakritiky
+a klepne mimo (nevybere z našeptávače), tabule zobrazí `Dnes už odsud nic nejede.` — **což je lež**.
+Stejná díra je v Hledat.
+
+**Nález managera k B (14. 8., ověřeno spuštěním):** `KNOWN_LINE_CLASSES = new Set(['3','9',…])` je
+Set **stringů**, ale `row.line` / `leg.line` z `network.json` je **number** → `.has()` nematchne
+nikdy (naměřeno 0 z 10 řádků). 3 call sites: `index_raw.html` ř. 1022 (Moje trasy), 1199 (Tabule),
+1321 (Hledat). Chyba je **pre-existující**, ne z J7-P2 — executor ji našel a záměrně neopravil, aby
+nezasáhl 3 taby mimo rozsah předávky. Oprava = `String(line)` nebo Set čísel; **vizuálně změní tři
+obrazovky naráz**, proto samostatný krok.
+
+📌 **Drobnosti k ověření na telefonu (manager, 14. 8.), zatím bez zadání:**
+(a) `z-index` našeptávače je **20**, sticky hlavička **100** a tab bar **99** → při odscrollování
+může rozbalený seznam podlézt lištu tabů; (b) fokus do pole, které už hodnotu má (Tabule, `Krátká`),
+hned otevře nabídku a překryje odjezdy; (c) prázdný stav nerozlišuje „konec provozu dnes" ×
+„neznámá zastávka" (souvisí s C).
+
+📌 **Kořenová příčina k rozhodnutí (mimo scope D/C/B):** `TASK.md` ř. 236–237 už zmiňuje, že
+„Lázně I" má ve zdroji dva **různě pojmenované** záznamy (`Karlovy Vary,Lázně I` × `Lázně I` bez
+prefixu). To je pravděpodobně kořen celého rozdvojení — D/C jsou léčba symptomu v appce, čistší by
+bylo sjednotit už v `build_network.js`. Stojí za rozhodnutí dřív, než se na `resolveStopIds` navěsí
+další logika.
+
+---
+
 **Manager ověřil po předávce (12. 8.):** `journey.test.js` všechny scénáře PASS, `verify_network.js`
 20/20, `index.html` = `index_raw.html`, karty vracejí správná data (Okružní→Tržnice 10:00 samé přímé,
 Krátká→Horní nádraží 4 řádky s přestupem). Naměřeno executorem 2541 → 690 ms, výstup byte-identický —
@@ -298,7 +352,10 @@ GitHub log hlásí deprecation warning (runner vynuceně použil Node 24) — zv
 | **Docházka do celkové doby** (Joe 12. 8.) | až bude GPS (J5), přibude čas „než dojdu na zastávku, odkud mi to jede" → **celková doba jízdy se prodlouží** a strop 75 min začne měřit něco jiného. Rozhodnout, jestli se docházka započítává do stropu, nebo se vede zvlášť. Váže se na J9 (pěší přestupy 30–200 m). | do J5 |
 | **Asymetrie přímé × přestupy** (nález managera 12. 8.) | `directItineraries` zahodí odjezd před `nowMin` (kromě nočního okna), zatímco `transferItineraries` posouvá o `+1440` → v hluchých obdobích se nabídnou zítřejší přestupy, ale ne zítřejší přímé spoje. Filtry J4-sort to zamaskují, **neopraví**. | samostatný fix po J4-sort |
 | **Večerní/víkendová tolerance okna** (Joe 12. 8.: „ještě doladíme") | 90 min je laděné na denní provoz; večer a o víkendu jezdí řidčeji. Po nasazení J4-sort proměřit a případně zvednout — jde jen o čísla parametrů, ne o logiku. | po J4-sort, dle testu |
-| **Slepá skvrna `resolveStopId` u stejnojmenných zastávek** (nález managera 12. 8.) | „Lázně I" = `S63` + `S143`; `resolveStopId` vrací jen první → **Hledat ignoruje linku 20**. J7-P2 to řeší jen pro tabuli (`resolveStopIds`), oprava v routing jádře je samostatná předávka. Pozor na dopad na `search()` a Pareto — víc výchozích id znamená víc variant. | samostatná předávka po J7-P2 |
+| **Slepá skvrna `resolveStopId` u stejnojmenných zastávek** (nález managera 12. 8.) = **krok D** | „Lázně I" = 2 id; `resolveStopId` vrací jen první → **Hledat ignoruje linku 20**. J7-P2 to řeší jen pro tabuli (`resolveStopIds`), oprava v routing jádře je samostatná předávka. Pozor na dopad na `search()` a Pareto — víc výchozích id znamená víc variant. | ⭐ **ZADÁNO 14. 8.**, spec v `handoff.md` |
+| **Volný text a diakritika při rozlišení zastávky** (nález managera 14. 8.) = **krok C** | `matchStopNames` je bez diakritiky, `resolveStopId(s)` ji vyžaduje → `Kratka` i `lazne` vrátí **0 spojů** a tabule zobrazí `Dnes už odsud nic nejede.`, což je lež. Dvě cesty: (1) fallback bez diakritiky v rozlišení (příjemnější), (2) nepotvrzený text = hláška „Zastávku vyber ze seznamu" (bezpečnější). ⚠️ **NEměnit `normalizeName` globálně** — používá ho i `coLocatedGroups` pro práh 60 m × 30 m. | schváleno Joem 14. 8., po D |
+| **`KNOWN_LINE_CLASSES` nikdy nematchne** (nález executora + ověřeno managerem 14. 8.) = **krok B** | Set stringů × `line` je number → barevné odznaky linek 3/9/13/15/51 se nezobrazí **nikde** (Moje trasy ř. 1022, Tabule ř. 1199, Hledat ř. 1321 v `index_raw.html`). Pre-existující, ne z J7-P2. Oprava jednořádková, ale vizuálně změní 3 taby naráz. | schváleno Joem 14. 8., po C |
+| **Našeptávač — drobnosti k ověření na telefonu** (manager 14. 8.) | `z-index: 20` × sticky hlavička 100 / taby 99 → seznam může podlézt lištu · fokus do pole s hodnotou hned otevře nabídku přes odjezdy · prázdný stav nerozlišuje „konec provozu" × „neznámá zastávka" | čeká na Joeův mobilní test |
 | **Našeptávání zastávek, hlavně na mobilu** (Joe 12. 8., UX) — ✅ **řeší J7-P2** | Dnes je to nativní `<datalist>` (`index_raw.html`, `stopList`) — na desktopu funguje, **na mobilu je chování nekonzistentní** (iOS Safari datalist prakticky nepoužívá). Nálezy managera: (a) zdroj má **duplicitní názvy lišící se jen velikostí písmen a zkratkou** — `Andělská Hora,Dolní obec` × `,dolní obec`, `hor.obec` × `horní obec` → v našeptávači to vypadá jako chyba; (b) ověřit, jak si s nimi poradí `resolveStopId`. Váže se na výběr zastávky v J7-P2 (Tabule) — dá se udělat jednou pro obě místa. | do J7-P2 nebo samostatně |
 | **Stránkování výsledků** (Joe 12. 8.) | `limit: 8` je natvrdo. Ve špičce a v centru bude spojů víc → stránkovat / „načíst další". V okrajových oblastech naopak platí opak: každý přestup se hodí. | do J4 P2 |
 | Stará appka | nechat F1 běžet, nebo přepsat na nový model? | do J7 |

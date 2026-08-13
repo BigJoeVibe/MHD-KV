@@ -14,7 +14,8 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
 - **Repo (GitHub):** `BigJoeVibe/MHD-KV`, branch `main`
 - **Aktuální verze:** v0.1.0 (F1 komplet). Schéma: 0.x = vývojové/testovací
   verze; 1.0.0 přijde, až appka pokryje širší cíl (rozhodnuto 17. 7. 2026).
-- **Stav (k 12. 8. 2026):** appka běží na GitHub Pages, git dělá Claude Code (executor).
+- **Stav (k 14. 8. 2026):** appka běží na GitHub Pages, git dělá Claude Code (executor).
+  **J7-P2 (Tabule) hotová a zrevidovaná; běží krok D** — viz předávka níže.
   **Jádro vyhledávání A→B je hotové a ověřené:** **J1** síťový model (`data/network.json`),
   **J2** routing (`routing.js`), **J3** časová vrstva (`timetable.js` + `journey.js`/`planJourney`),
   **JH** zpevnění jádra (bez Pareto, 2 přestupy, smyčky, co-located ≤30 m).
@@ -26,6 +27,27 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
   **J4-sort + J4-sort-2 HOTOVÉ** (pravidla malého města ve výsledcích hledání) a **J7-P1 HOTOVÁ**
   (tab „Moje trasy" na `network.json`, Jízdní řády zrušeny) — vše 12. 8., ověřeno Joem na Pages.
   **Další: J7-P2 (tab „Tabule").** Detail: `TASK.md` (sekce TEĎ), `changelog.md`, `handoff.md` → RESULT.
+
+## Předávka dalšímu manažerovi (2026-08-14) — J7-P2 zrevidována, běží D → C → B
+
+- **J7-P2 (Tabule + sdílený našeptávač + sloučení stejnojmenných zastávek) HOTOVÁ a zrevidovaná**
+  managerem 14. 8.: testy přeběhnuty (3 suity exit 0, `verify_network.js` 20/20), `boardDepartures`
+  ověřeno proti reálným datům řádek po řádku, `index.html` = `index_raw.html`. **Joe testuje na
+  mobilu** — dotykové chování našeptávače (blur/tap 150 ms) se z Node ověřit nedá.
+- **Joe schválil pořadí `D → C → B` (14. 8.). ⭐ D je ZADANÉ, spec v `handoff.md`.**
+  **D** = slepá skvrna stejnojmenných zastávek v routing jádře (Hledat dnes nenajde
+  `Lázně I → Parkoviště KOME` **vůbec** — 0 variant, linka 20 je neviditelná) ·
+  **C** = volný text a diakritika (`Kratka` i `lazne` vrátí 0 spojů a tabule tvrdí „Dnes už odsud nic
+  nejede.") · **B** = `KNOWN_LINE_CLASSES` je Set stringů × `line` je number → barevné odznaky linek
+  nefungují nikde. Detail, nálezy a čísla v `TASK.md` → sekce „J7-P2 — REVIZE MANAGERA".
+- **Klíčové pro D:** expanze musí jít **z id na stejnojmenná id**, ne z názvu — `planJourney` si A/B
+  předrozliší na id dřív, než je předá do `search()`, takže expanze podle názvu by se nechytila.
+  Díky tomu `journey.js` **nepotřebuje žádnou změnu**.
+- ⚠️ **`S#`/`P#` id se mění při každé denní obnově dat** (J8). „Lázně I" byly 12. 8. `S63`+`S143`,
+  14. 8. jsou `S1`+`S154`. V kódu ani testech je nikdy nedrž natvrdo — dohledávej podle názvu.
+- 📌 **Kořenová příčina k rozhodnutí:** „Lázně I" má ve zdroji dva různě pojmenované záznamy
+  (`Karlovy Vary,Lázně I` × `Lázně I`) — viz `TASK.md` ř. ~236. D i C léčí symptom v appce; čistší by
+  bylo sjednotit už v `build_network.js`. Rozhodnout dřív, než na `resolveStopIds` naroste další logika.
 
 ## Předávka dalšímu manažerovi (2026-08-12)
 

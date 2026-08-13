@@ -7,6 +7,36 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-08-14 (2) — v0.1.0 (STEP D: same-name stop ids in the routing core)
+
+- **`scripts/routing.js` — new `buildSameNameMap(net)`** next to `buildCoLocatedMap`: groups all stop
+  ids by `normalizeName(net.stops[id].n)`, maps every id to its full same-name group including
+  itself. Fixes the routing-core counterpart of the "Lázně I" blind spot J7-P2 already fixed for the
+  Tabule board (`resolveStopIds`/`boardDepartures` in `timetable.js`) — `resolveStopId` only ever
+  returns the first id sharing a name, so `search()` was blind to whichever line lived on the other
+  id (here: line 20, a two-stop shuttle Lázně I ↔ Parkoviště KOME). Expansion goes **id → same-name
+  siblings**, not name → ids, because `planJourney` already resolves A/B to ids before calling
+  `search()` — a name-based expansion would never fire on that call path.
+- **`search()`** now resolves `stopA`/`stopB` to `originIds`/`destIds` sets right after the
+  `!stopA || !stopB` guard and uses them in all three blocks (`transfers: 0`, `1`, `2`): an extra
+  `for (const a of originIds)` loop level around the existing `forwardSegments` calls, and a new
+  `firstIndexIn(arr, set)` helper replacing the scalar `indexOf`/`includes`/`===` checks against
+  `stopB`/`stopA`. Mechanical change per spec — loop shapes unchanged, dedup by `resultKey` still
+  collapses anything the wider origin set produces twice. `normalizeName`, `resolveStopId`,
+  `coLocatedGroups`/`buildCoLocatedMap`/`transferPoints` (different concern: nearby stops, not
+  same-name ones) and the final sort are all untouched.
+- **`scripts/routing.test.js`** — new "STEP D" block: `Lázně I → Parkoviště KOME` now finds the direct
+  line-20 shuttle (was 0 variants, now 1, `transfers: 0`), same for the reverse direction, and a
+  no-regression check that `Krátká → Tržnice` (a single-id name) still returns exactly 1296 variants
+  (7 direct) — unchanged from before the fix. All ids resolved by name at run time, no `S#`/`P#`
+  literals (J8 reshuffles them on every data refresh).
+- **Verified:** `routing.test.js`/`journey.test.js`/`timetable.test.js` all exit clean, no `FAIL`
+  lines; `verify_network.js` **20/20 PASS** (guard untouched). `search(net, "Krátká", "Tržnice")`
+  timing ~3.8–5.6 ms across runs, in line with the ~7 ms baseline — the extra loop level is free since
+  only 1 of 156 stop names has more than one id. `index_raw.html`/`index.html` not touched (confirmed
+  via `git status` and `diff -q`) — the fix stayed entirely inside the routing core, as intended.
+  Detail in `handoff.md` → RESULT.
+
 ## 2026-08-14 — v0.1.0 (J7-P2: "Tabule" tab, shared stop picker, merged same-name stops)
 
 - **`scripts/timetable.js` — new `resolveStopIds(net, stopIdOrName)`:** same matching rule as

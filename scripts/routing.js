@@ -134,6 +134,35 @@ function buildCoLocatedMap(net) {
   return map;
 }
 
+// Nektere zastavky maji ve zdroji dve ID se stejnym nazvem (napr. "Lazne I": jedno ID
+// pro linky 2/11/52, druhe pro linku 20) — na rozdil od coLocatedGroups (blizka, ale
+// ruzne pojmenovana mista) tohle je stejne jmeno bez ohledu na vzdalenost. resolveStopId
+// vraci jen prvni shodu, takze bez expanze je druha linka pro search() neviditelna.
+// Expanze jde z id na sourozence (vcetne sebe sama), ne z nazvu — planJourney uz predava
+// id (resolveStopId probehl driv), nazvova expanze by se na tomto volani nikdy nechytila.
+function buildSameNameMap(net) {
+  const groups = new Map();
+  for (const id in net.stops) {
+    const key = normalizeName(net.stops[id].n);
+    let arr = groups.get(key);
+    if (!arr) { arr = []; groups.set(key, arr); }
+    arr.push(id);
+  }
+  const map = new Map();
+  for (const id in net.stops) {
+    map.set(id, groups.get(normalizeName(net.stops[id].n)));
+  }
+  return map;
+}
+
+// Prvni index prvku pole, ktery je v mnozine set (obdoba indexOf, ale pro mnozinu id).
+function firstIndexIn(arr, set) {
+  for (let i = 0; i < arr.length; i++) {
+    if (set.has(arr[i])) return i;
+  }
+  return -1;
+}
+
 // Leg z explicitnich indexu (fromIdx/toIdx v ramci pattern.stops) — jednoznacne
 // i pro smyckove patterny, kde stejne stopId muze mit vice vyskytu. journey.js
 // (KROK B/H2) pouziva leg.fromIdx/leg.toIdx primo, misto zpetneho hledani pres
@@ -180,6 +209,10 @@ function search(net, A, B, opts = {}) {
 
   if (!stopA || !stopB) return results;
 
+  const sameNameMap = buildSameNameMap(net);
+  const originIds = new Set(sameNameMap.get(stopA));
+  const destIds = new Set(sameNameMap.get(stopB));
+
   const stopIdx = maxTransfers >= 1 ? buildStopPatternIndex(net) : null;
   const patternsAt = (stopId) => (stopIdx.get(stopId) ? Array.from(stopIdx.get(stopId)) : []);
   const coLoc = maxTransfers >= 1 ? buildCoLocatedMap(net) : null;
@@ -187,40 +220,45 @@ function search(net, A, B, opts = {}) {
   // misto — leg1 dojede na T, leg2 muze odjet z kteregokoli z nich.
   const transferPoints = (stopId) => [stopId, ...(coLoc.get(stopId) || [])];
 
-  // Prime spoje (transfers 0) — kazdy pouzitelny vyskyt stopA v patternu zvlast
-  // (smycky), pro kazdy nejblizsi nasledujici vyskyt stopB v jeho useku.
+  // Prime spoje (transfers 0) — kazdy pouzitelny vyskyt kterehokoli stejnojmenneho
+  // ID stopA v patternu zvlast (smycky), pro kazdy nejblizsi nasledujici vyskyt
+  // kterehokoli stejnojmenneho ID stopB v jeho useku.
   for (const patternId in net.patterns) {
-    for (const seg of forwardSegments(net, patternId, stopA)) {
-      const ai = seg.after.indexOf(stopB);
-      if (ai === -1) continue;
-      const leg = legFromIndices(net, patternId, seg.fromIdx, seg.fromIdx + 1 + ai);
-      results.push({ transfers: 0, legs: [leg], totalHops: leg.hops });
+    for (const a of originIds) {
+      for (const seg of forwardSegments(net, patternId, a)) {
+        const ai = firstIndexIn(seg.after, destIds);
+        if (ai === -1) continue;
+        const leg = legFromIndices(net, patternId, seg.fromIdx, seg.fromIdx + 1 + ai);
+        results.push({ transfers: 0, legs: [leg], totalHops: leg.hops });
+      }
     }
   }
 
   // 1 prestup (transfers 1)
   if (maxTransfers >= 1) {
     for (const p1 in net.patterns) {
-      for (const seg1 of forwardSegments(net, p1, stopA)) {
-        for (let i = 0; i < seg1.after.length; i++) {
-          const T = seg1.after[i];
-          if (T === stopB || T === stopA) continue;
-          const idxT1 = seg1.fromIdx + 1 + i;
-          for (const Tp of transferPoints(T)) {
-            if (Tp === stopA || Tp === stopB) continue;
-            for (const p2 of patternsAt(Tp)) {
-              if (lineOf(net, p2) === lineOf(net, p1)) continue;
-              for (const seg2 of forwardSegments(net, p2, Tp)) {
-                const bi = seg2.after.indexOf(stopB);
-                if (bi === -1) continue;
-                const leg1 = legFromIndices(net, p1, seg1.fromIdx, idxT1);
-                const leg2 = legFromIndices(net, p2, seg2.fromIdx, seg2.fromIdx + 1 + bi);
-                results.push({
-                  transfers: 1,
-                  legs: [leg1, leg2],
-                  totalHops: leg1.hops + leg2.hops,
-                  coLocated: Tp !== T,
-                });
+      for (const a of originIds) {
+        for (const seg1 of forwardSegments(net, p1, a)) {
+          for (let i = 0; i < seg1.after.length; i++) {
+            const T = seg1.after[i];
+            if (destIds.has(T) || originIds.has(T)) continue;
+            const idxT1 = seg1.fromIdx + 1 + i;
+            for (const Tp of transferPoints(T)) {
+              if (originIds.has(Tp) || destIds.has(Tp)) continue;
+              for (const p2 of patternsAt(Tp)) {
+                if (lineOf(net, p2) === lineOf(net, p1)) continue;
+                for (const seg2 of forwardSegments(net, p2, Tp)) {
+                  const bi = firstIndexIn(seg2.after, destIds);
+                  if (bi === -1) continue;
+                  const leg1 = legFromIndices(net, p1, seg1.fromIdx, idxT1);
+                  const leg2 = legFromIndices(net, p2, seg2.fromIdx, seg2.fromIdx + 1 + bi);
+                  results.push({
+                    transfers: 1,
+                    legs: [leg1, leg2],
+                    totalHops: leg1.hops + leg2.hops,
+                    coLocated: Tp !== T,
+                  });
+                }
               }
             }
           }
@@ -236,38 +274,40 @@ function search(net, A, B, opts = {}) {
   // pokryte 1-prestupovym vysledkem vyse, dalsi prestup by byl jen zbytecna oklika).
   if (maxTransfers >= 2) {
     for (const p1 in net.patterns) {
-      for (const seg1 of forwardSegments(net, p1, stopA)) {
-        for (let i = 0; i < seg1.after.length; i++) {
-          const T1 = seg1.after[i];
-          if (T1 === stopB || T1 === stopA) continue;
-          const idxT1 = seg1.fromIdx + 1 + i;
-          for (const T1p of transferPoints(T1)) {
-            if (T1p === stopA || T1p === stopB) continue;
-            for (const p2 of patternsAt(T1p)) {
-              if (lineOf(net, p2) === lineOf(net, p1)) continue;
-              for (const seg2 of forwardSegments(net, p2, T1p)) {
-                if (seg2.after.includes(stopB)) continue; // pokryto 1-prestupovym vysledkem
-                for (let j = 0; j < seg2.after.length; j++) {
-                  const T2 = seg2.after[j];
-                  if (T2 === stopA || T2 === T1 || T2 === T1p || T2 === stopB) continue;
-                  const idxT2 = seg2.fromIdx + 1 + j;
-                  for (const T2p of transferPoints(T2)) {
-                    if (T2p === stopA || T2p === stopB || T2p === T1 || T2p === T1p) continue;
-                    for (const p3 of patternsAt(T2p)) {
-                      if (lineOf(net, p3) === lineOf(net, p2)) continue;
-                      for (const seg3 of forwardSegments(net, p3, T2p)) {
-                        const bi = seg3.after.indexOf(stopB);
-                        if (bi === -1) continue;
-                        const leg1 = legFromIndices(net, p1, seg1.fromIdx, idxT1);
-                        const leg2 = legFromIndices(net, p2, seg2.fromIdx, idxT2);
-                        const leg3 = legFromIndices(net, p3, seg3.fromIdx, seg3.fromIdx + 1 + bi);
-                        results.push({
-                          transfers: 2,
-                          legs: [leg1, leg2, leg3],
-                          totalHops: leg1.hops + leg2.hops + leg3.hops,
-                          coLocated1: T1p !== T1,
-                          coLocated2: T2p !== T2,
-                        });
+      for (const a of originIds) {
+        for (const seg1 of forwardSegments(net, p1, a)) {
+          for (let i = 0; i < seg1.after.length; i++) {
+            const T1 = seg1.after[i];
+            if (destIds.has(T1) || originIds.has(T1)) continue;
+            const idxT1 = seg1.fromIdx + 1 + i;
+            for (const T1p of transferPoints(T1)) {
+              if (originIds.has(T1p) || destIds.has(T1p)) continue;
+              for (const p2 of patternsAt(T1p)) {
+                if (lineOf(net, p2) === lineOf(net, p1)) continue;
+                for (const seg2 of forwardSegments(net, p2, T1p)) {
+                  if (seg2.after.some((x) => destIds.has(x))) continue; // pokryto 1-prestupovym vysledkem
+                  for (let j = 0; j < seg2.after.length; j++) {
+                    const T2 = seg2.after[j];
+                    if (originIds.has(T2) || T2 === T1 || T2 === T1p || destIds.has(T2)) continue;
+                    const idxT2 = seg2.fromIdx + 1 + j;
+                    for (const T2p of transferPoints(T2)) {
+                      if (originIds.has(T2p) || destIds.has(T2p) || T2p === T1 || T2p === T1p) continue;
+                      for (const p3 of patternsAt(T2p)) {
+                        if (lineOf(net, p3) === lineOf(net, p2)) continue;
+                        for (const seg3 of forwardSegments(net, p3, T2p)) {
+                          const bi = firstIndexIn(seg3.after, destIds);
+                          if (bi === -1) continue;
+                          const leg1 = legFromIndices(net, p1, seg1.fromIdx, idxT1);
+                          const leg2 = legFromIndices(net, p2, seg2.fromIdx, idxT2);
+                          const leg3 = legFromIndices(net, p3, seg3.fromIdx, seg3.fromIdx + 1 + bi);
+                          results.push({
+                            transfers: 2,
+                            legs: [leg1, leg2, leg3],
+                            totalHops: leg1.hops + leg2.hops + leg3.hops,
+                            coLocated1: T1p !== T1,
+                            coLocated2: T2p !== T2,
+                          });
+                        }
                       }
                     }
                   }

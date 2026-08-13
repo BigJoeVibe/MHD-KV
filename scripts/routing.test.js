@@ -149,3 +149,45 @@ if (!komeId) {
       : "WARN H1d: co-located prestup Parkoviste KOME -> Trznice NENALEZEN - zkontroluj coLocatedGroups/H1d"
   );
 }
+
+// --- STEP D: same-name stop ids in the routing core (2026-08-14) ---
+// "Lázně I" is split across two ids sharing the same name — one carries lines 2/11/52,
+// the other carries line 20 (a two-stop shuttle Lázně I <-> Parkoviště KOME).
+// resolveStopId() only ever returns the first match, so before this fix search() was
+// blind to line 20 no matter which id it silently picked. Ids are looked up by name
+// (never hardcoded), per handoff.md — S#/P# are reshuffled by every J8 data refresh.
+console.log("\n--- STEP D: same-name stop ids (Lázně I / Parkoviště KOME, line 20) ---");
+let stepDAllOk = true;
+
+const laznePK = search(net, "Lázně I", "Parkoviště KOME", { maxTransfers: 1 });
+const laznePKDirectLine20 = laznePK.some((r) => r.transfers === 0 && r.legs[0].line === 20);
+stepDAllOk = stepDAllOk && laznePKDirectLine20;
+console.log(
+  (laznePKDirectLine20 ? "  OK   " : "  FAIL ") +
+    `Lázně I → Parkoviště KOME: ${laznePK.length} varianta/y, přímá linka 20 ${laznePKDirectLine20 ? "nalezena" : "CHYBÍ"}`
+);
+
+const pkLazne = search(net, "Parkoviště KOME", "Lázně I", { maxTransfers: 1 });
+const pkLazneDirectLine20 = pkLazne.some((r) => r.transfers === 0 && r.legs[0].line === 20);
+stepDAllOk = stepDAllOk && pkLazneDirectLine20;
+console.log(
+  (pkLazneDirectLine20 ? "  OK   " : "  FAIL ") +
+    `Parkoviště KOME → Lázně I (opačný směr): ${pkLazne.length} varianta/y, přímá linka 20 ${pkLazneDirectLine20 ? "nalezena" : "CHYBÍ"}`
+);
+
+// No-regression invariant: a name with a single id must return exactly the same
+// counts as before the fix — measured by the manager on today's data (2026-08-14).
+const kratkaTrznice = search(net, "Krátká", "Tržnice", { maxTransfers: 1 });
+const kratkaTrzniceDirect = kratkaTrznice.filter((r) => r.transfers === 0).length;
+const noRegression = kratkaTrznice.length === 1296 && kratkaTrzniceDirect === 7;
+stepDAllOk = stepDAllOk && noRegression;
+console.log(
+  (noRegression ? "  OK   " : "  FAIL ") +
+    `no-regression: Krátká → Tržnice vrací ${kratkaTrznice.length} variant (${kratkaTrzniceDirect} přímých), čekáno 1296 (7 přímých)`
+);
+
+console.time("  STEP D timing: Krátká → Tržnice");
+search(net, "Krátká", "Tržnice");
+console.timeEnd("  STEP D timing: Krátká → Tržnice");
+
+console.log(stepDAllOk ? "OK: STEP D — všechny scénáře prošly" : "FAIL: STEP D — některý scénář selhal (viz výše)");
