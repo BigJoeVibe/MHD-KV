@@ -15,11 +15,23 @@ function normalizeName(name) {
   return name.replace(/^Karlovy Vary,/, "").trim().toLowerCase();
 }
 
+// Diacritics-stripped normalizeName, for a second-pass fallback ONLY (STEP C1) — most
+// people type without diacritics on a phone. Never used for the first, exact pass: it
+// also drives coLocatedGroups' distance threshold and buildSameNameMap, both of which
+// must keep matching on exact names.
+function normalizeLoose(name) {
+  return normalizeName(name).normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
 function resolveStopId(net, nameOrId) {
   if (net.stops[nameOrId]) return nameOrId;
   const target = normalizeName(nameOrId);
   for (const id in net.stops) {
     if (normalizeName(net.stops[id].n) === target) return id;
+  }
+  const loose = normalizeLoose(nameOrId);
+  for (const id in net.stops) {
+    if (normalizeLoose(net.stops[id].n) === loose) return id;
   }
   return null;
 }
@@ -348,7 +360,7 @@ function search(net, A, B, opts = {}) {
   return deduped;
 }
 
-const MHDRouting = { search, resolveStopId, lineOf, forwardSegments, HUBS, coLocatedGroups, stopsAfter, patternsThrough };
+const MHDRouting = { search, resolveStopId, lineOf, forwardSegments, HUBS, coLocatedGroups, stopsAfter, patternsThrough, normalizeName, normalizeLoose };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MHDRouting;
 if (typeof window !== "undefined") window.MHDRouting = MHDRouting;

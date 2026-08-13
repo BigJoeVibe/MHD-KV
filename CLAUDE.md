@@ -15,7 +15,7 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
 - **Aktuální verze:** v0.1.0 (F1 komplet). Schéma: 0.x = vývojové/testovací
   verze; 1.0.0 přijde, až appka pokryje širší cíl (rozhodnuto 17. 7. 2026).
 - **Stav (k 14. 8. 2026):** appka běží na GitHub Pages, git dělá Claude Code (executor).
-  **J7-P2 (Tabule) hotová a zrevidovaná; běží krok D** — viz předávka níže.
+  **J7-P2 (Tabule) i krok D hotové a zrevidované; další v pořadí C, pak B** — viz předávka níže.
   **Jádro vyhledávání A→B je hotové a ověřené:** **J1** síťový model (`data/network.json`),
   **J2** routing (`routing.js`), **J3** časová vrstva (`timetable.js` + `journey.js`/`planJourney`),
   **JH** zpevnění jádra (bez Pareto, 2 přestupy, smyčky, co-located ≤30 m).
@@ -34,7 +34,16 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
   managerem 14. 8.: testy přeběhnuty (3 suity exit 0, `verify_network.js` 20/20), `boardDepartures`
   ověřeno proti reálným datům řádek po řádku, `index.html` = `index_raw.html`. **Joe testuje na
   mobilu** — dotykové chování našeptávače (blur/tap 150 ms) se z Node ověřit nedá.
-- **Joe schválil pořadí `D → C → B` (14. 8.). ⭐ D je ZADANÉ, spec v `handoff.md`.**
+- **✅ KROK D HOTOVÝ a zrevidovaný (14. 8.).** `buildSameNameMap` + `firstIndexIn` v `routing.js`;
+  `Lázně I → Parkoviště KOME` = 1 přímá linkou 20 (dřív 0), `planJourney` vrací 5 karet, regrese
+  `Krátká → Tržnice` 1296/7 beze změny, `index_raw.html` nedotčený. **Nález revize: duplicitní
+  názvy jsou DVA, ne jeden** — přibyla `Andělská Hora,Dolní obec` (rozdíl jen ve velikosti písmene
+  ve zdroji), D opravilo i jeden neviditelný směr linky 8. Detail v `TASK.md` → „KROK D — REVIZE".
+- **Joe schválil pořadí `D → C → B` (14. 8.).** ⭐ **KROK C JE ZADANÝ, spec v `handoff.md`** —
+  varianta „obojí": tolerantní rozlišení zastávky (druhý průchod bez diakritiky, exact vyhrává)
+  + poctivá hláška `Zastávku neznám. Vyber ji ze seznamu.` + snap volného textu na kanonický název.
+  Ověřeno předem: 155 unikátních názvů striktně **i** bez diakritiky → **0 kolizí**, fallback nemůže
+  trefit jinou zastávku. Spec na to přidává hlídací test pro budoucí obnovy dat.
   **D** = slepá skvrna stejnojmenných zastávek v routing jádře (Hledat dnes nenajde
   `Lázně I → Parkoviště KOME` **vůbec** — 0 variant, linka 20 je neviditelná) ·
   **C** = volný text a diakritika (`Kratka` i `lazne` vrátí 0 spojů a tabule tvrdí „Dnes už odsud nic

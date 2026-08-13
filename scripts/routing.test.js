@@ -7,7 +7,7 @@
 // radku, ne cely seznam (drive slo vypsat vse, protoze Pareto ho drzelo male).
 
 const path = require("path");
-const { search, resolveStopId, HUBS } = require("./routing.js");
+const { search, resolveStopId, HUBS, normalizeName, normalizeLoose } = require("./routing.js");
 const net = require(path.join(__dirname, "..", "data", "network.json"));
 
 function fmtResult(r) {
@@ -191,3 +191,55 @@ search(net, "Krátká", "Tržnice");
 console.timeEnd("  STEP D timing: Krátká → Tržnice");
 
 console.log(stepDAllOk ? "OK: STEP D — všechny scénáře prošly" : "FAIL: STEP D — některý scénář selhal (viz výše)");
+
+// --- STEP C: diacritics-tolerant stop resolution (2026-08-14) ---
+// The picker's suggestion matching (matchStopNames) already ignores diacritics, but
+// resolution demanded them exactly — so text that autocompletes fine resolved to
+// nothing. resolveStopId now retries diacritics-stripped when the exact pass finds
+// nothing; the exact pass itself must stay byte-identical.
+console.log("\n--- STEP C: diacritics-tolerant resolveStopId ---");
+let stepCAllOk = true;
+
+const looseId = resolveStopId(net, "kratka");
+const exactId = resolveStopId(net, "Krátká");
+const looseOk = looseId !== null && looseId === exactId;
+stepCAllOk = stepCAllOk && looseOk;
+console.log(
+  (looseOk ? "  OK   " : "  FAIL ") +
+    `resolveStopId(net, "kratka") = ${looseId}, resolveStopId(net, "Krátká") = ${exactId}`
+);
+
+const looseSearch = search(net, "kratka", "trznice", { maxTransfers: 1 });
+const looseSearchDirect = looseSearch.filter((r) => r.transfers === 0).length;
+const looseSearchOk = looseSearch.length === 1296 && looseSearchDirect === 7;
+stepCAllOk = stepCAllOk && looseSearchOk;
+console.log(
+  (looseSearchOk ? "  OK   " : "  FAIL ") +
+    `search(net, "kratka", "trznice") vrací ${looseSearch.length} variant (${looseSearchDirect} přímých), čekáno 1296 (7 přímých) — stejně jako přesný název`
+);
+
+// Data guard: if a future data refresh introduces two DIFFERENT exact names that
+// collapse to the same diacritics-stripped string, the loose fallback becomes
+// ambiguous (resolveStopId would silently pick whichever comes first). This must
+// fail loudly, not quietly pick a stop, if that ever happens.
+const exactNames = new Set();
+for (const id in net.stops) exactNames.add(normalizeName(net.stops[id].n));
+const looseToExact = new Map();
+let collision = null;
+for (const exact of exactNames) {
+  const loose = normalizeLoose(exact);
+  if (looseToExact.has(loose) && looseToExact.get(loose) !== exact) {
+    collision = { loose, a: looseToExact.get(loose), b: exact };
+    break;
+  }
+  looseToExact.set(loose, exact);
+}
+const guardOk = collision === null;
+stepCAllOk = stepCAllOk && guardOk;
+console.log(
+  (guardOk ? "  OK   " : "  FAIL ") +
+    `data guard: ${exactNames.size} přesných názvů → ${looseToExact.size} po odstranění diakritiky` +
+    (collision ? ` — KOLIZE: "${collision.a}" i "${collision.b}" → "${collision.loose}"` : ", 0 kolizí")
+);
+
+console.log(stepCAllOk ? "OK: STEP C (routing.js) — všechny scénáře prošly" : "FAIL: STEP C (routing.js) — některý scénář selhal (viz výše)");

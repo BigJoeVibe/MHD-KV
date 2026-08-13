@@ -102,3 +102,34 @@ check(`matchStopNames("zzz-neexistuje") -> [] (skutecne ${JSON.stringify(matchSt
   matchStopNames(stopNames, "zzz-neexistuje").length === 0);
 
 console.log(j7p2AllOk ? "\nOK: J7-P2 — všechny scénáře prošly" : "\nFAIL: J7-P2 — některý scénář selhal (viz výše)");
+
+// ============================================================
+// STEP C — diacritics-tolerant resolveStopIds (2026-08-14)
+// ============================================================
+console.log("\n--- STEP C: diacritics-tolerant resolveStopIds ---");
+let stepCAllOk = true;
+function checkC(label, ok) {
+  console.log((ok ? "  OK   " : "  FAIL ") + label);
+  if (!ok) stepCAllOk = false;
+  return ok;
+}
+
+// tolerant, by name — same ids as the exact-name call, regardless of order
+const kratkaLoose = resolveStopIds(net, "Kratka").slice().sort();
+const kratkaExact = resolveStopIds(net, "Krátká").slice().sort();
+checkC(`resolveStopIds("Kratka") = resolveStopIds("Krátká") (skutecne ${JSON.stringify(kratkaLoose)} vs ${JSON.stringify(kratkaExact)})`,
+  kratkaExact.length > 0 && JSON.stringify(kratkaLoose) === JSON.stringify(kratkaExact));
+
+// tolerant board — merged Lázně I board (line 20 included), same rows regardless of typed diacritics
+const lazneLooseBoard = boardDepartures(net, "lazne i", DAY, 600, { limit: 10 });
+const lazneExactBoard = boardDepartures(net, "Lázně I", DAY, 600, { limit: 10 });
+checkC(`boardDepartures("lazne i") = boardDepartures("Lázně I") (${lazneLooseBoard.length} vs ${lazneExactBoard.length} radku)`,
+  JSON.stringify(lazneLooseBoard) === JSON.stringify(lazneExactBoard));
+checkC("boardDepartures(\"lazne i\") obsahuje aspon jeden radek linky 20",
+  lazneLooseBoard.some((r) => r.line === 20));
+
+// still strict about nonsense — no fallback match for a name that isn't close to any stop
+checkC('resolveStopIds("zzz-neexistuje") -> [] (stale prazdne i po loose fallbacku)',
+  resolveStopIds(net, "zzz-neexistuje").length === 0);
+
+console.log(stepCAllOk ? "OK: STEP C (timetable.js) — všechny scénáře prošly" : "FAIL: STEP C (timetable.js) — některý scénář selhal (viz výše)");

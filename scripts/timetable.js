@@ -47,6 +47,12 @@ function normalizeName(name) {
   return name.replace(/^Karlovy Vary,/, "").trim().toLowerCase();
 }
 
+// Diacritics-stripped normalizeName, for a second-pass fallback ONLY (STEP C1) — see
+// routing.js's copy of the same helper for why the exact pass must stay untouched.
+function normalizeLoose(name) {
+  return normalizeName(name).normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
 // Unlike resolveStopId (first match only), returns EVERY stop id sharing the name —
 // e.g. "Lázně I" is split across S63 (lines 2/11/52) and S143 (line 20 only).
 function resolveStopIds(net, stopIdOrName) {
@@ -55,6 +61,11 @@ function resolveStopIds(net, stopIdOrName) {
   const ids = [];
   for (const id in net.stops) {
     if (normalizeName(net.stops[id].n) === target) ids.push(id);
+  }
+  if (ids.length > 0) return ids;
+  const loose = normalizeLoose(stopIdOrName);
+  for (const id in net.stops) {
+    if (normalizeLoose(net.stops[id].n) === loose) ids.push(id);
   }
   return ids;
 }
@@ -139,7 +150,7 @@ function nextDepartures(net, stopIdOrName, dateStr, nowMin, opts = {}) {
 
 const MHDTimetable = {
   isServiceActive, activeServicesOn, patternDeparturesOn, nextDepartures,
-  resolveStopIds, boardDepartures, matchStopNames
+  resolveStopIds, boardDepartures, matchStopNames, normalizeName, normalizeLoose
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MHDTimetable;

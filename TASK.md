@@ -63,9 +63,46 @@ chronologicky (ne po linkách), duplicitní názvy ze zdroje nechat být.
 🔴 **Nález managera (12. 8.) — „Lázně I" jsou v datech DVĚ zastávky se stejným názvem** na
 identických souřadnicích (0 m): `S63` (24 patternů, linky 2, 11, 52) a `S143` (2 patterny,
 **linka 20**). `resolveStopId` vrací jen `S63`, takže **linka 20 je z pohledu appky neviditelná**.
-Jediný takový případ ze 156 názvů. P2 to řeší pro tabuli přes `resolveStopIds` + `boardDepartures`.
+~~Jediný takový případ ze 156 názvů.~~ ⚠️ **OPRAVENO 14. 8. při revizi D — jsou DVA** (viz sekce
+„KROK D — REVIZE MANAGERA"): původní měření jsem dělal bez `toLowerCase()`, `normalizeName` ho ale
+dělá. P2 to řeší pro tabuli přes `resolveStopIds` + `boardDepartures`.
 📌 **Stejnou slepou skvrnu má i Hledat** (zadáš „Lázně I" jako výchozí → linka 20 se neuvažuje).
 Oprava sahá do routing jádra → **samostatná předávka**, do P2 se nepřidává.
+
+---
+
+## 🟢 KROK D — HOTOVO A ZREVIDOVÁNO (14. 8. 2026). Další v pořadí: **C**, pak **B**
+
+**Revize (manager, 14. 8., ověřeno vlastním během):** 3 test suity exit 0 bez `FAIL`,
+`verify_network.js` 20/20, `index.html` = `index_raw.html`. `Lázně I → Parkoviště KOME` = **1 přímá
+varianta linkou 20** v obou směrech (dřív 0). Regresní invariant `Krátká → Tržnice` sedí přesně:
+**1296 variant / 7 přímých**, ~9 ms. Kód přečten — `buildSameNameMap` + `firstIndexIn` aplikované
+konzistentně ve všech třech blocích (`transfers: 0/1/2`), `normalizeName`, `resolveStopId`,
+co-located logika i závěrečné řazení nedotčené. Přesně podle specu.
+
+✅ **Ověřeno navíc i na reálné uživatelské cestě** (executor testoval jen `search`): `planJourney`
+vrací pro `Lázně I → Parkoviště KOME` **5 karet linky 20** (10:05, 10:20, 10:35…) a opačný směr
+také. Tohle Joe uvidí v appce — jádro i UI vrstva sedí.
+
+🔴 **CHYBA V MÉM ZADÁNÍ, kterou revize odhalila:** psal jsem „jediný takový případ ze 156 názvů".
+**Není.** Měřil jsem duplicity bez `toLowerCase()`, ale `normalizeName` lowercase dělá. Ve
+skutečnosti jsou **dva**:
+
+| název | id | vzdálenost | linky | co bylo neviditelné |
+|---|---|---|---|---|
+| `Lázně I` | S1 + S154 | 0 m | 2/11/52 × **20** | celá linka 20 |
+| `Andělská Hora,Dolní obec` | S57 + S80 | 0 m | 8 × 8 | **jeden směr linky 8** (P51) |
+
+Druhý případ vzniká rozdílem `Dolní obec` × `dolní obec` ve zdrojových datech (už zmíněno v ř. ~302
+tohoto souboru jako UX poznámka k našeptávači — nedošlo mi, že jde o tentýž problém). Sloučení je
+v obou případech správné: 0 m, stejná linka. **D tedy opravilo dvě zastávky, ne jednu** — ověřeno:
+`Andělská Hora,Dolní obec → Kolová,ObÚ` vrací nově 2 přímé varianty (P38 z S57 + P51 z S80), dřív
+jednu. Perf závěr platí dál. Číslo opraveno v `TASK.md` ř. 66 a v `changelog.md`; v `handoff.md`
+zůstalo v RESULTu jako historický záznam.
+
+📌 **Latentní, zatím neškodné:** `hubStopIds()` pořád používá `resolveStopId` → jedno id na hub.
+Dnes v pořádku (ověřeno — žádný ze 4 hubů duplicitní název nemá), ale kdyby ho někdy měl, řazení
+„přestup přes hub napřed" by ho přestalo poznávat. Řádek na hlídání, ne úkol.
 
 ---
 
@@ -353,7 +390,7 @@ GitHub log hlásí deprecation warning (runner vynuceně použil Node 24) — zv
 | **Asymetrie přímé × přestupy** (nález managera 12. 8.) | `directItineraries` zahodí odjezd před `nowMin` (kromě nočního okna), zatímco `transferItineraries` posouvá o `+1440` → v hluchých obdobích se nabídnou zítřejší přestupy, ale ne zítřejší přímé spoje. Filtry J4-sort to zamaskují, **neopraví**. | samostatný fix po J4-sort |
 | **Večerní/víkendová tolerance okna** (Joe 12. 8.: „ještě doladíme") | 90 min je laděné na denní provoz; večer a o víkendu jezdí řidčeji. Po nasazení J4-sort proměřit a případně zvednout — jde jen o čísla parametrů, ne o logiku. | po J4-sort, dle testu |
 | **Slepá skvrna `resolveStopId` u stejnojmenných zastávek** (nález managera 12. 8.) = **krok D** | „Lázně I" = 2 id; `resolveStopId` vrací jen první → **Hledat ignoruje linku 20**. J7-P2 to řeší jen pro tabuli (`resolveStopIds`), oprava v routing jádře je samostatná předávka. Pozor na dopad na `search()` a Pareto — víc výchozích id znamená víc variant. | ⭐ **ZADÁNO 14. 8.**, spec v `handoff.md` |
-| **Volný text a diakritika při rozlišení zastávky** (nález managera 14. 8.) = **krok C** | `matchStopNames` je bez diakritiky, `resolveStopId(s)` ji vyžaduje → `Kratka` i `lazne` vrátí **0 spojů** a tabule zobrazí `Dnes už odsud nic nejede.`, což je lež. Dvě cesty: (1) fallback bez diakritiky v rozlišení (příjemnější), (2) nepotvrzený text = hláška „Zastávku vyber ze seznamu" (bezpečnější). ⚠️ **NEměnit `normalizeName` globálně** — používá ho i `coLocatedGroups` pro práh 60 m × 30 m. | schváleno Joem 14. 8., po D |
+| **Volný text a diakritika při rozlišení zastávky** (nález managera 14. 8.) = **krok C** | `matchStopNames` je bez diakritiky, `resolveStopId(s)` ji vyžaduje → `Kratka` i `lazne` vrátí **0 spojů** a tabule zobrazí `Dnes už odsud nic nejede.`, což je lež. **Joe rozhodl 14. 8.: obojí** — tolerantní rozlišení (druhý průchod bez diakritiky, exact vyhrává) **i** poctivá hláška `Zastávku neznám. Vyber ji ze seznamu.` + snap volného textu na kanonický název, ať je vidět, co appka uhodla. ⚠️ **NEměnit `normalizeName` globálně** — používá ho i `coLocatedGroups` (práh 60 m × 30 m) a `buildSameNameMap` (krok D). | ⭐ **ZADÁNO 14. 8.**, spec v `handoff.md` |
 | **`KNOWN_LINE_CLASSES` nikdy nematchne** (nález executora + ověřeno managerem 14. 8.) = **krok B** | Set stringů × `line` je number → barevné odznaky linek 3/9/13/15/51 se nezobrazí **nikde** (Moje trasy ř. 1022, Tabule ř. 1199, Hledat ř. 1321 v `index_raw.html`). Pre-existující, ne z J7-P2. Oprava jednořádková, ale vizuálně změní 3 taby naráz. | schváleno Joem 14. 8., po C |
 | **Našeptávač — drobnosti k ověření na telefonu** (manager 14. 8.) | `z-index: 20` × sticky hlavička 100 / taby 99 → seznam může podlézt lištu · fokus do pole s hodnotou hned otevře nabídku přes odjezdy · prázdný stav nerozlišuje „konec provozu" × „neznámá zastávka" | čeká na Joeův mobilní test |
 | **Našeptávání zastávek, hlavně na mobilu** (Joe 12. 8., UX) — ✅ **řeší J7-P2** | Dnes je to nativní `<datalist>` (`index_raw.html`, `stopList`) — na desktopu funguje, **na mobilu je chování nekonzistentní** (iOS Safari datalist prakticky nepoužívá). Nálezy managera: (a) zdroj má **duplicitní názvy lišící se jen velikostí písmen a zkratkou** — `Andělská Hora,Dolní obec` × `,dolní obec`, `hor.obec` × `horní obec` → v našeptávači to vypadá jako chyba; (b) ověřit, jak si s nimi poradí `resolveStopId`. Váže se na výběr zastávky v J7-P2 (Tabule) — dá se udělat jednou pro obě místa. | do J7-P2 nebo samostatně |

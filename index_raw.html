@@ -1094,7 +1094,22 @@ function onPickerFocus(fieldId) {
 function onPickerBlur(fieldId) {
   // Short delay: a tap on a suggestion fires blur before its click — closing the
   // list immediately would eat the tap. 150ms is long enough for that click to land.
-  pickerBlurTimers[fieldId] = setTimeout(() => closePickerSuggestions(fieldId), 150);
+  pickerBlurTimers[fieldId] = setTimeout(() => {
+    closePickerSuggestions(fieldId);
+    // Snap free text to the canonical name so a tolerant resolve (STEP C1, e.g.
+    // "kratka" -> "Krátká") is visible, not silent — resolveStopId is now
+    // diacritics-tolerant, so this can succeed even when the typed text doesn't
+    // exactly match any stop name.
+    const value = PICKER_FIELDS[fieldId].get();
+    const id = value.trim() ? window.MHDRouting.resolveStopId(NET, value.trim()) : null;
+    if (id) {
+      const canonical = stopDisplayName(NET.stops[id].n);
+      PICKER_FIELDS[fieldId].set(canonical);
+      const input = document.getElementById(`picker-${fieldId}`);
+      if (input) input.value = canonical;
+    }
+    PICKER_FIELDS[fieldId].onCommit();
+  }, 150);
 }
 
 function onPickerKeydown(event, fieldId) {
@@ -1131,6 +1146,10 @@ function closePickerSuggestions(fieldId) {
 }
 
 function selectPickerStop(fieldId, name) {
+  // A tap fires blur before this click handler runs, so onPickerBlur's delayed
+  // callback is already scheduled — without clearing it, it fires ~150ms later and
+  // now does real snap/onCommit work (STEP C2a), not just a harmless list close.
+  if (pickerBlurTimers[fieldId]) { clearTimeout(pickerBlurTimers[fieldId]); pickerBlurTimers[fieldId] = null; }
   PICKER_FIELDS[fieldId].set(name);
   const input = document.getElementById(`picker-${fieldId}`);
   if (input) input.value = name;
@@ -1191,7 +1210,8 @@ function renderBoardRows() {
 
   let html = `<div class="route-card${vClass}"><div class="departures-list">`;
   if (rows.length === 0) {
-    html += `<div class="no-more">Dnes už odsud nic nejede.</div>`;
+    const knownStop = window.MHDTimetable.resolveStopIds(NET, boardStop).length > 0;
+    html += `<div class="no-more">${knownStop ? 'Dnes už odsud nic nejede.' : 'Zastávku neznám. Vyber ji ze seznamu.'}</div>`;
   } else {
     rows.forEach((row, i) => {
       const isNext = i === 0;

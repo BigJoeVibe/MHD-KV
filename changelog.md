@@ -7,6 +7,48 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-08-14 (3) — v0.1.0 (STEP C: diacritics-tolerant stop resolution + honest empty state)
+
+- **The bug:** the picker's suggestion matching (`matchStopNames`) already ignores diacritics, but
+  the resolvers it feeds into (`resolveStopId` in `routing.js`, `resolveStopIds` in `timetable.js`)
+  demanded them exactly — text that autocompleted fine (e.g. `kratka` → suggests `Krátká`) resolved
+  to nothing if the user typed free text and blurred instead of tapping a suggestion. On a phone,
+  where most people type without diacritics, this made the Tabule board print `Dnes už odsud nic
+  nejede.` for a perfectly real stop — a lie, not a timetable fact. Joe's decision (14. 8.): fix
+  both halves — tolerant resolution *and* an honest empty state.
+- **`scripts/routing.js`/`scripts/timetable.js` — new `normalizeLoose(name)`** next to each module's
+  existing `normalizeName` (left untouched — it still drives `coLocatedGroups`'/`buildSameNameMap`'s
+  exact-name matching). Both resolvers get a second pass: only when the exact pass finds nothing do
+  they retry with every stop name diacritics-stripped. `resolveStopId(net, "kratka")` and
+  `resolveStopId(net, "Krátká")` now both resolve to the same id; `resolveStopId(net,
+  "zzz-neexistuje")` still returns `null` — the loose pass can't invent a match for genuine nonsense.
+  `normalizeName`/`normalizeLoose` now exported from both modules.
+- **`index_raw.html` — snap on blur (STEP C2a):** the existing 150ms delayed blur callback
+  (`onPickerBlur`) now resolves whatever the user typed via the now-tolerant `resolveStopId` before
+  closing the suggestion list; on a hit it writes the canonical stop name back into the input and
+  the field's state, making a tolerant guess **visible** instead of silent. `selectPickerStop` now
+  clears the field's pending blur timer first — a tap fires blur before its click, so without this
+  the delayed callback would still fire ~150ms later and now do real snap/onCommit work instead of
+  a harmless list close.
+- **`index_raw.html` — honest empty state (STEP C2b):** `renderBoardRows` now distinguishes "stop
+  doesn't resolve at all" (`Zastávku neznám. Vyber ji ze seznamu.`) from "stop resolves, nothing
+  left today" (`Dnes už odsud nic nejede.`, unchanged) via `resolveStopIds(...).length`. Hledat
+  already had this distinction and needed no change — it inherits the tolerant resolution for free
+  since `doSearch` calls `resolveStopId` directly.
+- **Tests:** `routing.test.js` new STEP C block — tolerant `resolveStopId` equality, tolerant
+  `search("kratka","trznice")` matching the exact-name count (1296 variants, 7 direct), and a data
+  guard asserting no two distinct exact stop names collapse to the same diacritics-stripped string
+  (measured **155 → 155, 0 collisions** on today's data — would fail loudly if a future data refresh
+  ever broke this). `timetable.test.js` new STEP C block — tolerant `resolveStopIds` equality,
+  `boardDepartures("lazne i", …)` byte-identical to `boardDepartures("Lázně I", …)` including the
+  line-20 row, and `resolveStopIds("zzz-neexistuje")` staying `[]`.
+- **Verified:** `routing.test.js`/`journey.test.js`/`timetable.test.js` all exit 0, zero "fail"
+  occurrences in any output; `verify_network.js` **20/20 PASS** (exact-name path — the exact pass in
+  both resolvers is byte-identical, confirmed by this guard staying green and by the STEP D
+  no-regression check, `Krátká → Tržnice` 1296/7, still holding). `index.html` re-synced from
+  `index_raw.html`, `diff -q` clean. Detail, before/after numbers and a flagged judgment call around
+  2a's `onCommit()` timing in `handoff.md` → RESULT.
+
 ## 2026-08-14 (2) — v0.1.0 (STEP D: same-name stop ids in the routing core)
 
 - **`scripts/routing.js` — new `buildSameNameMap(net)`** next to `buildCoLocatedMap`: groups all stop
@@ -33,9 +75,17 @@ Backlog byl přesunut do `TASK.md`.
 - **Verified:** `routing.test.js`/`journey.test.js`/`timetable.test.js` all exit clean, no `FAIL`
   lines; `verify_network.js` **20/20 PASS** (guard untouched). `search(net, "Krátká", "Tržnice")`
   timing ~3.8–5.6 ms across runs, in line with the ~7 ms baseline — the extra loop level is free since
-  only 1 of 156 stop names has more than one id. `index_raw.html`/`index.html` not touched (confirmed
-  via `git status` and `diff -q`) — the fix stayed entirely inside the routing core, as intended.
-  Detail in `handoff.md` → RESULT.
+  only a handful of the 156 stop names has more than one id. `index_raw.html`/`index.html` not touched
+  (confirmed via `git status` and `diff -q`) — the fix stayed entirely inside the routing core, as
+  intended. Detail in `handoff.md` → RESULT.
+- **Oprava managera (14. 8., revize D):** číslo „1 ze 156 názvů" ve specu i v tomhle zápisu bylo
+  **chybné — moje chyba v zadání**. Měřil jsem duplicitní názvy bez `toLowerCase()`, kdežto
+  `normalizeName` lowercase dělá. Skutečnost: **2 názvy ze 156** mají víc id — `Lázně I` (S1+S154,
+  0 m, linky 2/11/52 × 20) a **`Andělská Hora,Dolní obec`** (S57+S80, 0 m, obojí linka 8, liší se
+  jen velikostí písmene v `Dolní`/`dolní` ve zdrojových datech). D tedy opravilo **dvě** zastávky,
+  ne jednu: ověřeno, `Andělská Hora,Dolní obec → Kolová,ObÚ` vrací nově **2 přímé varianty**
+  (patterny P38 z S57 a P51 z S80), dřív jen jednu — druhý směr byl neviditelný. Sloučení je
+  v obou případech správné (0 m, stejná linka). Perf závěr platí dál, 2 názvy nic nezmění.
 
 ## 2026-08-14 — v0.1.0 (J7-P2: "Tabule" tab, shared stop picker, merged same-name stops)
 
