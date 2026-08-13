@@ -7,6 +7,47 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-08-14 — v0.1.0 (J7-P2: "Tabule" tab, shared stop picker, merged same-name stops)
+
+- **`scripts/timetable.js` — new `resolveStopIds(net, stopIdOrName)`:** same matching rule as
+  `resolveStopId` (prefix-strip + trim + lowercase, duplicated locally since `routing.js` is
+  off-limits for this handoff), but returns **every** id sharing the name instead of the first
+  match. Fixes the "Lázně I" blind spot (`S63` lines 2/11/52, `S143` line 20 only) for the new
+  board — `resolveStopId`/`planJourney` themselves are untouched, same blind spot in Hledat is a
+  separate handoff per `TASK.md`.
+- **New `boardDepartures(net, stopIdOrName, dateStr, nowMin, opts)`:** runs `nextDepartures` over
+  every id from `resolveStopIds`, merges, sorts by `depMin`, slices to `limit` (default 10) — the
+  night-crossing math stays inside `nextDepartures`, not duplicated here.
+  **New `matchStopNames(names, query, limit)`:** diacritics/case-insensitive substring matcher for
+  the picker (NFD strip, `starts-with` ranked before plain substring, alphabetical `cs` within each
+  group) — pure and Node-testable, no DOM. All three exported from `MHDTimetable`.
+- **New shared stop picker in `index_raw.html`** (`stopPickerHtml`/`onPickerInput`/`onPickerFocus`/
+  `onPickerBlur`/`onPickerKeydown`/`selectPickerStop`/`showPickerSuggestions`), replacing the native
+  `<datalist>` in Hledat (iOS Safari ignores it) and used again in the new Tabule tab. State is keyed
+  per field id (`searchFrom`/`searchTo`/`board`) through a small `PICKER_FIELDS` dispatch table, so
+  both Hledat inputs run independently on one screen. Blur closes the suggestion list after a 150 ms
+  delay so a tap on a suggestion (which fires blur first on touch) still registers before the list
+  disappears; Enter takes the first suggestion or commits free text; Escape closes. Free text stays
+  valid input — final resolution is still `resolveStopId`/`resolveStopIds`, the picker never filters
+  what can be submitted.
+- **New `Tabule` tab** (internal id `board`, between Moje trasy and Hledat): Teď/Jindy toggle → stop
+  picker (default `Krátká`, session-only, no `localStorage`) → chronological rows from
+  `boardDepartures()`, reusing the existing `.route-card`/`.departure-row`/`dep-countdown` look.
+  Empty state: `Dnes už odsud nic nejede.` Wired into `showTab`'s tab-index array, `render()`'s
+  switch, and `tick()`'s once-a-minute refresh (same pattern as `departures`).
+- **`scripts/timetable.test.js`** — new J7-P2 block: `resolveStopIds` by name (2 ids) and by id (1
+  id), merged Lázně I board contains a line-20 row with the right first row, chronological order and
+  `limit` respected, Tržnice hub first row, Krátká night board non-empty with no row before `nowMin`,
+  all four `matchStopNames` queries from the spec plus an unknown-query-returns-`[]` case. All OK.
+- **Verified:** `timetable.test.js`/`journey.test.js`/`routing.test.js` all exit 0, no `FAIL` lines;
+  `verify_network.js` 20/20 PASS (guard untouched). Additionally ran the real `index_raw.html` inline
+  script plus the three `<script src>` modules through a Node `vm` context with a minimal `document`/
+  `fetch` shim (ad hoc, not committed): confirmed the merged Lázně I board actually renders a line-20
+  row after picking it via the shimmed suggestion click, confirmed the two Hledat picker fields keep
+  independent suggestion lists, and exercised Enter/Escape/blur on the picker without throwing.
+  **Not a substitute for Joe's touch test on Pages** — the blur/tap timing is the one thing here that
+  can only really be judged on a phone. Detail and open flags in `handoff.md` → RESULT.
+
 ## 2026-08-12 — v0.1.0 (J7-P1: "Moje trasy" tab on network.json)
 
 - **`scripts/journey.js` — STEP 1a perf fix:** the departure window is now pushed down into the

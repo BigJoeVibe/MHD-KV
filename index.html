@@ -424,6 +424,33 @@ body {
   display: flex; align-items: center; justify-content: center;
 }
 
+/* Shared stop picker (J7-P2) — replaces <datalist>, which iOS Safari ignores. */
+.stop-picker { position: relative; }
+.stop-picker-suggestions {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin-top: 4px;
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.stop-picker-suggestions.open { display: block; }
+.stop-picker-item {
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  cursor: pointer;
+}
+.stop-picker-item:last-child { border-bottom: none; }
+.stop-picker-item:active { background: var(--bg3); }
+
 .search-loc-btn {
   width: 100%;
   margin-top: 10px;
@@ -534,6 +561,7 @@ body {
 
 <div class="tabs mode-now" id="tabBar">
   <button class="tab active" onclick="showTab('departures')">Moje trasy</button>
+  <button class="tab" onclick="showTab('board')">Tabule</button>
   <button class="tab" onclick="showTab('search')">Hledat</button>
   <button class="tab" onclick="showTab('settings')">Nastavení</button>
 </div>
@@ -746,6 +774,9 @@ const ROUTE_GROUPS = [
 let routeGroupReversed = {}; // groupIndex -> bool (Tam/Zpět)
 const boardCache = new Map(); // "gi|reversed|from|to|date|nowMin" -> planBoard() rows, viz 2c
 
+// J7-P2: "Tabule" — vybrana zastavka, jen pro session (localStorage az s cloud ukladanim).
+let boardStop = 'Krátká';
+
 fetch('data/network.json')
   .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
   .then(net => {
@@ -884,7 +915,7 @@ function updateClockForMode() {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', ['departures','search','settings'][i] === tab);
+    t.classList.toggle('active', ['departures','board','search','settings'][i] === tab);
   });
   render();
 }
@@ -893,8 +924,9 @@ function render() {
   updateClockForMode();
   switch (currentTab) {
     case 'departures': renderDepartures(); break;
-    case 'search':     renderSearch();     break;
-    case 'settings':   renderSettings();   break;
+    case 'board':       renderBoard();      break;
+    case 'search':      renderSearch();     break;
+    case 'settings':    renderSettings();   break;
   }
 }
 
@@ -1007,10 +1039,179 @@ function renderDepartureCards() {
   el.innerHTML = html;
 }
 
+function stopDisplayName(name) { return name.replace(/^Karlovy Vary,/, ''); }
+
+// ============================================================
+// STOP PICKER (J7-P2) — shared by Hledat (searchFrom/searchTo) and Tabule (board).
+// Replaces <datalist>, which iOS Safari effectively ignores.
+// ============================================================
+let stopNamesCache = null;
+function getStopNames() {
+  if (!NET) return [];
+  if (!stopNamesCache) {
+    stopNamesCache = [...new Set(Object.values(NET.stops).map(s => stopDisplayName(s.n)))]
+      .sort((a, b) => a.localeCompare(b, 'cs'));
+  }
+  return stopNamesCache;
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// fieldId -> where the picked value lives and what to do once it is committed
+// (suggestion tapped, Enter pressed, or field blurred). Hledat fields just hold the
+// text — search only runs via the explicit submit button, unchanged. Tabule needs its
+// rows refreshed as soon as a stop is picked.
+const PICKER_FIELDS = {
+  searchFrom: { get: () => searchFrom, set: (v) => { searchFrom = v; }, onCommit: () => {} },
+  searchTo:   { get: () => searchTo,   set: (v) => { searchTo = v; },   onCommit: () => {} },
+  board:      { get: () => boardStop,  set: (v) => { boardStop = v; },  onCommit: () => renderBoardRows() }
+};
+
+const pickerBlurTimers = {}; // fieldId -> timer, so a tap on a suggestion survives blur
+
+function stopPickerHtml(fieldId, value, placeholder) {
+  return `<div class="stop-picker">` +
+    `<input type="text" id="picker-${fieldId}" class="stop-picker-input" value="${escapeAttr(value)}" ` +
+    `placeholder="${placeholder}" autocomplete="off" ` +
+    `oninput="onPickerInput('${fieldId}', this.value)" ` +
+    `onfocus="onPickerFocus('${fieldId}')" onblur="onPickerBlur('${fieldId}')" ` +
+    `onkeydown="onPickerKeydown(event, '${fieldId}')">` +
+    `<div class="stop-picker-suggestions" id="picker-sugg-${fieldId}"></div></div>`;
+}
+
+function onPickerInput(fieldId, value) {
+  PICKER_FIELDS[fieldId].set(value);
+  showPickerSuggestions(fieldId, value);
+}
+
+function onPickerFocus(fieldId) {
+  if (pickerBlurTimers[fieldId]) { clearTimeout(pickerBlurTimers[fieldId]); pickerBlurTimers[fieldId] = null; }
+  showPickerSuggestions(fieldId, PICKER_FIELDS[fieldId].get());
+}
+
+function onPickerBlur(fieldId) {
+  // Short delay: a tap on a suggestion fires blur before its click — closing the
+  // list immediately would eat the tap. 150ms is long enough for that click to land.
+  pickerBlurTimers[fieldId] = setTimeout(() => closePickerSuggestions(fieldId), 150);
+}
+
+function onPickerKeydown(event, fieldId) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    const list = document.getElementById(`picker-sugg-${fieldId}`);
+    const first = list && list.querySelector('.stop-picker-item');
+    if (first) {
+      selectPickerStop(fieldId, first.dataset.name);
+    } else {
+      closePickerSuggestions(fieldId);
+      PICKER_FIELDS[fieldId].onCommit();
+    }
+    event.target.blur();
+  } else if (event.key === 'Escape') {
+    closePickerSuggestions(fieldId);
+  }
+}
+
+function showPickerSuggestions(fieldId, value) {
+  const list = document.getElementById(`picker-sugg-${fieldId}`);
+  if (!list) return;
+  const matches = value.trim() ? window.MHDTimetable.matchStopNames(getStopNames(), value, 8) : [];
+  if (matches.length === 0) { list.innerHTML = ''; list.classList.remove('open'); return; }
+  list.innerHTML = matches.map(n =>
+    `<div class="stop-picker-item" data-name="${escapeAttr(n)}" onclick="selectPickerStop('${fieldId}', this.dataset.name)">${n}</div>`
+  ).join('');
+  list.classList.add('open');
+}
+
+function closePickerSuggestions(fieldId) {
+  const list = document.getElementById(`picker-sugg-${fieldId}`);
+  if (list) { list.innerHTML = ''; list.classList.remove('open'); }
+}
+
+function selectPickerStop(fieldId, name) {
+  PICKER_FIELDS[fieldId].set(name);
+  const input = document.getElementById(`picker-${fieldId}`);
+  if (input) input.value = name;
+  closePickerSuggestions(fieldId);
+  PICKER_FIELDS[fieldId].onCommit();
+}
+
+// ============================================================
+// TABULE (J7-P2) — chronological board.js boardDepartures() for one picked stop.
+// ============================================================
+function renderBoard() {
+  const vClass = useCustomTime ? ' violet' : '';
+
+  if (netStatus === 'loading') {
+    document.getElementById('content').innerHTML = `<div class="search-loading">Načítám síť…</div>`;
+    return;
+  }
+  if (netStatus === 'error') {
+    document.getElementById('content').innerHTML = `<div class="search-error">Data se nepodařilo načíst.</div>`;
+    return;
+  }
+
+  let html = `<div class="time-toggle${vClass}">`;
+  html += `<div class="time-toggle-header">`;
+  html += `<button class="time-toggle-btn ${!useCustomTime ? 'active-now' : ''}" onclick="setTimeMode('now')">Teď</button>`;
+  html += `<button class="time-toggle-btn ${useCustomTime ? 'active-custom' : ''}" onclick="setTimeMode('custom')">Jindy</button>`;
+  html += `</div>`;
+  html += `<div class="custom-time-picker ${useCustomTime ? 'visible' : ''}">`;
+  html += `<div class="custom-time-row">`;
+  html += `<input type="date" id="customDate" value="${customDate}" onchange="onCustomDateChange(this.value)">`;
+  html += `<input type="time" id="customTime" value="${customTime}" onchange="onCustomTimeChange(this.value)">`;
+  html += `</div>`;
+  if (useCustomTime && customDate && customTime) {
+    const sim = getNow();
+    html += `<div class="custom-time-info"><span class="badge">${getDayTypeLabel(getDayType(sim))}</span><span>${formatCzechDate(sim)}</span></div>`;
+  }
+  html += `</div></div>`;
+
+  html += `<div class="search-form${vClass}">`;
+  html += `<div class="search-field"><label>Zastávka</label>${stopPickerHtml('board', boardStop, 'Zastávka…')}</div>`;
+  html += `</div>`;
+
+  html += `<div id="board-rows"></div>`;
+
+  document.getElementById('content').innerHTML = html;
+  renderBoardRows();
+}
+
+function renderBoardRows() {
+  const el = document.getElementById('board-rows');
+  if (!el || netStatus !== 'ready') return;
+
+  const vClass = useCustomTime ? ' violet' : '';
+  const now = getNow();
+  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const rows = window.MHDTimetable.boardDepartures(NET, boardStop, date, nowMin, { limit: 10 });
+
+  let html = `<div class="route-card${vClass}"><div class="departures-list">`;
+  if (rows.length === 0) {
+    html += `<div class="no-more">Dnes už odsud nic nejede.</div>`;
+  } else {
+    rows.forEach((row, i) => {
+      const isNext = i === 0;
+      const diff = row.depMin - nowMin;
+      const cls = KNOWN_LINE_CLASSES.has(row.line) ? `line-${row.line}` : '';
+      html += `<div class="departure-row${isNext ? ' next' + vClass : ''}">`;
+      html += `<div class="dep-time">${fmtJourneyTime(row.depMin)}</div>`;
+      html += `<div class="line-badge ${cls}" style="margin-left:10px;min-width:38px;height:38px;font-size:0.9rem;border-radius:8px"><span>${row.line}</span></div>`;
+      html += `<div style="flex:1;min-width:0;margin-left:10px;font-size:0.85rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">→ ${stopDisplayName(row.headsign)}</div>`;
+      html += `<div class="dep-countdown ${countdownClass(diff)}">${formatCountdown(diff)}</div>`;
+      html += `</div>`;
+    });
+  }
+  html += `</div></div>`;
+  el.innerHTML = html;
+}
+
 // ============================================================
 // SEARCH
 // ============================================================
-function stopDisplayName(name) { return name.replace(/^Karlovy Vary,/, ''); }
 
 function renderSearch() {
   const vClass = useCustomTime ? ' violet' : '';
@@ -1024,17 +1225,10 @@ function renderSearch() {
     return;
   }
 
-  const stopNames = [...new Set(Object.values(NET.stops).map(s => stopDisplayName(s.n)))]
-    .sort((a, b) => a.localeCompare(b, 'cs'));
-  const stopOptions = stopNames.map(n => `<option value="${n}">`).join('');
-
   let html = `<div class="search-form${vClass}">`;
-  html += `<div class="search-field"><label>Odkud</label>`;
-  html += `<input type="text" id="searchFromInput" list="stopList" value="${searchFrom}" placeholder="Zastávka…" oninput="onSearchFieldChange('from', this.value)"></div>`;
+  html += `<div class="search-field"><label>Odkud</label>${stopPickerHtml('searchFrom', searchFrom, 'Zastávka…')}</div>`;
   html += `<div class="search-swap-row"><button class="search-swap" onclick="swapSearchStops()" title="Prohodit směr">⇅</button></div>`;
-  html += `<div class="search-field"><label>Kam</label>`;
-  html += `<input type="text" id="searchToInput" list="stopList" value="${searchTo}" placeholder="Zastávka…" oninput="onSearchFieldChange('to', this.value)"></div>`;
-  html += `<datalist id="stopList">${stopOptions}</datalist>`;
+  html += `<div class="search-field"><label>Kam</label>${stopPickerHtml('searchTo', searchTo, 'Zastávka…')}</div>`;
   html += `<button class="search-loc-btn" disabled>📍 Moje poloha (brzy)</button>`;
   html += `</div>`;
 
@@ -1061,13 +1255,9 @@ function renderSearch() {
   renderSearchResults();
 }
 
-function onSearchFieldChange(which, value) {
-  if (which === 'from') searchFrom = value; else searchTo = value;
-}
-
 function swapSearchStops() {
-  const from = document.getElementById('searchFromInput').value;
-  const to = document.getElementById('searchToInput').value;
+  const from = document.getElementById('picker-searchFrom').value;
+  const to = document.getElementById('picker-searchTo').value;
   searchFrom = to;
   searchTo = from;
   searchResults = null;
@@ -1082,8 +1272,8 @@ function fmtJourneyTime(totalMin) {
 }
 
 function doSearch() {
-  const from = document.getElementById('searchFromInput').value.trim();
-  const to = document.getElementById('searchToInput').value.trim();
+  const from = document.getElementById('picker-searchFrom').value.trim();
+  const to = document.getElementById('picker-searchTo').value.trim();
   searchFrom = from;
   searchTo = to;
 
@@ -1196,6 +1386,7 @@ function onCustomTimeChange(v) { customTime = v; render(); }
 function tick() {
   updateClockForMode();
   if (currentTab === 'departures' && !useCustomTime) renderDepartureCards();
+  if (currentTab === 'board' && !useCustomTime) renderBoardRows();
 }
 
 updateModeClasses();

@@ -14,7 +14,7 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
 - **Repo (GitHub):** `BigJoeVibe/MHD-KV`, branch `main`
 - **Aktuální verze:** v0.1.0 (F1 komplet). Schéma: 0.x = vývojové/testovací
   verze; 1.0.0 přijde, až appka pokryje širší cíl (rozhodnuto 17. 7. 2026).
-- **Stav (k 4. 8. 2026):** appka běží na GitHub Pages, git dělá Claude Code (executor).
+- **Stav (k 12. 8. 2026):** appka běží na GitHub Pages, git dělá Claude Code (executor).
   **Jádro vyhledávání A→B je hotové a ověřené:** **J1** síťový model (`data/network.json`),
   **J2** routing (`routing.js`), **J3** časová vrstva (`timetable.js` + `journey.js`/`planJourney`),
   **JH** zpevnění jádra (bez Pareto, 2 přestupy, smyčky, co-located ≤30 m).
@@ -23,22 +23,28 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
   **J4 (UI „Hledat spojení") — Předávka 1 HOTOVÁ** (4. tab, formulář Odkud/Kam, karty z `planJourney`;
   moduly v prohlížeči přes IIFE). **J4-fix HOTOVÝ** (noční přestup přes půlnoc vracel zápornou dobu)
   **a ověřený na Pages 4. 8.** — invariant drží v noci i ve dne, regrese žádná.
-  Další: **J4-sort ✅ ROZHODNUTO 4. 8., spec v `handoff.md`, čeká na executora** → **J4 Předávka 2**
-  (GPS „Moje poloha" + doladění). Detail: `TASK.md` (sekce TEĎ),
-  poslední `changelog.md`, aktivní `handoff.md`.
+  **J4-sort + J4-sort-2 HOTOVÉ** (pravidla malého města ve výsledcích hledání) a **J7-P1 HOTOVÁ**
+  (tab „Moje trasy" na `network.json`, Jízdní řády zrušeny) — vše 12. 8., ověřeno Joem na Pages.
+  **Další: J7-P2 (tab „Tabule").** Detail: `TASK.md` (sekce TEĎ), `changelog.md`, `handoff.md` → RESULT.
 
-## Předávka dalšímu manažerovi (2026-08-04, aktualizováno večer)
+## Předávka dalšímu manažerovi (2026-08-12)
 
-- **J4-sort i J4-sort-2 HOTOVÉ a pushnuté** (executor, 4. 8., commit `aee8ea3`). Hledání teď jede na
+- **J4-sort i J4-sort-2 HOTOVÉ a pushnuté** (executor, 12. 8., commit `aee8ea3`). Hledání teď jede na
   pravidlech malého města: odjezdové okno 90 min, stropy 75/40, Pareto, `minTransfer 0`, průjezdné spoje.
-- **`handoff.md` je ZADANÁ — spec `J7-P1` („Moje trasy")**, tj. **J7 předsazeno před J5/J6**.
-  Spouštěč: tabule ukazovala příjezd 1:28 místo 1:30, protože stará F1 data mají jednu konstantu
-  `travelMinutes` na linku. Migrace tabu Odjezdy na `network.json`, Jízdní řády pryč.
-  **Pozor — v P1 je i výkonový fix jádra** (ořez okna při stavbě itinerářů, naměřeno 2509 → 681 ms
-  pro 6 karet, výsledky identické). Detail a všechna rozhodnutí v `TASK.md` → „J7 PŘEDSAZENO".
+- **J7-P1 HOTOVÁ a pushnutá** (executor, 12. 8.) — **J7 předsazeno před J5/J6**. Tab `Odjezdy` →
+  `Moje trasy` nad `network.json` (`ROUTE_GROUPS` + `planBoard`), `Jízdní řády` a „Sledované linky"
+  zrušeny. Spouštěč: tabule ukazovala příjezd 1:28 místo 1:30, protože stará F1 data mají jednu
+  konstantu `travelMinutes` na linku. **Součástí byl i výkonový fix jádra** — ořez okna při stavbě
+  itinerářů, 2541 → 690 ms pro 6 karet, výstup byte-identický. Manager ověřil testy, `index.html`
+  = `index_raw.html`. **✅ Joe ověřil na Pages 12. 8. — funguje včetně režimu „Jindy".**
+- **Tři věci k Joeovu posouzení** (executor je označil v `handoff.md` → RESULT): umístění přepínače
+  `Tam`/`Zpět` vlevo od názvu skupiny, sdílený text podřádku přestupu mezi Hledat a kartami
+  (včetně `(stejné místo)`), a nevyužité CSS `.timetable-*` / `.dpkv-link` ponechané v souboru.
+- **Otevřené:** `DATA.routes` zůstává jako mrtvý kód do konce J7-P2 (bezpečný návrat).
+  Detail a všechna rozhodnutí v `TASK.md` → „J7 PŘEDSAZENO".
 - **Baseline `verify_network.js` je 20/20, ne 26/26** — J8-hotfix přesunul H1a–d do `routing.test.js`.
   (V předchozím zadání jsem měl 26/26 chybně, executor to udělal správně.)
-- **Rozhodnutí J4-sort (Joe, 4. 8.) — „pravidla malého města":** odjezdové okno 90 min (žebřík
+- **Rozhodnutí J4-sort (Joe, 12. 8.) — „pravidla malého města":** odjezdové okno 90 min (žebřík
   rozšíření 90 → 240 → bez omezení), uvnitř okna **nejdřív přímé spoje, pak přestupy**, strop jízdy
   75 min a čekání 40 min (vše jako parametry), sloučení identických jízd do jedné karty.
   Řazení podle `arrival` se **nepoužije** — s oknem ztrácí smysl.
@@ -84,7 +90,7 @@ Práce běží přes dvě „Claude" plochy; sdílený kanál = **soubory v tét
 **Pravidla:** na souborech pracuje **jen jeden agent naráz** (mezi úkoly je
 `handoff.md` „prázdná"). Executor nepřidává nic nad zadání; nápady → `TASK.md`.
 
-## Jazyková dělba (od 2026-08-04)
+## Jazyková dělba (od 2026-08-12)
 
 Čeština stojí [ODHAD] 1,8–2,5× víc tokenů než stejný obsah anglicky a executor si při každém
 běhu načítá desítky kB dokumentace. Proto:
@@ -119,8 +125,10 @@ běhu načítá desítky kB dokumentace. Proto:
 - **Spuštění (lokálně):** otevřít `index.html` v prohlížeči
   (Chrome / Firefox / Safari mobil). Žádný build.
 - **Nasazení:** commit do `main` → GitHub Pages se aktualizuje automaticky (~1 min).
-- **Test (ručně v prohlížeči):** projít taby Odjezdy / Jízdní řády / Nastavení,
+- **Test (ručně v prohlížeči):** projít taby Moje trasy / Hledat / Nastavení,
   v módu **Teď** i **Jindy**. Před commitem otestuj vždy.
+  ⚠️ **Appka bere čas z prohlížeče** — když má zařízení posunuté datum, tabule i hledání počítají
+  k jinému dni (a jinému typu dne). Při divných výsledcích zkontroluj nejdřív hodiny zařízení.
 
 ## Git a verzování
 

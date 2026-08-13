@@ -40,6 +40,60 @@ function patternDeparturesOn(net, patternId, dateStr) {
   return startMins;
 }
 
+// Same matching rule as routing.js resolveStopId (prefix-strip + trim + lowercase),
+// duplicated here on purpose — routing.js is off-limits for this handoff and does not
+// export normalizeName.
+function normalizeName(name) {
+  return name.replace(/^Karlovy Vary,/, "").trim().toLowerCase();
+}
+
+// Unlike resolveStopId (first match only), returns EVERY stop id sharing the name —
+// e.g. "Lázně I" is split across S63 (lines 2/11/52) and S143 (line 20 only).
+function resolveStopIds(net, stopIdOrName) {
+  if (net.stops[stopIdOrName]) return [stopIdOrName];
+  const target = normalizeName(stopIdOrName);
+  const ids = [];
+  for (const id in net.stops) {
+    if (normalizeName(net.stops[id].n) === target) ids.push(id);
+  }
+  return ids;
+}
+
+// Board for a stop name/id: merges nextDepartures() across every id resolveStopIds
+// finds, so a name split across stop ids (see resolveStopIds) still shows all lines.
+function boardDepartures(net, stopIdOrName, dateStr, nowMin, opts = {}) {
+  const limit = opts.limit != null ? opts.limit : 10;
+  const ids = resolveStopIds(net, stopIdOrName);
+  const rows = [];
+  for (const id of ids) {
+    rows.push(...nextDepartures(net, id, dateStr, nowMin, { limit: limit * 4 }));
+  }
+  rows.sort((a, b) => a.depMin - b.depMin);
+  return rows.slice(0, limit);
+}
+
+// Diacritics- and case-insensitive substring matcher for the stop picker (STEP 2).
+// Pure/testable in Node — no DOM.
+function normalizeForMatch(s) {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+function matchStopNames(names, query, limit = 8) {
+  const limitN = limit != null ? limit : 8;
+  const q = normalizeForMatch(String(query).trim());
+  if (!q) return [];
+  const starts = [];
+  const contains = [];
+  for (const name of names) {
+    const norm = normalizeForMatch(name);
+    if (norm.startsWith(q)) starts.push(name);
+    else if (norm.includes(q)) contains.push(name);
+  }
+  starts.sort((a, b) => a.localeCompare(b, "cs"));
+  contains.sort((a, b) => a.localeCompare(b, "cs"));
+  return [...starts, ...contains].slice(0, limitN);
+}
+
 function firstNonLastIndex(stops, stopId) {
   // Prvni vyskyt stopId, ktery NENI posledni zastavkou patternu (smerove, konzistentni
   // se stopsAfter — z konecne se dal neodjizdi). Okruzni linky mivaji stopId 2x.
@@ -83,7 +137,10 @@ function nextDepartures(net, stopIdOrName, dateStr, nowMin, opts = {}) {
   return results.slice(0, limit);
 }
 
-const MHDTimetable = { isServiceActive, activeServicesOn, patternDeparturesOn, nextDepartures };
+const MHDTimetable = {
+  isServiceActive, activeServicesOn, patternDeparturesOn, nextDepartures,
+  resolveStopIds, boardDepartures, matchStopNames
+};
 
 if (typeof module !== "undefined" && module.exports) module.exports = MHDTimetable;
 if (typeof window !== "undefined") window.MHDTimetable = MHDTimetable;
