@@ -50,15 +50,19 @@ function check(label, ok) {
   return ok;
 }
 
-// resolveStopIds by name -> vsechny id se shodnym nazvem (Lazne I = S63 + S143)
+// resolveStopIds by name -> vsechny id se shodnym nazvem (Lazne I je rozdelena na 2 id).
+// POZOR (J8-fix): S#/P# id nejsou stabilni mezi obnovami dat, nehardcodovat literaly —
+// dohledat spravnou sadu id primo z net.stops podle jmena, stejne jako verify_network.js.
+const lazneExpectedIds = Object.keys(net.stops).filter((id) => net.stops[id].n === "Lázně I").sort();
 const lazneIds = resolveStopIds(net, "Lázně I").slice().sort();
-check(`resolveStopIds("Lázně I") -> [S63, S143] (skutecne ${JSON.stringify(lazneIds)})`,
-  lazneIds.length === 2 && lazneIds.includes("S63") && lazneIds.includes("S143"));
+check(`resolveStopIds("Lázně I") -> vsechna id jmena "Lázně I" (ocekavano ${JSON.stringify(lazneExpectedIds)}, skutecne ${JSON.stringify(lazneIds)})`,
+  lazneExpectedIds.length === 2 && JSON.stringify(lazneIds) === JSON.stringify(lazneExpectedIds));
 
-// resolveStopIds by id -> jen to jedno id
-const s63Ids = resolveStopIds(net, "S63");
-check(`resolveStopIds("S63") -> ["S63"] (skutecne ${JSON.stringify(s63Ids)})`,
-  s63Ids.length === 1 && s63Ids[0] === "S63");
+// resolveStopIds by id -> jen to jedno id (id samotne dohledane vyse, ne literal)
+const oneLazneId = lazneExpectedIds[0];
+const oneIdResult = resolveStopIds(net, oneLazneId);
+check(`resolveStopIds("${oneLazneId}") -> ["${oneLazneId}"] (skutecne ${JSON.stringify(oneIdResult)})`,
+  oneIdResult.length === 1 && oneIdResult[0] === oneLazneId);
 
 // merged board — Lazne I musi obsahovat linku 20 (jinak by S143 byla neviditelna)
 const lazneBoard = boardDepartures(net, "Lázně I", DAY, 600, { limit: 10 });
