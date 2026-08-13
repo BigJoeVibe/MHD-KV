@@ -235,3 +235,14 @@ shim (ad hoc, not committed) and drove it through: tab switch to Tabule, typing 
 clicking a suggestion, board re-render, Enter/Escape/blur on the picker, and independent typing in
 both Hledat fields simultaneously — no exceptions, output matched expectations at every step. **Not a
 substitute for your visual/touch pass on Pages** — I have no browser here.
+
+**Push hit the J8 auto-refresh mid-session:** `git push` was rejected because the daily automatic
+data-refresh workflow committed a fresh `data/network.json` (2026-08-13) to `main` while I was
+working. Rebased cleanly (no conflicts — I never touched `data/`), but that refresh reshuffled the
+`S#`/`P#` ids exactly the way `docs/DATA_SOURCES.md` documents (known since J8-fix), and my first
+version of the `resolveStopIds` test had hardcoded `"S63"`/`"S143"` literals from before the refresh
+— broke immediately. Fixed by looking the Lázně I ids up dynamically from `net.stops` by name
+instead (same convention `verify_network.js` already uses), separate commit
+`fix: J7-P2 test — resolve Lázně I ids by name, not hardcoded S#`. Both commits are pushed
+(`8f15f19`). Mentioning this mainly as a reminder for future test-writing sessions, not as an open
+issue.
