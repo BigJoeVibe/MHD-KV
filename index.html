@@ -420,18 +420,43 @@ body {
 
 /* Shared stop picker (J7-P2) — replaces <datalist>, which iOS Safari ignores. */
 .stop-picker { position: relative; }
+.stop-picker .stop-picker-input { padding-right: 44px; }
+.stop-picker-toggle {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  color: var(--text2);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.stop-picker-toggle.open { color: var(--blue2); }
+.search-form.violet .stop-picker-toggle.open { color: var(--violet); }
 .stop-picker-suggestions {
   display: none;
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
-  z-index: 20;
+  /* Above the sticky header (100) and tab bar (99) — a 50vh full list (UI-2)
+     can otherwise slide underneath them; the short filtered list never reached
+     that far down, so this never mattered before. */
+  z-index: 101;
   margin-top: 4px;
+  max-height: min(50vh, 320px);
+  overflow-y: auto;
   background: var(--bg2);
   border: 1px solid var(--bg3);
   border-radius: 10px;
-  overflow: hidden;
   box-shadow: var(--shadow);
 }
 .stop-picker-suggestions.open { display: block; }
@@ -1088,24 +1113,32 @@ const PICKER_FIELDS = {
 };
 
 const pickerBlurTimers = {}; // fieldId -> timer, so a tap on a suggestion survives blur
+const pickerShowAll = {}; // fieldId -> true while the list is showing every stop (UI-2), not a filtered match
 
 function stopPickerHtml(fieldId, value, placeholder) {
+  const showAll = !!pickerShowAll[fieldId];
   return `<div class="stop-picker">` +
     `<input type="text" id="picker-${fieldId}" class="stop-picker-input" value="${escapeAttr(value)}" ` +
     `placeholder="${placeholder}" autocomplete="off" ` +
     `oninput="onPickerInput('${fieldId}', this.value)" ` +
     `onfocus="onPickerFocus('${fieldId}')" onblur="onPickerBlur('${fieldId}')" ` +
     `onkeydown="onPickerKeydown(event, '${fieldId}')">` +
+    `<button type="button" id="picker-toggle-${fieldId}" class="stop-picker-toggle${showAll ? ' open' : ''}" ` +
+    `onmousedown="event.preventDefault()" onclick="togglePickerShowAll('${fieldId}')" ` +
+    `aria-label="Zobrazit všechny zastávky" title="Zobrazit všechny zastávky">${showAll ? '▴' : '▾'}</button>` +
     `<div class="stop-picker-suggestions" id="picker-sugg-${fieldId}"></div></div>`;
 }
 
 function onPickerInput(fieldId, value) {
   PICKER_FIELDS[fieldId].set(value);
+  pickerShowAll[fieldId] = false;
+  updatePickerToggleIcon(fieldId);
   showPickerSuggestions(fieldId, value);
 }
 
 function onPickerFocus(fieldId) {
   if (pickerBlurTimers[fieldId]) { clearTimeout(pickerBlurTimers[fieldId]); pickerBlurTimers[fieldId] = null; }
+  if (pickerShowAll[fieldId]) return; // full list already open (UI-2) — focusing must not replace it
   showPickerSuggestions(fieldId, PICKER_FIELDS[fieldId].get());
 }
 
@@ -1113,6 +1146,10 @@ function onPickerBlur(fieldId) {
   // Short delay: a tap on a suggestion fires blur before its click — closing the
   // list immediately would eat the tap. 150ms is long enough for that click to land.
   pickerBlurTimers[fieldId] = setTimeout(() => {
+    // A blurred, closed list is never "showing everything" any more (e.g. Tab away
+    // without typing) — keep the flag/icon in sync with what's actually on screen.
+    pickerShowAll[fieldId] = false;
+    updatePickerToggleIcon(fieldId);
     closePickerSuggestions(fieldId);
     // Snap free text to the canonical name so a tolerant resolve (STEP C1, e.g.
     // "kratka" -> "Krátká") is visible, not silent — resolveStopId is now
@@ -1143,19 +1180,46 @@ function onPickerKeydown(event, fieldId) {
     }
     event.target.blur();
   } else if (event.key === 'Escape') {
+    pickerShowAll[fieldId] = false;
+    updatePickerToggleIcon(fieldId);
     closePickerSuggestions(fieldId);
   }
 }
 
-function showPickerSuggestions(fieldId, value) {
+// UI-2: the toggle button in each field's picker — opens/closes the complete stop
+// list, independent of focus/typing. Never called on a filtered/typed suggestion.
+function togglePickerShowAll(fieldId) {
+  if (!NET) return; // network not loaded yet — nothing to list, do nothing (per spec)
+  pickerShowAll[fieldId] = !pickerShowAll[fieldId];
+  updatePickerToggleIcon(fieldId);
+  if (pickerShowAll[fieldId]) {
+    renderPickerItems(fieldId, getStopNames());
+  } else {
+    closePickerSuggestions(fieldId);
+  }
+}
+
+function updatePickerToggleIcon(fieldId) {
+  const btn = document.getElementById(`picker-toggle-${fieldId}`);
+  if (!btn) return;
+  const open = !!pickerShowAll[fieldId];
+  btn.textContent = open ? '▴' : '▾';
+  btn.classList.toggle('open', open);
+}
+
+function renderPickerItems(fieldId, names) {
   const list = document.getElementById(`picker-sugg-${fieldId}`);
   if (!list) return;
-  const matches = value.trim() ? window.MHDTimetable.matchStopNames(getStopNames(), value, 8) : [];
-  if (matches.length === 0) { list.innerHTML = ''; list.classList.remove('open'); return; }
-  list.innerHTML = matches.map(n =>
+  if (names.length === 0) { list.innerHTML = ''; list.classList.remove('open'); return; }
+  list.innerHTML = names.map(n =>
     `<div class="stop-picker-item" data-name="${escapeAttr(n)}" onmousedown="event.preventDefault()" onclick="selectPickerStop('${fieldId}', this.dataset.name)">${n}</div>`
   ).join('');
   list.classList.add('open');
+}
+
+function showPickerSuggestions(fieldId, value) {
+  const matches = value.trim() ? window.MHDTimetable.matchStopNames(getStopNames(), value, 8) : [];
+  renderPickerItems(fieldId, matches);
 }
 
 function closePickerSuggestions(fieldId) {
@@ -1171,8 +1235,25 @@ function selectPickerStop(fieldId, name) {
   PICKER_FIELDS[fieldId].set(name);
   const input = document.getElementById(`picker-${fieldId}`);
   if (input) input.value = name;
+  pickerShowAll[fieldId] = false;
+  updatePickerToggleIcon(fieldId);
   closePickerSuggestions(fieldId);
   PICKER_FIELDS[fieldId].onCommit();
+}
+
+// UI-2: full list can be open without focus (it doesn't steal it), so there is no
+// blur to close it on outside taps — a single document-level listener does that.
+// Registered once, at the bottom of this script, not per render.
+function onDocumentClickForPicker(e) {
+  Object.keys(PICKER_FIELDS).forEach(fieldId => {
+    if (!pickerShowAll[fieldId]) return;
+    const input = document.getElementById(`picker-${fieldId}`);
+    const picker = input ? input.closest('.stop-picker') : null;
+    if (picker && picker.contains(e.target)) return; // click landed inside this field's own picker
+    pickerShowAll[fieldId] = false;
+    closePickerSuggestions(fieldId);
+    updatePickerToggleIcon(fieldId);
+  });
 }
 
 // ============================================================
@@ -1456,6 +1537,7 @@ function tick() {
 
 updateModeClasses();
 updateClockForMode();
+document.addEventListener('click', onDocumentClickForPicker);
 render();
 setInterval(tick, 60000);
 </script>

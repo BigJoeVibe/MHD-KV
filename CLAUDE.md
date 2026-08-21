@@ -15,7 +15,7 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
 - **Aktuální verze:** v0.1.0 (F1 komplet). Schéma: 0.x = vývojové/testovací
   verze; 1.0.0 přijde, až appka pokryje širší cíl (rozhodnuto 17. 7. 2026).
 - **Stav (k 21. 8. 2026):** appka běží na GitHub Pages, git dělá Claude Code (executor).
-  **Sekvence D → C → B hotová, B ověřeno Joem na Pages 21. 8.; běží UI-1** — viz předávka níže.
+  **Sekvence D → C → B i UI-1 hotové a ověřené Joem na Pages 21. 8.; další v pořadí UI-2** — viz předávka níže.
   **Jádro vyhledávání A→B je hotové a ověřené:** **J1** síťový model (`data/network.json`),
   **J2** routing (`routing.js`), **J3** časová vrstva (`timetable.js` + `journey.js`/`planJourney`),
   **JH** zpevnění jádra (bez Pareto, 2 přestupy, smyčky, co-located ≤30 m).
@@ -48,12 +48,12 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
   linky 20 a 44 padají na neutrální odznak. Paleta a její zdroj: **`docs/DPKV_BARVY.md`**.
   Joeův verdikt: barvy OK, **sytost k doladění později** (zapsáno v `TASK.md` → otevřené body).
   Tím je uzavřená celá sekvence D → C → B.
-- ⭐ **UI-1 JE ZADANÉ (21. 8.), spec v `handoff.md`** — dvě vady, které Joe našel při testu na PC:
+- **✅ UI-1 HOTOVÉ a OVĚŘENÉ JOEEM na Pages 21. 8.** (`fdcd384`, `9196ae1`, `bb946eb`) — dvě vady, které Joe našel při testu na PC:
   (a) **klik na napovězenou zastávku nic neudělá**, protože blur po 150 ms smaže seznam dřív, než
   uživatel pustí tlačítko myši, a prohlížeč pak `click` vůbec nevyvolá (na dotyku je tap kratší,
   proto to na mobilu prošlo); (b) **pole čas/datum ztrácí číslice**, protože `onCustomTimeChange`
   volá `render()` a překreslí i ten `<input>`, do kterého se právě píše. Obojí jen v `index_raw.html`.
-  **Joe zvolil variantu B (21. 8.):** nejdřív tyhle dvě opravy, tlačítko „celý seznam zastávek"
+  **Joe zvolil variantu B (21. 8.):** nejdřív tyhle dvě opravy — hotové a odtestované — tlačítko „celý seznam zastávek"
   (UI-2, zadání v `TASK.md`) až po nich.
 - **Joe schválil pořadí `D → C → B` (14. 8.).** Krok C byl zadán jako varianta „obojí" —
   varianta „obojí": tolerantní rozlišení zastávky (druhý průchod bez diakritiky, exact vyhrává)

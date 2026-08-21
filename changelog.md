@@ -7,6 +7,33 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-08-22 — v0.1.0 (UI-2: "show all stops" button on the shared picker)
+
+- **`index_raw.html` — new toggle button in `stopPickerHtml()`**, shared by `Odkud`/`Kam` (Hledat) and
+  the stop field (Tabule): a 40×40 px `▾`/`▴` button at the right edge of the field, opening the
+  **complete** stop list (`getStopNames()`) independently of focus or typing — Joe's request, so the
+  list on a phone never jumps over the departures just because the field was touched. New
+  `pickerShowAll[fieldId]` flag drives it; `togglePickerShowAll()` flips it, `onPickerFocus` now
+  returns early while it's set (focusing must not replace the full list), `onPickerInput` clears it on
+  the first keystroke (typing always wins back to the filtered list). `showPickerSuggestions()` was
+  split so both the filtered and full-list paths render through one `renderPickerItems()`.
+- **Outside click closes it** — one `document.addEventListener('click', ...)` registered once at the
+  bottom of the script (not per render, nothing to tear down), checking per field whether the click
+  landed inside *that field's own* `.stop-picker` before closing it, since two fields can have their
+  full lists open independently.
+- **Mobile list constraints:** `.stop-picker-suggestions` gets `max-height: min(50vh, 320px)` +
+  `overflow-y: auto` (was unbounded — 155 rows would have run off the screen) and `z-index` raised
+  20 → 101, above the sticky header (100) and tab bar (99), which a half-screen list can otherwise
+  slide under. Selection stays on `click` (unchanged from UI-1a) so scrolling never eats a tap.
+- **Self-found consistency fix:** `onPickerBlur`'s existing 150 ms timer now also clears the
+  `pickerShowAll` flag/icon before closing the list — without it, blurring an open full list without
+  typing (e.g. Tab away) left the toggle showing "open" while the list was actually closed.
+- **Verified:** all three test suites exit clean, `verify_network.js` 20/20 PASS, `scripts/*`
+  untouched, `index.html` re-synced (`diff -q` clean), inline `<script>` passes `node --check`. **Not
+  tested in a browser** — the toggle/focus/blur interplay and real touch scrolling were traced by hand
+  against the spec's Checks table rather than simulated; visual and device testing is Joe's, on
+  desktop and phone. Detail in `handoff.md` → RESULT.
+
 ## 2026-08-21 (2) — v0.1.0 (UI-1: suggestion click ignored + Jindy inputs dropping digits)
 
 - **BUG 1 (`fdcd384`) — clicking a stop suggestion did nothing on desktop.** `onPickerBlur`'s

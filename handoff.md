@@ -1,182 +1,184 @@
-# Handoff — EXECUTOR spec (STEP UI-1: suggestion click + time/date input)
+# Handoff — EXECUTOR spec (STEP UI-2: "show the whole stop list" button)
 
 > **LANGUAGE:** this file, your code comments, commit messages and the `RESULT` section below are
 > **English**. Czech stays only in: stop names (they come from the data), UI strings shown to the
 > user, and the project docs `CLAUDE.md` / `TASK.md` / `docs/*.md` (those are the owner's, do not
 > translate them). Work internally in English.
 
-> 🔴 **ACTIVE SPEC (manager, 2026-08-21).** D, C and B are done, pushed and verified — B was checked
-> visually by Joe on Pages on 21. 8. and accepted. This is **UI-1: two bugs Joe hit on desktop**.
-> Both live in `index_raw.html` only. Joe explicitly chose to ship these two **before** the new
-> "show the whole stop list" button, so that button is **not** part of this handoff.
+> 🔴 **ACTIVE SPEC (manager, 2026-08-21).** UI-1 is done, pushed and verified by Joe on Pages —
+> desktop **and** phone, both fine. This is **UI-2**, the feature Joe deferred while UI-1 shipped.
+> `index_raw.html` only. It is a **mobile-first** change: everything hard about it happens on a
+> phone.
 
 > **Handoff for the lower CC (executor).** Implement per the bullets, **nothing beyond the spec**.
-> You do the git. Small steps, code as a **diff**, commit + test. **Two separate commits**, one per
-> bug — they have different mechanisms and Joe tests them separately.
+> You do the git. Small steps, code as a **diff**, commit + test.
 
 ## How to start
 1. "Use skill **kod-jadro**."
-2. `git pull --rebase` first — the J8 data refresh commits daily and you are probably behind.
-3. Read `CLAUDE.md` and, in `index_raw.html`: the picker block (~1055–1155), and the three
-   `time-toggle` blocks in `renderDepartures` (~931), `renderBoard` (~1170), `renderSearch` (~1252).
+2. `git pull --rebase` — the J8 data refresh commits daily.
+3. Read `CLAUDE.md`, and in `index_raw.html` the picker block (~1085–1180) plus its CSS
+   (`.stop-picker*`, ~421–446).
 
 ---
 
-## BUG 1 — clicking a suggestion does nothing (desktop, mouse)
+## What Joe asked for, in his words
 
-Reported by Joe on PC: the suggestion list appears, but clicking an entry does nothing and he has to
-type the full stop name anyway.
+- A button **on the right inside the field** ("místo tam je") that opens the **complete** stop list.
+- It opens **only on the button** — *not* when the field is focused or clicked. Reason he gave: on a
+  phone the list would jump over the departures every time he touches the field.
+- It must work on **mobile**: scrolling inside the list, no "endless" list, rows that stay tappable
+  while scrolling, and **a way back to typing**.
+- **All three fields** (Joe's decision, variant A, 21. 8.): `Odkud`, `Kam` in Hledat **and** the
+  stop field in Tabule. One shared picker → one implementation, identical behaviour everywhere.
 
-**Mechanism — verified in the code, not a guess:**
+## UI-2a — the button
 
-- `.stop-picker-item` selects via `onclick="selectPickerStop(...)"`.
-- `onPickerBlur` schedules a **150 ms** timer whose callback runs `closePickerSuggestions()`, i.e.
-  `list.innerHTML = ''`.
-- Mouse order is: `mousedown` → `blur` (timer starts) → *user releases* → `mouseup` → `click`.
-  A hold longer than 150 ms — completely normal on a desktop — removes the item node between
-  `mousedown` and `mouseup`. The browser then dispatches **no `click` at all**, because `click`
-  requires the same target for press and release. Hence "nothing happens".
-- A touch tap is usually shorter than 150 ms, which is why this looked fine on mobile and why
-  STEP C's own reasoning ("150 ms is long enough for that click to land") held only for taps.
+- Add a `<button type="button">` inside `.stop-picker` (it is already `position: relative`), absolutely
+  positioned at the right edge of the input, vertically centred. Give the input `padding-right`
+  so a long stop name never runs underneath it.
+- Label: a chevron (`▾`) plus `aria-label="Zobrazit všechny zastávky"` and `title` with the same
+  text. No image assets, no icon font.
+- **Tap target at least 40 × 40 px**, even though the input is ~42 px tall — the visible chevron may
+  be smaller, the hit area may not.
+- ⚠️ **The button must not steal focus.** Put `onmousedown="event.preventDefault()"` on it, exactly
+  like the suggestion rows in UI-1a. Without it, clicking the button while the input has focus
+  fires `blur`, which schedules the 150 ms timer, which closes the list **right after** the button
+  opened it — the feature would look broken at random.
+- The chevron flips (`▾` / `▴`) or gets a state class while the full list is open — the user must be
+  able to see that the button is a toggle.
 
-**Fix:**
+## UI-2b — opening, closing, and the way back to typing
 
-- Add `onmousedown="event.preventDefault()"` to each `.stop-picker-item`. Preventing the default on
-  `mousedown` suppresses the focus change, so the input **never blurs**, no timer is scheduled, and
-  the list is still in the DOM when `click` arrives.
-- **Keep `onclick="selectPickerStop(...)"` as the handler that actually selects.** Do **not** move
-  the selection itself onto `mousedown` / `pointerdown`: the very next step makes this list
-  scrollable (full stop list behind a button) and a drag-to-scroll would then select whatever the
-  finger or cursor started on.
-- Leave the blur timer, the snap-to-canonical-name logic and `onCommit` **untouched** — they still
-  have to run when the user clicks somewhere else entirely.
-- Keep the `clearTimeout` inside `selectPickerStop` as a safety net. iOS dispatches `mousedown` late
-  in the tap sequence; if a `blur` ever slips through first, that timer must not fire afterwards.
+Add a per-field flag, e.g. `pickerShowAll[fieldId]`, meaning "the list currently shows everything,
+not a filtered match".
 
-**Checks (manual, no UI test harness):**
+- **Button click → toggle.** Open: set the flag, render **all** of `getStopNames()` (already unique,
+  already sorted `cs`), open the list. Closed → open, open → closed.
+- **Do NOT focus the input when opening.** On a phone that would raise the keyboard and eat half the
+  space the list needs. This is the deliberate choice; say in `RESULT` if something forces otherwise.
+- **The way back to typing:** tapping into the input must work as it always has — the field takes
+  focus, the keyboard appears, and as soon as the user types, `onPickerInput` **clears the flag** and
+  the list goes back to normal filtered mode. Never leave the full list showing over typed text.
+- **`onPickerFocus` must respect the flag.** It currently calls `showPickerSuggestions(value)`, which
+  would silently replace the full list with a filtered one (or with nothing, when the field is
+  empty). If the flag is set, leave the list as it is.
+- **Closing, all paths:** the button again · `Escape` · picking a row · **a click or tap anywhere
+  outside the picker**. That last one needs a document-level listener, because the input may not
+  have focus, so there is no `blur` to lean on. Register it **once** (not per render), ignore events
+  whose target is inside a `.stop-picker`, and clear the flag when it fires.
+- Leave the existing blur timer, the snap-to-canonical-name and `onCommit` logic **untouched** —
+  they still own the "user typed free text and clicked away" path.
 
-| check | expectation |
-|---|---|
-| slow desktop click | press on a suggestion, hold **> 1 s**, release → the stop is selected |
-| fast desktop click | still selected, no double-commit, list closes once |
-| keyboard | `Enter` still picks the first suggestion, `Escape` still closes the list |
-| click outside | clicking anywhere else still closes the list, still snaps free text (`kratka` → `Krátká`) and still refreshes Tabule |
-| Tabule | picking a stop in Tabule still refreshes the rows immediately |
+## UI-2c — the list itself on a phone
 
-## BUG 2 — the time / date field drops digits
-
-Reported by Joe on PC: typing several digits into the `Jindy` date or time field is unreliable; typed
-quickly, the second digit is not taken.
-
-**Mechanism — verified in the code:**
-
-- `onCustomDateChange(v)` and `onCustomTimeChange(v)` both end in `render()`, which rebuilds the
-  **entire tab's HTML** — including the `<input>` currently being typed into. The browser destroys
-  that element and builds a new one, so focus and the segment position are gone.
-- `setTimeMode('custom')` prefills both fields with the current date and time, so the value is
-  already complete. In Chrome, typing the first hour digit into a complete `<input type="time">`
-  yields a valid value immediately (`14:05` → `01:05`), which fires `change` **after one digit**.
-  The re-render follows, the field dies, the second digit lands nowhere. That is exactly the
-  reported symptom, and the date field has the same shape of the problem.
-
-**Fix — stop re-rendering the block that contains the inputs:**
-
-- Give the info line a stable id (e.g. `id="custom-time-info"`) and render the element
-  **unconditionally**, empty when `useCustomTime && customDate && customTime` is false, so it can be
-  refreshed on its own. Add a small `updateCustomTimeInfo()` that only writes its `innerHTML`.
-- `onCustomDateChange` / `onCustomTimeChange`: set the value, then call `updateClockForMode()`,
-  `updateCustomTimeInfo()`, and refresh **only the results of the current tab** —
-  `departures → renderDepartureCards()`, `board → renderBoardRows()`,
-  `search → renderSearchResults()`. No `render()`.
-- ⚠️ **Search tab, decide and report:** check what `renderSearchResults()` does before any search has
-  been submitted. If it would wipe the form state or render an empty/false result, do **not** call it
-  on a time change — Hledat only runs on its submit button, so leaving its results alone is
-  acceptable and probably correct. State in `RESULT` which branch you took and why.
-- Leave `setTimeMode()` on the full `render()`. Switching `Teď` / `Jindy` has to rebuild the block
-  and nobody is mid-typing at that moment.
-
-**The three copies:** the `time-toggle` block is **byte-identical** in `renderDepartures` (~931),
-`renderBoard` (~1170) and `renderSearch` (~1252) — I diffed them. Extract it into a single
-`timeToggleHtml()` helper used by all three, so this fix cannot end up applied to two of the three.
-This small refactor is explicitly allowed here, for the same drift-prevention reason as
-`lineBadgeStyle` in STEP B. The rendered markup must be identical to today's apart from the new
-stable info-line element.
-
-**Checks:**
-
-| check | expectation |
-|---|---|
-| slow typing | type the time digit by digit with pauses → every digit lands, value ends up as typed |
-| fast typing | type `1430` as fast as you can → value is `14:30`, nothing dropped |
-| date | same for the date field, including changing only the month |
-| results follow | after the value settles, `Moje trasy` cards and `Tabule` rows reflect the new time |
-| info line | the day-type badge and the Czech date under the fields update with the new value |
-| Teď / Jindy | switching modes still works, violet mode still applies, no leftover state |
+- `.stop-picker-suggestions` today is `overflow: hidden` with **no height limit**. 155 rows would run
+  off the screen — this is Joe's "nekonečný seznam". Add `max-height` (something like
+  `min(50vh, 320px)`) and `overflow-y: auto`. It must apply in both modes; the filtered list is ≤ 8
+  rows and will not notice.
+- **Rows must stay tappable while the list scrolls.** This is why UI-1a deliberately kept selection
+  on `click` and only called `preventDefault()` on `mousedown` — `mousedown` is synthesized *after*
+  a touch gesture, so it does not block scrolling. **Do not** move selection to `pointerdown` /
+  `touchstart` "to make it snappier"; that is exactly the bug this design avoids.
+- ⚠️ **Check the stacking order.** `.stop-picker-suggestions` is `z-index: 20`, the sticky header is
+  100 and the tab bar 99. With a short filtered list this never showed; a 50vh list very well may
+  slide **under** the tab bar. If it does, raise the list's `z-index` above them — and only that,
+  no other layout changes. Report in `RESULT` whether it was actually needed.
+- Rendering 155 rows at once is fine (plain string join, one `innerHTML` write) — do **not** add
+  virtual scrolling, lazy chunks or a library.
 
 ## DO NOT TOUCH
 
-- `scripts/*` — all of it. This handoff is `index_raw.html` + `index.html`. If you believe a script
-  change is required, stop and write why in `RESULT` instead.
-- The picker's matching / snapping / `resolveStopId` behaviour from STEP C, the line colours from
-  STEP B, `DATA.routes`, the tab bar, violet mode, any layout or sizing.
-- ⛔ **The "show the whole stop list" button is NOT in this handoff.** Joe deferred it deliberately.
-  Do not add it and do not build hooks for it — the only thing you owe it is the `onclick`-not-
-  `mousedown` note in BUG 1, so a scrollable list stays possible later.
-- ⚠️ **Never hardcode `S#`/`P#` ids** in code or tests — the daily J8 refresh reshuffles them.
+- `scripts/*` — all of it. This handoff is `index_raw.html` + `index.html`.
+- Matching/snapping/`resolveStopId` (STEP C), line colours (STEP B), the `timeToggleHtml()` work from
+  UI-1b, `DATA.routes`, tab bar, violet mode, card layout.
+- No new dependency, no new file, no build step.
+- ⚠️ **Never hardcode `S#`/`P#` ids** — the daily J8 refresh reshuffles them.
+
+## Checks (manual — there is no UI test harness)
+
+| check | expectation |
+|---|---|
+| all three fields | the button is in `Odkud`, `Kam` **and** the Tabule stop field, and behaves identically |
+| opens only on the button | focusing or clicking the field alone never opens the full list |
+| toggle | second click on the button closes it; chevron state matches what is on screen |
+| pick a row | selects the stop, closes the list, Tabule refreshes immediately |
+| back to typing | tap the field, type one letter → list switches to filtered matches, full-list flag gone |
+| outside click | tapping the departures or another field closes the list |
+| long name | the longest stop name does not run under the button |
+| scrolling | the list scrolls inside itself, the page behind it does not; a row tapped after scrolling still selects |
+| stacking | the open list is not covered by the sticky header or the tab bar |
+| data not ready | pressing the button before `network.json` has loaded does nothing and throws nothing |
 
 ## PROOF / verification
 
 1. `node scripts/routing.test.js`, `journey.test.js`, `timetable.test.js` → all PASS, no FAIL lines.
-   (They do not touch the UI — this is a regression check that you stayed inside `index_raw.html`.)
 2. `node scripts/verify_network.js` → **20/20 PASS**.
 3. Copy `index_raw.html` → `index.html`, `diff -q` clean, commit both.
-4. Two commits, one per bug.
-5. Into `RESULT`: the search-tab decision from BUG 2, whether `onmousedown` needed anything extra for
-   touch, and any event-order or focus behaviour that differed from what this spec predicts.
+4. Into `RESULT`: whether the `z-index` had to be raised, how the outside-click listener is
+   registered and torn down across re-renders, and anything the "do not focus the input" decision
+   made awkward.
 
-**Visual and device testing is Joe's** — desktop and phone, both bugs. You have no browser.
+**Visual and device testing is Joe's** — desktop and phone. You have no browser.
 
 ## RESULT (filled in by the executor)
 
-**Both bugs fixed, two commits, `index.html` = `index_raw.html`.**
+**Done, `index_raw.html` only, all three fields (`searchFrom`, `searchTo`, `board`) share the one
+implementation via `PICKER_FIELDS`/`stopPickerHtml`.**
 
-- **BUG 1 (`fdcd384`):** added `onmousedown="event.preventDefault()"` to `.stop-picker-item` in
-  `showPickerSuggestions`. Selection stayed on `onclick`, nothing else touched.
-- **BUG 2 (`9196ae1`):** extracted the three byte-identical `time-toggle` blocks into
-  `timeToggleHtml()`; the info line now has a stable `id="custom-time-info"` and its own
-  `customTimeInfoHtml()`/`updateCustomTimeInfo()`. `onCustomDateChange`/`onCustomTimeChange` now
-  call a shared `onCustomTimeValueChanged()` that runs `updateClockForMode()` +
-  `updateCustomTimeInfo()` + refreshes only the current tab's results
-  (`renderDepartureCards()` for Moje trasy, `renderBoardRows()` for Tabule) — no `render()`.
+- **UI-2a (button):** `<button type="button" class="stop-picker-toggle">` added inside `.stop-picker`,
+  absolute-positioned at the right edge (`top:50%; right:2px; transform:translateY(-50%)`), 40×40 px
+  hit area, `onmousedown="event.preventDefault()"` so it never steals focus (same pattern as UI-1a's
+  suggestion rows). `.stop-picker .stop-picker-input { padding-right: 44px }` keeps long names clear
+  of it — needed a `.stop-picker .stop-picker-input` selector, not just `.stop-picker-input`, because
+  the existing `.search-field input` rule has equal-or-higher specificity and would otherwise win.
+  Glyph flips `▾`/`▴` via `updatePickerToggleIcon()`, plus an `.open` class for a colour change
+  (`--blue2`, or `--violet` in violet mode).
+- **UI-2b (state machine):** new `pickerShowAll[fieldId]` flag. `togglePickerShowAll()` flips it and
+  either renders `getStopNames()` (via new `renderPickerItems()`, factored out of
+  `showPickerSuggestions()` so both the filtered and full-list paths share one renderer) or closes the
+  list. `onPickerFocus` returns early when the flag is set — tapping the field never replaces the full
+  list. `onPickerInput` clears the flag on the first keystroke, handing control back to the filtered
+  path, per spec. The input is deliberately never focused programmatically when the button opens the
+  list.
+- **Outside click:** one `document.addEventListener('click', onDocumentClickForPicker)` registered
+  once, at the very end of the script next to `updateModeClasses()`/`render()` — not inside any render
+  function, so it survives every tab switch and re-render untouched (nothing to tear down). The
+  handler loops `PICKER_FIELDS`, and for each field with `pickerShowAll` set, checks whether the click
+  landed inside *that field's own* `.stop-picker` (via `closest`) before closing it — a per-field check,
+  not "close everything on any outside click", because opening field B's full list while field A's is
+  still open must close A without touching B. Traced the tab-switch case by hand: a tab-bar click fires
+  the tab's own `onclick` (which re-renders `#content`, possibly removing the picker's DOM entirely)
+  *before* the event bubbles to `document`; the handler's `getElementById` lookups then just return
+  `null` and every function involved already null-checks, so nothing throws even when the field the
+  flag belongs to no longer exists in the DOM.
+- **z-index:** raised `.stop-picker-suggestions` from 20 to 101 (above the sticky header's 100 and the
+  tab bar's 99) unconditionally, not just "if needed" — a `min(50vh, 320px)` list is large enough that
+  it will reach under the header on the shorter Tabule layout in ordinary use, not just as an edge
+  case, so I didn't see a reason to leave it as a maybe. No other stacking-context changes.
+- **One thing not explicitly in the spec, added for consistency:** `onPickerBlur`'s existing 150 ms
+  timer now also clears `pickerShowAll`/updates the icon before it closes the list. Without it, a
+  found-by-hand-tracing edge case: focus a field while its full list is open (spec says this must
+  *not* replace the list), then blur via Tab or clicking a non-interactive area *without typing and
+  without the document click landing outside the picker in time* — the timer would still close the
+  list but leave the flag `true`, so the toggle button's icon would show "open" while the list was
+  actually closed, and the next click on it would toggle the (stale) flag to `false` and appear to do
+  nothing instead of reopening. This is a one-line addition to code already scheduled for that path,
+  not new logic — the snap-to-canonical-name and `onCommit` calls after it are untouched.
+- **Awkwardness from "never focus the input":** none of substance — the existing focus/blur wiring
+  already assumed focus could arrive or leave independently of the list's contents, so a picker that's
+  open-but-unfocused fit without restructuring anything. The one real consequence is exactly what the
+  outside-click listener exists to solve (no `blur` to hang a close on), which the spec had already
+  anticipated.
+- **`renderPickerItems(fieldId, [])`** (network not loaded, or — theoretically — an empty stop list)
+  clears and closes the list the same way the old empty-match branch did; `togglePickerShowAll` also
+  short-circuits on `!NET` so pressing the button before data loads does nothing and cannot throw.
 
-**Search-tab decision (per the spec's request to state it):** `renderSearchResults()` is **not**
-called from the date/time change path. Checked `renderSearchResults()` first: when
-`searchResults === null` (nothing submitted yet) it just clears `#search-results`'s innerHTML —
-harmless either way — but when a search **was** already submitted, calling it again would
-re-render the *same* `searchResults` array (it doesn't recompute), so the cards would keep
-showing times computed for the old `customDate`/`customTime` while looking freshly rendered.
-Leaving it alone means the stale cards stay visibly stale until the user hits "Hledat spojení"
-again, which is the honest state — matches the spec's own suggested branch.
-
-**`onmousedown` and touch:** did not need anything extra. `mousedown` fires on touch too (before
-`touchend`/`click`), so `preventDefault()` there suppresses focus/blur on touch exactly the same
-way — the tap-then-click path STEP C already relied on is untouched; this only removes a race that
-was specific to a slow *mouse* press. Nothing to add for touch, but Joe's phone test is still the
-real check.
-
-**Event-order / focus notes vs. spec's prediction:** matched exactly — no surprises. Verified with
-an ad hoc Node `vm` sandbox (real inline script + the three `<script src>` modules, minimal
-`document`/`fetch` shim, not committed): after `setTimeMode('custom')` then
-`onCustomDateChange('2026-08-25')` + `onCustomTimeChange('14:31')`, the `content` element's
-`innerHTML` write-count did **not** increase (proving no full re-render), `custom-time-info`'s
-did (twice, once per change) and showed the new date/day-type, `dayType`'s status text updated,
-and on the Tabule tab `renderBoardRows()` fired without touching `content`. Also confirmed the
-generated suggestion markup carries both `onmousedown="event.preventDefault()"` and
-`onclick="selectPickerStop(...)"`.
-
-**Verification:** `routing.test.js` / `journey.test.js` / `timetable.test.js` all exit clean, zero
-`FAIL` lines; `verify_network.js` **20/20 PASS**. No `scripts/*` files touched (confirmed via
-`git status` — only `index_raw.html`/`index.html` in both commits).
-
-**Not tested visually** — no browser here. The touch-timing and real focus/typing behaviour are
-Joe's to check on desktop and phone, per the spec.
+**Verified:** `routing.test.js` / `journey.test.js` / `timetable.test.js` all exit clean, no `FAIL`
+lines; `verify_network.js` **20/20 PASS** (guard untouched, `scripts/*` untouched — confirmed via
+`git status`). `index.html` re-synced from `index_raw.html`, `diff -q` clean. Extracted the real inline
+`<script>` block and ran `node --check` on it — no syntax errors. **Not tested in a browser** — no
+DOM/touch simulation was attempted this time (previous handoffs built one-off `vm` DOM shims for this
+kind of interaction work; given the size of the state machine here I instead traced every path in the
+spec's Checks table by hand against the code rather than half-simulating it). All of it — the toggle,
+the focus/blur interplay, real scrolling, the stacking fix, touch timing — is Joe's to confirm on
+desktop and phone per the Checks table above.

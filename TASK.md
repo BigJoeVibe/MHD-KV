@@ -370,7 +370,7 @@ GitHub log hlásí deprecation warning (runner vynuceně použil Node 24) — zv
 - **keepalive** proti 60dennímu auto-vypnutí (ověřeno).
 - Zdroj: A=JrUtil GTFS (hlavní), B=CIS MHD JDF (záložní). GPS = statická, ne-prio.
 
-## 🟡 UI-1 — ZADÁNO 21. 8. 2026 (spec v `handoff.md`). Dvě chyby z Joeova testu na PC
+## 🟢 UI-1 — HOTOVÉ a OVĚŘENÉ JOEEM na Pages 21. 8. 2026 (commity `fdcd384`, `9196ae1`, `bb946eb`)
 
 **Krok B ověřen Joem na Pages 21. 8.** — barvy sedí, linky 20/44 padají na neutrální odznak podle
 plánu. Sytost barev k doladění → zapsáno v „NEDOŘEŠENÉ / OTEVŘENÉ BODY" níže. Při testu Joe našel dvě vady,
@@ -378,8 +378,13 @@ obě mimo krok B (pre-existující, obě v `index_raw.html`):
 
 | # | Vada | Mechanismus (ověřen managerem v kódu, ne odhad) | Stav |
 |---|------|---|---|
-| UI-1a | **Klik na napovězenou zastávku nic neudělá** (PC, myš) | `onPickerBlur` po 150 ms maže seznam (`innerHTML = ''`). Pořadí u myši je mousedown → blur → *puštění* → mouseup → click. Když uživatel drží tlačítko déle než 150 ms (na PC běžné), položka zmizí mezi stiskem a puštěním a prohlížeč **click vůbec nevyvolá**. Na dotyku je ťuknutí kratší, proto to na mobilu většinou projde — předpoklad kroku C („150 ms stačí") platil jen pro tap. | ⭐ **ZADÁNO 21. 8.** |
-| UI-1b | **Pole čas/datum ztrácí číslice** (PC) | `onCustomDateChange`/`onCustomTimeChange` končí `render()`, což překreslí celý tab včetně toho `<input>`, do kterého se píše — prohlížeč ho zahodí a vyrobí nový, fokus i pozice v poli jsou pryč. `setTimeMode('custom')` navíc pole předvyplní, takže hodnota je kompletní a Chrome vystřelí `change` **už po první číslici** (`14:05` → `01:05`). Druhá číslice pak padá do prázdna. | ⭐ **ZADÁNO 21. 8.** |
+| UI-1a | **Klik na napovězenou zastávku nic neudělá** (PC, myš) | `onPickerBlur` po 150 ms maže seznam (`innerHTML = ''`). Pořadí u myši je mousedown → blur → *puštění* → mouseup → click. Když uživatel drží tlačítko déle než 150 ms (na PC běžné), položka zmizí mezi stiskem a puštěním a prohlížeč **click vůbec nevyvolá**. Na dotyku je ťuknutí kratší, proto to na mobilu většinou projde — předpoklad kroku C („150 ms stačí") platil jen pro tap. | ✅ **HOTOVO + ověřeno Joem 21. 8.** |
+| UI-1b | **Pole čas/datum ztrácí číslice** (PC) | `onCustomDateChange`/`onCustomTimeChange` končí `render()`, což překreslí celý tab včetně toho `<input>`, do kterého se píše — prohlížeč ho zahodí a vyrobí nový, fokus i pozice v poli jsou pryč. `setTimeMode('custom')` navíc pole předvyplní, takže hodnota je kompletní a Chrome vystřelí `change` **už po první číslici** (`14:05` → `01:05`). Druhá číslice pak padá do prázdna. | ✅ **HOTOVO + ověřeno Joem 21. 8.** |
+
+**Výsledek Joeova testu (21. 8.):** klik na návrh funguje i při pomalém stisku, psaní času a data
+je spolehlivé, návaznost tabů sedí. **Přenos času mezi taby je pro Joea v pořádku** — když změní čas
+jinde, Hledat si ho vezme taky a jen čeká na tlačítko. Info řádek se ukazuje jen v režimu „Jindy",
+ve všech třech tabech — správně, celý blok je v režimu „Teď" schovaný, takže prázdné místo nevzniká.
 
 **Rozhodnutí Joea 21. 8.: varianta B** — nejdřív tyhle dvě vady samostatně, tlačítko na celý seznam
 zastávek až po nich. Důvod: menší a jistější diff, opravy jsou na Pages dřív. Cena: dvě kola
@@ -389,7 +394,7 @@ testování místo jednoho a část orientace v týchž funkcích se udělá dva
 (`renderDepartures` ~931, `renderBoard` ~1170, `renderSearch` ~1252). UI-1b ho slučuje do jednoho
 helperu, aby oprava nemohla skončit ve dvou místech ze tří.
 
-### ⏭️ UI-2 — tlačítko „celý seznam zastávek" (zadání Joea 21. 8., ZATÍM NEZADÁNO executorovi)
+### ⭐ UI-2 — tlačítko „celý seznam zastávek" — ZADÁNO 21. 8., spec v `handoff.md`
 
 Až po UI-1. Zadání, jak ho Joe formuloval:
 
@@ -400,8 +405,15 @@ Až po UI-1. Zadání, jak ho Joe formuloval:
   „nekonečný" (155 zastávek, dnes je `overflow: hidden` a bez scrollu), klikatelnost položek při
   rolování (proto UI-1a **nesmí** přesunout výběr na `mousedown`/`pointerdown`), a hlavně **cesta
   zpět k psaní** — uživatel musí umět seznam zavřít a psát dál.
-- Joe říká „pro oba směry" = pole **Odkud** i **Kam** v Hledat. 📌 K potvrzení: našeptávač je sdílený,
-  takže tlačítko se stejným zásahem objeví i v **Tabuli** — předpokládám, že se to tak chce.
+- **Rozhodnuto Joem 21. 8. (varianta A): tlačítko ve všech třech polích** — `Odkud`, `Kam` i pole
+  v Tabuli. Kritérium bylo konzistence ovládání (dvě stejně vypadající pole s jiným chováním matou);
+  cena je, že v Tabuli rozbalený seznam překryje víc obsahu, protože odjezdy jsou hned pod polem.
+- **Návrhová rozhodnutí managera do spec (21. 8.):** tlačítko nesmí sebrat fokus (jinak si blur
+  zavře seznam 150 ms po otevření) · seznam se otevírá **bez** fokusu do pole, aby na mobilu
+  nevyskočila klávesnice · cesta zpět k psaní = ťuknutí do pole a první písmeno přepne zpět na
+  filtrovaný režim · zavření i kliknutím mimo (potřebuje posluchač na dokumentu, protože pole
+  nemusí mít fokus) · `max-height` + `overflow-y: auto` na seznam · výběr zůstává na `click`,
+  aby rolování prstem nevybíralo zastávky · prověřit překryv se sticky lištou (`z-index` 20 × 100/99).
 
 ---
 
