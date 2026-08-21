@@ -7,6 +7,37 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-08-21 — v0.1.0 (STEP B: real DPKV line colours on the badges)
+
+- **The bug:** `KNOWN_LINE_CLASSES` was a `Set` of strings (`'3'`, `'9'`, …) but `leg.line`/`row.line`
+  from `network.json` is a number, so `.has()` never matched — the coloured badge never applied, in
+  any of the three tabs, since the app existed. Fixing only the type would still leave the old F1
+  palette (5 lines) covering a 23-line network, so per Joe's decision (14. 8.) this replaces it
+  outright with the real DPKV palette from the official line schema (`docs/DPKV_BARVY.md`).
+- **`index_raw.html` — new `LINE_COLORS`** (plain object, number keys, 21 lines from the DPKV schema)
+  replaces `KNOWN_LINE_CLASSES`. New `lineBadgeStyle(line)` (+ WCAG `relativeLuminance`/
+  `contrastRatio` helpers) returns `{bg, fg}` or `null`; `fg` is computed per line (white or
+  `#0a0c0f`, whichever has higher contrast against `bg` — 16 of 21 DPKV colours fail 4.5:1 with a
+  flat white numeral, worst case line 9 at 1.56:1). Background applies inline on the `.line-badge`
+  div; the numeral colour applies inline **on the `<span>` itself**, not the div — `color` is
+  inherited and an inline style on the parent loses to any explicit rule on the child regardless of
+  specificity, so setting it anywhere but the span would have silently done nothing. Lines 20 and 44
+  (outside DPKV's main schema) return `null` and fall back to the existing neutral badge
+  (`var(--bg4)` bg, white numeral via the untouched `.line-badge span` rule).
+- **Deleted** the old `.line-3`/`.line-9`/`.line-13`/`.line-15`/`.line-51`/`.line-51 span` CSS rules
+  and `KNOWN_LINE_CLASSES` + its three call sites (Moje trasy, Tabule, Hledat). `DATA.routes` and its
+  `colorClass` fields left alone (scheduled for its own cleanup, out of scope here).
+- **Verified (no UI test harness, so by hand):** `routing.test.js`/`journey.test.js`/
+  `timetable.test.js` all exit clean; `verify_network.js` 20/20 PASS; a throwaway Node snippet against
+  the live `data/network.json` confirmed all 23 lines in the data resolve to `{bg,fg}` or `null`
+  (never `undefined`), worst-case contrast 4.58:1 (line 13, matches the doc), and lines 20/44 fall
+  back cleanly. **Finding:** the number/string mismatch that broke `Set.has()` doesn't reproduce on a
+  plain object — JS object keys are always coerced to strings on access, so `LINE_COLORS[13]` and
+  `LINE_COLORS['13']` hit the same property either way; the number-keyed object is still the honest
+  choice since it matches the data's real type, but the fix isn't relying on that coercion happening
+  to save it. `index.html` re-synced from `index_raw.html`. **Not tested visually** — no browser here,
+  Joe checks on Pages. This closes the D → C → B sequence from the 14. 8. manager plan.
+
 ## 2026-08-14 (3) — v0.1.0 (STEP C: diacritics-tolerant stop resolution + honest empty state)
 
 - **The bug:** the picker's suggestion matching (`matchStopNames`) already ignores diacritics, but

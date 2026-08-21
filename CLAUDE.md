@@ -39,7 +39,14 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
   `Krátká → Tržnice` 1296/7 beze změny, `index_raw.html` nedotčený. **Nález revize: duplicitní
   názvy jsou DVA, ne jeden** — přibyla `Andělská Hora,Dolní obec` (rozdíl jen ve velikosti písmene
   ve zdroji), D opravilo i jeden neviditelný směr linky 8. Detail v `TASK.md` → „KROK D — REVIZE".
-- **Joe schválil pořadí `D → C → B` (14. 8.).** ⭐ **KROK C JE ZADANÝ, spec v `handoff.md`** —
+- **✅ KROK C HOTOVÝ a zrevidovaný (14. 8.).** Tolerantní rozlišení (`normalizeLoose`, druhý průchod,
+  exact vyhrává) v `resolveStopId` i `resolveStopIds`; snap volného textu na kanonický název na blur;
+  tabule rozlišuje neznámou zastávku od prázdného jízdního řádu. Regrese 1296/7 sedí, hlídací test
+  na kolize bez diakritiky jsem prověřil podstrčením falešné zastávky — **kolizi opravdu najde**.
+- ⭐ **KROK B JE ZADANÝ, spec v `handoff.md`.** Nejen oprava typu (`Set` stringů × `line` je number),
+  ale **náhrada staré F1 palety skutečnými barvami DPKV** — Joe rozhodl 14. 8. Paleta, zdroj,
+  kontrastní čísla a co s linkami 20/44: **`docs/DPKV_BARVY.md`**.
+- **Joe schválil pořadí `D → C → B` (14. 8.).** Krok C byl zadán jako varianta „obojí" —
   varianta „obojí": tolerantní rozlišení zastávky (druhý průchod bez diakritiky, exact vyhrává)
   + poctivá hláška `Zastávku neznám. Vyber ji ze seznamu.` + snap volného textu na kanonický název.
   Ověřeno předem: 155 unikátních názvů striktně **i** bez diakritiky → **0 kolizí**, fallback nemůže
@@ -201,6 +208,7 @@ MHDKV/
     F1_SPEC.md             ← zadání fáze 1
     HANDOFF_2026-05-12.md  ← session report F1 (archiv)
     DATA_SOURCES.md        ← NOVÉ: zdroj dat (CIS/GTFS) + KV subset + rizika
+    DPKV_BARVY.md          ← NOVÉ: barvy linek DPKV (rekonstrukce ze schématu) + kontrasty
   data/
     network.json         ← NOVÉ: kompaktní model appky (stops+patterns+trips+services), 62 KB gzip
   scripts/

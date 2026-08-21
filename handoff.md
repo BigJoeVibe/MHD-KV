@@ -1,236 +1,184 @@
-# Handoff — EXECUTOR spec (STEP C: diacritics-tolerant stop resolution + honest empty state)
+# Handoff — EXECUTOR spec (STEP B: real DPKV line colours on the badges)
 
 > **LANGUAGE:** this file, your code comments, commit messages and the `RESULT` section below are
 > **English**. Czech stays only in: stop names (they come from the data), UI strings shown to the
 > user, and the project docs `CLAUDE.md` / `TASK.md` / `docs/*.md` (those are the owner's, do not
 > translate them). Work internally in English.
 
-> 🔴 **ACTIVE SPEC (manager, 2026-08-14).** Step **D is done, pushed and reviewed** — `search()` now
-> expands an id to its same-name siblings (`buildSameNameMap`), Hledat finds the line-20 shuttle.
-> This file is **C only**. Step **B** stays untouched and comes next.
+> 🔴 **ACTIVE SPEC (manager, 2026-08-14).** Steps **D and C are done, pushed and reviewed**. This is
+> **B**, the last of the three. It is the only one that changes what Joe actually sees, in **three
+> tabs at once** — so keep it surgical.
 
 > **Handoff for the lower CC (executor).** Implement per the bullets, **nothing beyond the spec**.
 > You do the git. Small steps, code as a **diff**, commit + test.
 
 ## How to start
 1. "Use skill **kod-jadro**."
-2. Read `CLAUDE.md`, `scripts/routing.js` (`normalizeName`, `resolveStopId`, `buildSameNameMap`),
-   `scripts/timetable.js` (`normalizeName`, `resolveStopIds`, `matchStopNames`, `boardDepartures`),
-   `index_raw.html` (the `STOP PICKER (J7-P2)` block ~1045, `renderBoardRows` ~1182, `doSearch` ~1274),
-   and this file.
+2. Read `CLAUDE.md`, **`docs/DPKV_BARVY.md`** (the palette, where it came from and why the numeral
+   colour is computed — read this before you touch anything), and `index_raw.html`: the
+   `.line-badge` CSS ~241, `KNOWN_LINE_CLASSES` ~1287, and the three render sites at ~1023
+   (`Moje trasy`), ~1222 (`Tabule`), ~1342 (`Hledat`).
 
 ---
 
 ## The bug, in one line
 
-The picker's **suggestion** matching ignores diacritics, but the **resolution** that follows demands
-them — so text that autocompletes fine resolves to nothing.
-
-**Reproduce it before you touch anything:**
+`KNOWN_LINE_CLASSES` is a `Set` of **strings** (`'3'`, `'9'`, …) but `leg.line` / `row.line` coming
+out of `network.json` is a **number** — so `.has(line)` never matches and the coloured badge never
+applies. In any tab. It has been shipped like this the whole time.
 
 ```js
-const T = require("./scripts/timetable.js");
-const net = require("./data/network.json");
-T.boardDepartures(net, "Krátká", "20260814", 600, { limit: 3 }).length  // → 3
-T.boardDepartures(net, "Kratka", "20260814", 600, { limit: 3 }).length  // → 0   ← today
-T.matchStopNames([...], "kratka", 8)                                    // → ["Krátká"]  (finds it!)
+new Set(['3','9','13','15','51']).has(3)   // → false
 ```
 
-On a phone most people type without diacritics. Today that path ends with the Tabule board printing
-**`Dnes už odsud nic nejede.`** — which is not true, it is the app failing to recognise the stop and
-blaming the timetable. Joe's decision (14. 8.): fix **both halves** — make resolution tolerant *and*
-make the empty state stop lying.
+Fixing only the type would be a poor outcome, though: the old palette covers **5** lines (leftovers
+from the F1 app) while the data has **23**. Joe's decision (14. 8.): replace it with the **real DPKV
+palette** from the official line schema.
 
-**Manager-measured, this is why the tolerant half is safe:** across all stop names in today's data
-there are **155 distinct names** after `normalizeName`, and still **155** after additionally
-stripping diacritics — **zero collisions**. No two different stops differ only by diacritics, so the
-fallback cannot silently pick the wrong stop. Step C3 adds a test that keeps this true.
+## STEP B1 — the palette
 
----
+Take the values from **`docs/DPKV_BARVY.md`** — do not retype them from this file, that doc is the
+source of truth and carries the provenance. Put them in `index_raw.html` as a plain object keyed by
+**number** (the same type the data uses), replacing `KNOWN_LINE_CLASSES`:
 
-## STEP C1 — tolerant resolution (two-pass, exact wins)
+```js
+const LINE_COLORS = { 1: '#2f2a84', 2: '#5196cd', /* … see docs/DPKV_BARVY.md … */ };
+```
 
-Both resolvers get a **second pass**, never a changed first pass:
+- 21 lines are covered (19 day + 2 night). **Lines 20 and 44 are deliberately absent** — DPKV runs
+  them outside the main schema, we have no official colour. They must fall back to the current
+  neutral badge (`var(--bg4)` background, white numeral) and must not break anything.
+- Do not invent colours for them. Do not interpolate, hash, or generate.
 
-| file | function | today | after |
-|---|---|---|---|
-| `scripts/routing.js` | `resolveStopId` | id → itself · exact `normalizeName` match → first id · else `null` | same, but **if the exact pass finds nothing**, retry with diacritics stripped |
-| `scripts/timetable.js` | `resolveStopIds` | id → `[id]` · exact matches → all ids · else `[]` | same, but **if the exact pass returns empty**, retry with diacritics stripped |
+## STEP B2 — computed numeral colour
 
-- Add a `normalizeLoose(name)` helper next to each module's existing `normalizeName`:
-  `normalizeName(name).normalize("NFD").replace(/[̀-ͯ]/g, "")`. Both modules already keep
-  their own copy of `normalizeName` (they are separate IIFEs) — follow that existing convention,
-  do not try to share code between them.
-- ⚠️ **Do NOT modify `normalizeName` itself.** In `routing.js` it also drives `coLocatedGroups`
-  (it picks the 60 m vs 30 m threshold) and `buildSameNameMap` (step D). Making it lenient would
-  silently move both. The whole point of two passes is that **nothing about exact input changes**.
-- Exact-first also means `matchStopNames` needs no change at all — leave it alone.
+The app is dark-theme with a white numeral. On this palette that fails badly: **16 of 21 colours are
+below 4.5 : 1 with white text, 10 below even 3 : 1** (line 9 `#f2cb5c` sits at 1.56 : 1). So the
+background stays exactly DPKV's, and the **numeral colour is chosen per line**:
 
-## STEP C2 — the UI half in `index_raw.html`
+- Compute WCAG relative luminance of the background, then the contrast ratio against `#ffffff` and
+  against `#0a0c0f`, and use whichever is higher.
+- `#0a0c0f` is not arbitrary — it is the lightest dark that keeps **every** line at AA. The
+  measurements are in `docs/DPKV_BARVY.md`; do not substitute a different dark without redoing them.
+- Write it as one small helper (e.g. `lineBadgeStyle(line) -> {bg, fg}`) used by **all three** render
+  sites, so they cannot drift apart. Unknown line → return `null` / a neutral marker and let the
+  existing default styling stand.
+- Apply via inline `style` on the existing `.line-badge` element. The numeral is inside
+  `<span>`, and `.line-badge span { color: #fff }` currently forces white — that rule has to stop
+  winning over the computed colour. Set the colour where it actually applies; do not add
+  `!important` anywhere.
 
-### 2a) Snap free text to the real stop name on commit
+## STEP B3 — clean up what this replaces
 
-This is what keeps the tolerant half honest: if the app resolved `kratka` to `Krátká`, the user must
-**see** that it did, so a wrong guess is visible instead of silent.
+- Delete the `.line-3` / `.line-9` / `.line-13` / `.line-15` / `.line-51` CSS rules and the
+  `.line-51 span { color: #f0728a }` override. They are the old F1 palette and nothing else uses them.
+- Delete `KNOWN_LINE_CLASSES` and the three `const cls = …` expressions that read it.
+- ⚠️ `DATA.routes` (the dead F1 data block) still has `colorClass: "line-3"` etc. on ~5 entries.
+  **Leave those alone** — `DATA.routes` is scheduled for its own cleanup and touching it here would
+  mix two changes in one diff. The CSS classes going away does not break it; nothing renders it.
 
-- In the picker's blur commit (the existing 150 ms `pickerBlurTimers` callback, `onPickerBlur`):
-  after closing the suggestion list, resolve whatever the user typed. If it resolves, **write the
-  canonical stop name back into the input and the field's state** (via `PICKER_FIELDS[fieldId].set`)
-  and call `onCommit()`. If it does not resolve, leave the text exactly as typed — 2b handles it.
-- Canonical name = `stopDisplayName(NET.stops[id].n)` for the resolved id, so it matches what the
-  suggestion list shows.
-- Enter and suggestion-tap already commit a canonical name, so they need no snapping — but
-  **`selectPickerStop` must clear that field's pending blur timer** (`pickerBlurTimers[fieldId]`),
-  otherwise the delayed blur callback still fires afterwards and now does real work, not just a
-  harmless list close. This is a real ordering bug the snap introduces; do not skip it.
+## STEP B4 — check, since there are no UI tests
 
-### 2b) Empty state that tells the truth (Tabule)
+There is no test harness for `index_raw.html`, so do this by hand and report the numbers:
 
-`renderBoardRows` currently prints one message for two different situations. Split it:
-
-| situation | Czech UI string |
+| check | expectation |
 |---|---|
-| the stop **does not resolve** (`resolveStopIds(...).length === 0`) | `Zastávku neznám. Vyber ji ze seznamu.` |
-| the stop resolves but has **no more departures** | `Dnes už odsud nic nejede.` (unchanged) |
+| every line in the data | for each of the 23 lines in `data/network.json`, `lineBadgeStyle` returns either a `{bg, fg}` pair or the neutral fallback — **never `undefined`, never a crash** |
+| contrast | for all 21 palette lines, the chosen `fg` is at **≥ 4.5 : 1** against its `bg` (worst case should land at 4.58, line 13) |
+| type safety ⭐ | the lookup works with a **number** key, the actual type in the data — the bug being fixed is precisely a string/number mismatch, so assert it with `typeof` rather than assuming |
+| fallback | lines **20** and **44** render the neutral badge, no console error |
 
-Hledat already distinguishes these two (`doSearch` → `Zastávku nenašel.` × `Žádné spojení v daném
-čase.`), so **Hledat needs no message change** — it only inherits the tolerant resolution from C1
-for free. Verify that it does; do not restyle or reword anything there.
-
-No new visual language, no new CSS class if an existing one fits. Joe is the UX arbiter.
-
-## STEP C3 — tests
-
-`scripts/timetable.test.js`:
-
-| scenario | expectation |
-|---|---|
-| tolerant, by name | `resolveStopIds(net, "Kratka")` returns the **same ids** as `resolveStopIds(net, "Krátká")` |
-| tolerant board | `boardDepartures(net, "lazne i", …)` returns the same rows as `boardDepartures(net, "Lázně I", …)`, line 20 included |
-| still strict about nonsense | `resolveStopIds(net, "zzz-neexistuje")` → `[]` |
-| exact unchanged | every existing J7-P2 scenario still passes untouched |
-
-`scripts/routing.test.js`:
-
-| scenario | expectation |
-|---|---|
-| tolerant | `resolveStopId(net, "kratka")` === `resolveStopId(net, "Krátká")`, both non-null |
-| tolerant search | `search(net, "kratka", "trznice", {maxTransfers: 1})` returns the **same counts** as the exact-name call — **1296 variants, 7 direct** |
-| **data guard** ⭐ | no two distinct `normalizeName` stop names collapse to the same `normalizeLoose` string (today: 155 → 155). If a future data refresh breaks this, the fallback becomes ambiguous and we want the suite to say so, loudly, rather than have the app quietly pick one |
+A tiny throwaway Node snippet that requires nothing from the DOM is fine for the contrast and
+coverage maths — say in `RESULT` what you ran and what it printed. Do not add a new test file to the
+repo for this.
 
 ## PROOF / verification
 
 1. `node scripts/routing.test.js`, `journey.test.js`, `timetable.test.js` → all PASS, no FAIL lines.
-2. `node scripts/verify_network.js` → **20/20 PASS**, guard untouched. (It calls `resolveStopId` with
-   exact names — the exact-first pass means its behaviour must not move at all.)
+   (None of them touch the UI — this is a regression check that you did not stray out of
+   `index_raw.html`.)
+2. `node scripts/verify_network.js` → **20/20 PASS**.
 3. Copy `index_raw.html` → `index.html`, commit both.
-4. Into `RESULT`: before/after for `Kratka` and `lazne`, confirmation that exact-name resolution is
-   byte-identical, the 155 → 155 guard number as measured on your data, and anything the spec did
-   not predict — **especially around 2a's ordering** (blur timer × suggestion tap), which is the part
-   most likely to behave differently than described.
+4. Into `RESULT`: the coverage/contrast numbers from B4, confirmation that lines 20 and 44 fall back
+   cleanly, and anything the spec did not predict — **especially the CSS specificity of
+   `.line-badge span`**, which is the part most likely to behave differently than described.
 
-**Visual and touch testing on GitHub Pages is done by Joe — you have no browser.** The snap in 2a is
-a touch interaction; his test is the only real one.
+**Visual testing on GitHub Pages is done by Joe — you have no browser, and this step is *entirely*
+visual.** Your job is to make it correct and consistent; whether it looks right is his call.
 
 ## DO NOT TOUCH
 
-- `normalizeName` in either module (see C1), `matchStopNames`, `buildSameNameMap` / `search()` /
-  `coLocatedGroups` / `transferPoints`, `planJourney` / `planBoard`.
-- `scripts/build_network.js`, `scripts/verify_network.js`, `scripts/update_data.js`,
-  `.github/workflows/`, `data/`.
-- `Moje trasy` and its cards, the `Teď` / `Jindy` mechanics and violet mode, the tab bar.
-- Hledat's wording and layout (see 2b).
-- **Step B** — `KNOWN_LINE_CLASSES` is a `Set` of strings while `line` is a number, so the coloured
-  line badges never apply in any tab. Approved, written up in `TASK.md`, comes **after** this one.
-  Do not fold it in. If you spot more, write it into `TASK.md`, do not implement it.
-- ⚠️ **Never hardcode `S#`/`P#` ids** in code or tests — the daily J8 refresh reshuffles them. Look
-  ids up by name from `net.stops`, the way `verify_network.js` and the existing tests do.
+- `scripts/*` — all of it. This step is `index_raw.html` + `index.html` only. If you believe you need
+  a script change, stop and write why in `RESULT` instead.
+- `DATA.routes` and its `colorClass` fields (see B3).
+- The `Teď` / `Jindy` mechanics and violet mode, the stop picker, the tab bar, the empty-state
+  strings from step C, any layout or sizing. Only the badge's colours change.
+- The palette values themselves — if a colour looks wrong to you, say so in `RESULT`; do not adjust
+  it. They are a reconstruction from the official schema and Joe knows their error bars.
+- ⚠️ **Never hardcode `S#`/`P#` ids** in code or tests — the daily J8 refresh reshuffles them.
 
 ## RESULT (filled in by the executor)
 
-**STEP C done.** Both halves per spec: tolerant resolution (C1) + honest UI (C2) + tests (C3).
+**Done.** `index_raw.html` + `index.html` only, `scripts/*` untouched.
 
-**C1 — `scripts/routing.js`:** `normalizeLoose(name)` added next to `normalizeName` (unchanged).
-`resolveStopId` keeps the exact pass byte-identical and, only when it finds nothing, retries with
-every stop name diacritics-stripped. `normalizeName`/`normalizeLoose` now exported (needed by
-`routing.test.js`'s data guard). **`scripts/timetable.js`:** same pattern, own `normalizeLoose`
-copy (per spec, no cross-module sharing), `resolveStopIds`' second pass only runs when the exact
-pass returns `[]`. Both modules' loose pass is a straight linear rescan — cheap, and dwarfed by
-`search()`'s own cost, no measurable timing change (STEP D's `Krátká → Tržnice` timing: 3.47ms,
-in line with the ~3.8–5.6ms baseline noted after STEP D).
+- **B1 — palette:** `LINE_COLORS` (plain object, number keys) replaces `KNOWN_LINE_CLASSES`, values
+  copied verbatim from `docs/DPKV_BARVY.md` (21 lines). Placed at the same spot `KNOWN_LINE_CLASSES`
+  used to live (~line 1287, before all three render sites run for the first time — same pattern the
+  original code already relied on).
+- **B2 — computed numeral colour:** new `lineBadgeStyle(line)` (+ `relativeLuminance`/`contrastRatio`/
+  `srgbChannelToLinear` helpers, standard WCAG relative-luminance formula) used by all three render
+  sites (`renderBoard` legs, Tabule rows, Hledat legs). Background goes inline on the `.line-badge`
+  div (`background:${bs.bg}`); the numeral colour goes inline **on the `<span>` itself**
+  (`style="color:${bs.fg}"`), not on the div — see the CSS-specificity note below, this is the part
+  the spec flagged as most likely to surprise. Unknown line → `lineBadgeStyle` returns `null`, both
+  inline styles are omitted, and the pre-existing `.line-badge` (bg `var(--bg4)`) / `.line-badge span`
+  (`color:#fff`) CSS rules apply unchanged — that's the neutral fallback.
+- **B3 — cleanup:** deleted `.line-3`/`.line-9`/`.line-13`/`.line-15`/`.line-51`/`.line-51 span` CSS
+  rules and `KNOWN_LINE_CLASSES` plus its three `const cls = …` call sites. `.line-badge span { color:
+  #fff }` was **kept** — it's now doing real work as the fallback text colour for lines 20/44, not
+  dead weight. `DATA.routes` and its `colorClass` fields left untouched, confirmed via grep — nothing
+  else references the deleted classes.
 
-**Before/after, as specified:**
-```
-boardDepartures(net, "Krátká", "20260814", 600, {limit:3}).length  → 3  (unchanged)
-boardDepartures(net, "Kratka", "20260814", 600, {limit:3}).length  → 3  (was 0)
-boardDepartures(net, "lazne i", DAY, 600, {limit:10})               → 10 rows, line 20 included,
-                                                                        identical to "Lázně I"
-resolveStopId(net, "Krátká") → S127 ; resolveStopId(net, "kratka") → S127  (same id)
-resolveStopId(net, "zzz-neexistuje") → null  (loose pass does not invent a match)
-```
-**Exact-name resolution is byte-identical** — `verify_network.js` (calls `resolveStopId` with exact
-names throughout) is still **20/20 PASS**, and the STEP D `Krátká → Tržnice` no-regression check
-(1296 variants / 7 direct) still holds after adding the loose fallback on top.
+### B4 — numbers (throwaway Node snippet, not committed, ran against the live `data/network.json`)
 
-**Data guard (C3, measured on today's `network.json`):** **155 exact names → 155 after stripping
-diacritics, 0 collisions** — matches the number in the spec exactly. Guard lives in
-`routing.test.js`, walks every exact `normalizeName` and asserts no two different ones share a
-`normalizeLoose` string; would print a `FAIL` with both colliding names if a future data refresh
-ever broke this.
+Re-implemented `LINE_COLORS`/`contrastRatio`/`lineBadgeStyle` verbatim in a `node -e` one-liner and
+ran it over the 23 line numbers actually present in `data/network.json` (collected from
+`net.patterns[*].line`):
 
-**C2a — snap on blur (`index_raw.html`):** the delayed blur callback (still 150ms, unchanged) now
-resolves the typed text via `window.MHDRouting.resolveStopId` after closing the suggestion list. On
-a hit it writes the canonical name (`stopDisplayName(NET.stops[id].n)`) into both the field's JS
-state and the `<input>` DOM value; on a miss it leaves the text untouched for 2b to describe.
-**Deviation from a literal reading of the spec, flagged for review:** the spec's phrasing ("if it
-resolves... call `onCommit()`. If it does not resolve, leave the text as typed") could be read as
-skipping `onCommit()` entirely on a miss. I call it unconditionally instead — without it,
-`boardStop`'s state does update on every keystroke (via `onPickerInput`), but `renderBoardRows()`
-never re-runs after blur, so Tabule would keep showing whatever it last rendered instead of the new
-"Zastávku neznám." message from 2b. Since 2b's whole point is that the empty state must react to an
-unresolved stop, I judged unconditional `onCommit()` to be what the spec intended, not an
-alternative reading. Flagging this in case that judgment call is wrong — cheap to revert (guard the
-call with `if (id)`) if Joe's test shows it misbehaving.
-**2a ordering (`selectPickerStop`):** now clears `pickerBlurTimers[fieldId]` first thing, exactly as
-specced — verified by hand-tracing the tap sequence (blur fires → 150ms timer starts → click fires
-before the timer → `selectPickerStop` clears it → timer never fires) since there's no browser here
-to actually tap. This is the piece most likely to surprise on a real device; Joe's touch test is the
-real check.
+| check | result |
+|---|---|
+| every line in the data | all 23 lines → `lineBadgeStyle` returned either `{bg, fg}` or `null`, **never `undefined`** |
+| contrast | worst case across all 21 palette lines: **4.58, line 13** — matches `docs/DPKV_BARVY.md` exactly, all ≥ 4.5:1 |
+| type safety | `typeof lineBadgeStyle(13)` → `object` (not `undefined`), confirmed with a **number** literal, the actual type `net.patterns[*].line` uses |
+| fallback | line 20 → `null`, line 44 → `null`, both present in the 23-line data set — no crash, no console error (pure string templating, no DOM) |
 
-**2b — honest empty state:** `renderBoardRows` now calls `resolveStopIds(NET, boardStop).length` to
-tell "unknown stop" from "no more departures today" apart, per the spec's table. Verified in Node
-(not just read) that `boardStop = 'Krátká'` (the default) still resolves, so the normal empty-board
-case (late night, nothing left) keeps saying "Dnes už odsud nic nejede." — only a genuinely unknown
-name now says "Zastávku neznám. Vyber ji ze seznamu."
-**Hledat verified unchanged:** `doSearch` still calls `window.MHDRouting.resolveStopId` directly and
-was not touched — it inherits C1's tolerance for free, exactly as the spec predicted. No wording or
-layout edit made there.
+**Unpredicted finding, worth flagging:** the type-safety bug being fixed doesn't actually reproduce
+the same way on a plain object as it did on `Set`. `Set.has()` does strict equality with no
+coercion, so `new Set(['13']).has(13)` really is `false` — that was the original bug. But **plain
+JS object keys are always coerced to strings on both write and read** (`LINE_COLORS[13]` and
+`LINE_COLORS['13']` address the identical property), so `lineBadgeStyle(13)` and
+`lineBadgeStyle('13')` return the same result — checked this directly, both non-null with the same
+`{bg, fg}`. The number-keyed object is still the right, honest choice (matches the data's actual
+type, self-documents you're keying on `line`), but the fix works *even if* something upstream ever
+passed a stringified line number — not because of any explicit coercion I added, just how object
+property access works. Flagging since the spec asked me not to assume this.
 
-**C3 — tests, all PASS, no FAIL lines:**
-- `routing.test.js`: new "STEP C" block — `resolveStopId(net,"kratka") === resolveStopId(net,"Krátká")`
-  (both `S127`), `search(net,"kratka","trznice")` returns the same 1296/7 as the exact call, plus the
-  155→155/0-collision data guard.
-- `timetable.test.js`: new "STEP C" block — `resolveStopIds("Kratka")` = `resolveStopIds("Krátká")`,
-  `boardDepartures("lazne i", ...)` is `JSON.stringify`-identical to `boardDepartures("Lázně I", ...)`
-  and includes a line-20 row, `resolveStopIds("zzz-neexistuje")` stays `[]` (loose pass doesn't
-  invent a fuzzy match for genuine nonsense).
-- All prior STEP D / J7-P2 / J4 / J3 scenarios re-ran untouched and still pass — confirms C1's exact
-  pass really is unchanged, not just claimed to be.
+**CSS specificity, as requested:** `.line-badge span { color: #fff }` is a class-descendant selector
+(specificity 0,2,0). An inline `style="color:…"` **on the div** would not have beaten it — `color` is
+inherited, and an inherited value always loses to *any* explicit rule on the element itself,
+regardless of specificity math, so setting the colour on the outer div would have silently done
+nothing. Inline `style` **on the `<span>` element directly** wins over any external stylesheet rule
+unconditionally (barring `!important`, which neither side uses) — that's the mechanism actually
+relied on here, not specificity at all.
 
-**Verification, in order:** `node scripts/routing.test.js` / `journey.test.js` / `timetable.test.js`
-→ all exit 0, zero "fail" occurrences (case-insensitive) in any output. `node
-scripts/verify_network.js` → **20/20 PASS**, guard untouched, exact-name path confirmed unmoved.
-`index.html` re-copied from `index_raw.html` after every edit, `diff -q` clean at the end.
+### PROOF
 
-**Not testable from here (no browser):** the actual touch timing of 2a — whether 150ms is still
-enough margin now that the callback does more work (a lookup + two DOM/state writes) before firing,
-and whether the snap visibly flashes/jumps on a real phone keyboard closing. Per spec, Joe's test on
-Pages is the real check for this.
+1. `node scripts/routing.test.js` / `journey.test.js` / `timetable.test.js` → all exit clean, zero
+   `FAIL` lines (includes the STEP C/STEP D/J7-P1 blocks from prior steps — confirms nothing outside
+   `index_raw.html` was touched).
+2. `node scripts/verify_network.js` → **20/20 PASS**.
+3. `index.html` re-copied from `index_raw.html`, `diff -q` clean.
 
-## DO NOT TOUCH — confirmed respected
-
-`normalizeName` unchanged in both modules; `matchStopNames`, `buildSameNameMap`, `search()`,
-`coLocatedGroups`, `transferPoints`, `planJourney`, `planBoard` — no edits (`git diff` on
-`journey.js` is empty). `build_network.js`, `verify_network.js`, `update_data.js`, `.github/workflows/`,
-`data/` untouched. Moje trasy, Teď/Jindy/violet, tab bar, Hledat wording/layout — untouched. Step B
-(`KNOWN_LINE_CLASSES`) not folded in. No new `S#`/`P#` literals anywhere in the new test code.
+**Visual check on GitHub Pages is Joe's, per spec** — no browser available here. This closes the
+D → C → B sequence from the manager's 14. 8. plan; all three are now implemented, tested and
+pushed.
