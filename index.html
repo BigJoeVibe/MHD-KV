@@ -1131,7 +1131,7 @@ function showPickerSuggestions(fieldId, value) {
   const matches = value.trim() ? window.MHDTimetable.matchStopNames(getStopNames(), value, 8) : [];
   if (matches.length === 0) { list.innerHTML = ''; list.classList.remove('open'); return; }
   list.innerHTML = matches.map(n =>
-    `<div class="stop-picker-item" data-name="${escapeAttr(n)}" onclick="selectPickerStop('${fieldId}', this.dataset.name)">${n}</div>`
+    `<div class="stop-picker-item" data-name="${escapeAttr(n)}" onmousedown="event.preventDefault()" onclick="selectPickerStop('${fieldId}', this.dataset.name)">${n}</div>`
   ).join('');
   list.classList.add('open');
 }
