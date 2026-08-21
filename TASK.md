@@ -370,10 +370,47 @@ GitHub log hlásí deprecation warning (runner vynuceně použil Node 24) — zv
 - **keepalive** proti 60dennímu auto-vypnutí (ověřeno).
 - Zdroj: A=JrUtil GTFS (hlavní), B=CIS MHD JDF (záložní). GPS = statická, ne-prio.
 
+## 🟡 UI-1 — ZADÁNO 21. 8. 2026 (spec v `handoff.md`). Dvě chyby z Joeova testu na PC
+
+**Krok B ověřen Joem na Pages 21. 8.** — barvy sedí, linky 20/44 padají na neutrální odznak podle
+plánu. Sytost barev k doladění → zapsáno v „NEDOŘEŠENÉ / OTEVŘENÉ BODY" níže. Při testu Joe našel dvě vady,
+obě mimo krok B (pre-existující, obě v `index_raw.html`):
+
+| # | Vada | Mechanismus (ověřen managerem v kódu, ne odhad) | Stav |
+|---|------|---|---|
+| UI-1a | **Klik na napovězenou zastávku nic neudělá** (PC, myš) | `onPickerBlur` po 150 ms maže seznam (`innerHTML = ''`). Pořadí u myši je mousedown → blur → *puštění* → mouseup → click. Když uživatel drží tlačítko déle než 150 ms (na PC běžné), položka zmizí mezi stiskem a puštěním a prohlížeč **click vůbec nevyvolá**. Na dotyku je ťuknutí kratší, proto to na mobilu většinou projde — předpoklad kroku C („150 ms stačí") platil jen pro tap. | ⭐ **ZADÁNO 21. 8.** |
+| UI-1b | **Pole čas/datum ztrácí číslice** (PC) | `onCustomDateChange`/`onCustomTimeChange` končí `render()`, což překreslí celý tab včetně toho `<input>`, do kterého se píše — prohlížeč ho zahodí a vyrobí nový, fokus i pozice v poli jsou pryč. `setTimeMode('custom')` navíc pole předvyplní, takže hodnota je kompletní a Chrome vystřelí `change` **už po první číslici** (`14:05` → `01:05`). Druhá číslice pak padá do prázdna. | ⭐ **ZADÁNO 21. 8.** |
+
+**Rozhodnutí Joea 21. 8.: varianta B** — nejdřív tyhle dvě vady samostatně, tlačítko na celý seznam
+zastávek až po nich. Důvod: menší a jistější diff, opravy jsou na Pages dřív. Cena: dvě kola
+testování místo jednoho a část orientace v týchž funkcích se udělá dvakrát.
+
+**Poznámka k oběma opravám:** blok `time-toggle` je v `index_raw.html` **třikrát byte-identicky**
+(`renderDepartures` ~931, `renderBoard` ~1170, `renderSearch` ~1252). UI-1b ho slučuje do jednoho
+helperu, aby oprava nemohla skončit ve dvou místech ze tří.
+
+### ⏭️ UI-2 — tlačítko „celý seznam zastávek" (zadání Joea 21. 8., ZATÍM NEZADÁNO executorovi)
+
+Až po UI-1. Zadání, jak ho Joe formuloval:
+
+- **Vpravo v poli** přibude tlačítko (místo tam je), které rozbalí **kompletní seznam zastávek**.
+- Otevírá se **jen kliknutím na tlačítko** — ne při kliknutí do pole. (Důvod: na mobilu by seznam
+  vyskakoval přes odjezdy při každém dotyku pole.)
+- **Platí i pro mobil**, a tam se to láme — hlídat: rolování uvnitř seznamu, aby seznam nebyl
+  „nekonečný" (155 zastávek, dnes je `overflow: hidden` a bez scrollu), klikatelnost položek při
+  rolování (proto UI-1a **nesmí** přesunout výběr na `mousedown`/`pointerdown`), a hlavně **cesta
+  zpět k psaní** — uživatel musí umět seznam zavřít a psát dál.
+- Joe říká „pro oba směry" = pole **Odkud** i **Kam** v Hledat. 📌 K potvrzení: našeptávač je sdílený,
+  takže tlačítko se stejným zásahem objeví i v **Tabuli** — předpokládám, že se to tak chce.
+
+---
+
 ## NEDOŘEŠENÉ / OTEVŘENÉ BODY (rizika)
 
 | Téma | Co chybí / riziko | Stav |
 |------|-------------------|------|
+| 📌 **Sytost barev linek** (Joe 21. 8., mimo scope) | Paleta DPKV je věrná, ale na tmavém pozadí appky působí část odstínů vybledle. Doladit sytost/jas pro tmavý theme — pozor, hodnoty v `docs/DPKV_BARVY.md` jsou rekonstrukce oficiálního schématu, takže jakákoli úprava je vědomý odklon od DPKV a musí se tam zapsat. Zároveň hlídat čtyři blízké dvojice: **9×17** (odstup 18 z 441), **17×22** (29), **11×21** (32), **6×11** (37) — všechny se potkávají na Tržnici. | [k dořešení], počká
+| **Linka 44 je sezónní, ne chybějící** (ověřeno 21. 8.) | Joe ji nenašel v tabuli. Není to vada: služba `CAL-exc-6879` jede jen na vyjmenovaná data (duben–začátek října) a jen 4 zastávky (Hlavní pošta, Tržnice, Divadelní náměstí, Richmond), poslední spoj 17:00 / zpět 17:25. Druhá varianta (`CAL-exc-6880`, Tržnice ↔ Divadelní nám.) jede jen v adventu. 📌 K zvážení do UI: linka, která dnes už dojezdila nebo je mimo sezónu, není nijak odlišená od linky, která neexistuje. | [úsudek] — UX téma, ne bug
 | **Licence dat** | ověřit podmínky užití + atribuci GTFS (JrUtil / CIS JŘ) před veřejným nasazením | [k dořešení] |
 | **„Na znamení" GAP** | GTFS příznak nese jen linka 8; reálné (5, 19…) chybí → NEspoléhat na GTFS | rozhodnout v UI: ruční overlay / vynechat / jiný zdroj |
 | **Náhlé výluky** | plánované (v CIS) data mají; „ode dneška" výluku ne → řeší periodicita obnovy | do J8 |

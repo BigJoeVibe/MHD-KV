@@ -7,6 +7,34 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-08-21 (2) — v0.1.0 (UI-1: suggestion click ignored + Jindy inputs dropping digits)
+
+- **BUG 1 (`fdcd384`) — clicking a stop suggestion did nothing on desktop.** `onPickerBlur`'s
+  150ms delayed timer closed the suggestion list before a slow mouse click (press held >150ms)
+  could complete, so the browser never dispatched `click` at all (mouse order is `mousedown` →
+  `blur` → release → `mouseup` → `click`, and a removed target skips `click` entirely). Fix:
+  `onmousedown="event.preventDefault()"` on `.stop-picker-item` suppresses the blur, so the list
+  survives to `click`. Selection itself stays on `onclick`, not `mousedown` — a future scrollable
+  full-stop-list button needs drag-to-scroll to not trigger selection.
+- **BUG 2 (`9196ae1`) — the `Jindy` date/time fields dropped digits while typing.**
+  `onCustomDateChange`/`onCustomTimeChange` ended in a full `render()`, rebuilding the whole tab
+  including the `<input>` being typed into — the browser tore it down mid-entry, losing focus and
+  the next digit. Extracted the three byte-identical `time-toggle` blocks (Moje trasy / Tabule /
+  Hledat) into a shared `timeToggleHtml()`; the info line now has a stable `id="custom-time-info"`
+  refreshed on its own via `updateCustomTimeInfo()`. The two change handlers now only update the
+  clock, that info line, and the current tab's results (`renderDepartureCards()` /
+  `renderBoardRows()`) — never `render()`. Hledat's results are deliberately left untouched, since
+  it only (re)computes on its submit button; re-rendering old `searchResults` against a new time
+  would silently show stale cards as if fresh.
+- **Verified:** all three test suites exit clean, `verify_network.js` 20/20 PASS, no `scripts/*`
+  touched. Additionally ran the real inline script + the three `<script src>` modules through an ad
+  hoc Node `vm` sandbox (minimal `document`/`fetch` shim, not committed) — confirmed a date/time
+  change no longer rewrites `content`'s `innerHTML` (proving no full re-render), does refresh
+  `custom-time-info` with the new date/day-type, and that `renderBoardRows()` fires on Tabule; also
+  confirmed the generated suggestion markup carries the new `onmousedown` attribute. **Not tested
+  visually** — the touch-timing and real typing/focus behaviour are Joe's to check on desktop and
+  phone. Detail in `handoff.md` → RESULT.
+
 ## 2026-08-21 — v0.1.0 (STEP B: real DPKV line colours on the badges)
 
 - **The bug:** `KNOWN_LINE_CLASSES` was a `Set` of strings (`'3'`, `'9'`, …) but `leg.line`/`row.line`

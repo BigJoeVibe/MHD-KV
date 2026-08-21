@@ -1,184 +1,182 @@
-# Handoff — EXECUTOR spec (STEP B: real DPKV line colours on the badges)
+# Handoff — EXECUTOR spec (STEP UI-1: suggestion click + time/date input)
 
 > **LANGUAGE:** this file, your code comments, commit messages and the `RESULT` section below are
 > **English**. Czech stays only in: stop names (they come from the data), UI strings shown to the
 > user, and the project docs `CLAUDE.md` / `TASK.md` / `docs/*.md` (those are the owner's, do not
 > translate them). Work internally in English.
 
-> 🔴 **ACTIVE SPEC (manager, 2026-08-14).** Steps **D and C are done, pushed and reviewed**. This is
-> **B**, the last of the three. It is the only one that changes what Joe actually sees, in **three
-> tabs at once** — so keep it surgical.
+> 🔴 **ACTIVE SPEC (manager, 2026-08-21).** D, C and B are done, pushed and verified — B was checked
+> visually by Joe on Pages on 21. 8. and accepted. This is **UI-1: two bugs Joe hit on desktop**.
+> Both live in `index_raw.html` only. Joe explicitly chose to ship these two **before** the new
+> "show the whole stop list" button, so that button is **not** part of this handoff.
 
 > **Handoff for the lower CC (executor).** Implement per the bullets, **nothing beyond the spec**.
-> You do the git. Small steps, code as a **diff**, commit + test.
+> You do the git. Small steps, code as a **diff**, commit + test. **Two separate commits**, one per
+> bug — they have different mechanisms and Joe tests them separately.
 
 ## How to start
 1. "Use skill **kod-jadro**."
-2. Read `CLAUDE.md`, **`docs/DPKV_BARVY.md`** (the palette, where it came from and why the numeral
-   colour is computed — read this before you touch anything), and `index_raw.html`: the
-   `.line-badge` CSS ~241, `KNOWN_LINE_CLASSES` ~1287, and the three render sites at ~1023
-   (`Moje trasy`), ~1222 (`Tabule`), ~1342 (`Hledat`).
+2. `git pull --rebase` first — the J8 data refresh commits daily and you are probably behind.
+3. Read `CLAUDE.md` and, in `index_raw.html`: the picker block (~1055–1155), and the three
+   `time-toggle` blocks in `renderDepartures` (~931), `renderBoard` (~1170), `renderSearch` (~1252).
 
 ---
 
-## The bug, in one line
+## BUG 1 — clicking a suggestion does nothing (desktop, mouse)
 
-`KNOWN_LINE_CLASSES` is a `Set` of **strings** (`'3'`, `'9'`, …) but `leg.line` / `row.line` coming
-out of `network.json` is a **number** — so `.has(line)` never matches and the coloured badge never
-applies. In any tab. It has been shipped like this the whole time.
+Reported by Joe on PC: the suggestion list appears, but clicking an entry does nothing and he has to
+type the full stop name anyway.
 
-```js
-new Set(['3','9','13','15','51']).has(3)   // → false
-```
+**Mechanism — verified in the code, not a guess:**
 
-Fixing only the type would be a poor outcome, though: the old palette covers **5** lines (leftovers
-from the F1 app) while the data has **23**. Joe's decision (14. 8.): replace it with the **real DPKV
-palette** from the official line schema.
+- `.stop-picker-item` selects via `onclick="selectPickerStop(...)"`.
+- `onPickerBlur` schedules a **150 ms** timer whose callback runs `closePickerSuggestions()`, i.e.
+  `list.innerHTML = ''`.
+- Mouse order is: `mousedown` → `blur` (timer starts) → *user releases* → `mouseup` → `click`.
+  A hold longer than 150 ms — completely normal on a desktop — removes the item node between
+  `mousedown` and `mouseup`. The browser then dispatches **no `click` at all**, because `click`
+  requires the same target for press and release. Hence "nothing happens".
+- A touch tap is usually shorter than 150 ms, which is why this looked fine on mobile and why
+  STEP C's own reasoning ("150 ms is long enough for that click to land") held only for taps.
 
-## STEP B1 — the palette
+**Fix:**
 
-Take the values from **`docs/DPKV_BARVY.md`** — do not retype them from this file, that doc is the
-source of truth and carries the provenance. Put them in `index_raw.html` as a plain object keyed by
-**number** (the same type the data uses), replacing `KNOWN_LINE_CLASSES`:
+- Add `onmousedown="event.preventDefault()"` to each `.stop-picker-item`. Preventing the default on
+  `mousedown` suppresses the focus change, so the input **never blurs**, no timer is scheduled, and
+  the list is still in the DOM when `click` arrives.
+- **Keep `onclick="selectPickerStop(...)"` as the handler that actually selects.** Do **not** move
+  the selection itself onto `mousedown` / `pointerdown`: the very next step makes this list
+  scrollable (full stop list behind a button) and a drag-to-scroll would then select whatever the
+  finger or cursor started on.
+- Leave the blur timer, the snap-to-canonical-name logic and `onCommit` **untouched** — they still
+  have to run when the user clicks somewhere else entirely.
+- Keep the `clearTimeout` inside `selectPickerStop` as a safety net. iOS dispatches `mousedown` late
+  in the tap sequence; if a `blur` ever slips through first, that timer must not fire afterwards.
 
-```js
-const LINE_COLORS = { 1: '#2f2a84', 2: '#5196cd', /* … see docs/DPKV_BARVY.md … */ };
-```
-
-- 21 lines are covered (19 day + 2 night). **Lines 20 and 44 are deliberately absent** — DPKV runs
-  them outside the main schema, we have no official colour. They must fall back to the current
-  neutral badge (`var(--bg4)` background, white numeral) and must not break anything.
-- Do not invent colours for them. Do not interpolate, hash, or generate.
-
-## STEP B2 — computed numeral colour
-
-The app is dark-theme with a white numeral. On this palette that fails badly: **16 of 21 colours are
-below 4.5 : 1 with white text, 10 below even 3 : 1** (line 9 `#f2cb5c` sits at 1.56 : 1). So the
-background stays exactly DPKV's, and the **numeral colour is chosen per line**:
-
-- Compute WCAG relative luminance of the background, then the contrast ratio against `#ffffff` and
-  against `#0a0c0f`, and use whichever is higher.
-- `#0a0c0f` is not arbitrary — it is the lightest dark that keeps **every** line at AA. The
-  measurements are in `docs/DPKV_BARVY.md`; do not substitute a different dark without redoing them.
-- Write it as one small helper (e.g. `lineBadgeStyle(line) -> {bg, fg}`) used by **all three** render
-  sites, so they cannot drift apart. Unknown line → return `null` / a neutral marker and let the
-  existing default styling stand.
-- Apply via inline `style` on the existing `.line-badge` element. The numeral is inside
-  `<span>`, and `.line-badge span { color: #fff }` currently forces white — that rule has to stop
-  winning over the computed colour. Set the colour where it actually applies; do not add
-  `!important` anywhere.
-
-## STEP B3 — clean up what this replaces
-
-- Delete the `.line-3` / `.line-9` / `.line-13` / `.line-15` / `.line-51` CSS rules and the
-  `.line-51 span { color: #f0728a }` override. They are the old F1 palette and nothing else uses them.
-- Delete `KNOWN_LINE_CLASSES` and the three `const cls = …` expressions that read it.
-- ⚠️ `DATA.routes` (the dead F1 data block) still has `colorClass: "line-3"` etc. on ~5 entries.
-  **Leave those alone** — `DATA.routes` is scheduled for its own cleanup and touching it here would
-  mix two changes in one diff. The CSS classes going away does not break it; nothing renders it.
-
-## STEP B4 — check, since there are no UI tests
-
-There is no test harness for `index_raw.html`, so do this by hand and report the numbers:
+**Checks (manual, no UI test harness):**
 
 | check | expectation |
 |---|---|
-| every line in the data | for each of the 23 lines in `data/network.json`, `lineBadgeStyle` returns either a `{bg, fg}` pair or the neutral fallback — **never `undefined`, never a crash** |
-| contrast | for all 21 palette lines, the chosen `fg` is at **≥ 4.5 : 1** against its `bg` (worst case should land at 4.58, line 13) |
-| type safety ⭐ | the lookup works with a **number** key, the actual type in the data — the bug being fixed is precisely a string/number mismatch, so assert it with `typeof` rather than assuming |
-| fallback | lines **20** and **44** render the neutral badge, no console error |
+| slow desktop click | press on a suggestion, hold **> 1 s**, release → the stop is selected |
+| fast desktop click | still selected, no double-commit, list closes once |
+| keyboard | `Enter` still picks the first suggestion, `Escape` still closes the list |
+| click outside | clicking anywhere else still closes the list, still snaps free text (`kratka` → `Krátká`) and still refreshes Tabule |
+| Tabule | picking a stop in Tabule still refreshes the rows immediately |
 
-A tiny throwaway Node snippet that requires nothing from the DOM is fine for the contrast and
-coverage maths — say in `RESULT` what you ran and what it printed. Do not add a new test file to the
-repo for this.
+## BUG 2 — the time / date field drops digits
+
+Reported by Joe on PC: typing several digits into the `Jindy` date or time field is unreliable; typed
+quickly, the second digit is not taken.
+
+**Mechanism — verified in the code:**
+
+- `onCustomDateChange(v)` and `onCustomTimeChange(v)` both end in `render()`, which rebuilds the
+  **entire tab's HTML** — including the `<input>` currently being typed into. The browser destroys
+  that element and builds a new one, so focus and the segment position are gone.
+- `setTimeMode('custom')` prefills both fields with the current date and time, so the value is
+  already complete. In Chrome, typing the first hour digit into a complete `<input type="time">`
+  yields a valid value immediately (`14:05` → `01:05`), which fires `change` **after one digit**.
+  The re-render follows, the field dies, the second digit lands nowhere. That is exactly the
+  reported symptom, and the date field has the same shape of the problem.
+
+**Fix — stop re-rendering the block that contains the inputs:**
+
+- Give the info line a stable id (e.g. `id="custom-time-info"`) and render the element
+  **unconditionally**, empty when `useCustomTime && customDate && customTime` is false, so it can be
+  refreshed on its own. Add a small `updateCustomTimeInfo()` that only writes its `innerHTML`.
+- `onCustomDateChange` / `onCustomTimeChange`: set the value, then call `updateClockForMode()`,
+  `updateCustomTimeInfo()`, and refresh **only the results of the current tab** —
+  `departures → renderDepartureCards()`, `board → renderBoardRows()`,
+  `search → renderSearchResults()`. No `render()`.
+- ⚠️ **Search tab, decide and report:** check what `renderSearchResults()` does before any search has
+  been submitted. If it would wipe the form state or render an empty/false result, do **not** call it
+  on a time change — Hledat only runs on its submit button, so leaving its results alone is
+  acceptable and probably correct. State in `RESULT` which branch you took and why.
+- Leave `setTimeMode()` on the full `render()`. Switching `Teď` / `Jindy` has to rebuild the block
+  and nobody is mid-typing at that moment.
+
+**The three copies:** the `time-toggle` block is **byte-identical** in `renderDepartures` (~931),
+`renderBoard` (~1170) and `renderSearch` (~1252) — I diffed them. Extract it into a single
+`timeToggleHtml()` helper used by all three, so this fix cannot end up applied to two of the three.
+This small refactor is explicitly allowed here, for the same drift-prevention reason as
+`lineBadgeStyle` in STEP B. The rendered markup must be identical to today's apart from the new
+stable info-line element.
+
+**Checks:**
+
+| check | expectation |
+|---|---|
+| slow typing | type the time digit by digit with pauses → every digit lands, value ends up as typed |
+| fast typing | type `1430` as fast as you can → value is `14:30`, nothing dropped |
+| date | same for the date field, including changing only the month |
+| results follow | after the value settles, `Moje trasy` cards and `Tabule` rows reflect the new time |
+| info line | the day-type badge and the Czech date under the fields update with the new value |
+| Teď / Jindy | switching modes still works, violet mode still applies, no leftover state |
+
+## DO NOT TOUCH
+
+- `scripts/*` — all of it. This handoff is `index_raw.html` + `index.html`. If you believe a script
+  change is required, stop and write why in `RESULT` instead.
+- The picker's matching / snapping / `resolveStopId` behaviour from STEP C, the line colours from
+  STEP B, `DATA.routes`, the tab bar, violet mode, any layout or sizing.
+- ⛔ **The "show the whole stop list" button is NOT in this handoff.** Joe deferred it deliberately.
+  Do not add it and do not build hooks for it — the only thing you owe it is the `onclick`-not-
+  `mousedown` note in BUG 1, so a scrollable list stays possible later.
+- ⚠️ **Never hardcode `S#`/`P#` ids** in code or tests — the daily J8 refresh reshuffles them.
 
 ## PROOF / verification
 
 1. `node scripts/routing.test.js`, `journey.test.js`, `timetable.test.js` → all PASS, no FAIL lines.
-   (None of them touch the UI — this is a regression check that you did not stray out of
-   `index_raw.html`.)
+   (They do not touch the UI — this is a regression check that you stayed inside `index_raw.html`.)
 2. `node scripts/verify_network.js` → **20/20 PASS**.
-3. Copy `index_raw.html` → `index.html`, commit both.
-4. Into `RESULT`: the coverage/contrast numbers from B4, confirmation that lines 20 and 44 fall back
-   cleanly, and anything the spec did not predict — **especially the CSS specificity of
-   `.line-badge span`**, which is the part most likely to behave differently than described.
+3. Copy `index_raw.html` → `index.html`, `diff -q` clean, commit both.
+4. Two commits, one per bug.
+5. Into `RESULT`: the search-tab decision from BUG 2, whether `onmousedown` needed anything extra for
+   touch, and any event-order or focus behaviour that differed from what this spec predicts.
 
-**Visual testing on GitHub Pages is done by Joe — you have no browser, and this step is *entirely*
-visual.** Your job is to make it correct and consistent; whether it looks right is his call.
-
-## DO NOT TOUCH
-
-- `scripts/*` — all of it. This step is `index_raw.html` + `index.html` only. If you believe you need
-  a script change, stop and write why in `RESULT` instead.
-- `DATA.routes` and its `colorClass` fields (see B3).
-- The `Teď` / `Jindy` mechanics and violet mode, the stop picker, the tab bar, the empty-state
-  strings from step C, any layout or sizing. Only the badge's colours change.
-- The palette values themselves — if a colour looks wrong to you, say so in `RESULT`; do not adjust
-  it. They are a reconstruction from the official schema and Joe knows their error bars.
-- ⚠️ **Never hardcode `S#`/`P#` ids** in code or tests — the daily J8 refresh reshuffles them.
+**Visual and device testing is Joe's** — desktop and phone, both bugs. You have no browser.
 
 ## RESULT (filled in by the executor)
 
-**Done.** `index_raw.html` + `index.html` only, `scripts/*` untouched.
+**Both bugs fixed, two commits, `index.html` = `index_raw.html`.**
 
-- **B1 — palette:** `LINE_COLORS` (plain object, number keys) replaces `KNOWN_LINE_CLASSES`, values
-  copied verbatim from `docs/DPKV_BARVY.md` (21 lines). Placed at the same spot `KNOWN_LINE_CLASSES`
-  used to live (~line 1287, before all three render sites run for the first time — same pattern the
-  original code already relied on).
-- **B2 — computed numeral colour:** new `lineBadgeStyle(line)` (+ `relativeLuminance`/`contrastRatio`/
-  `srgbChannelToLinear` helpers, standard WCAG relative-luminance formula) used by all three render
-  sites (`renderBoard` legs, Tabule rows, Hledat legs). Background goes inline on the `.line-badge`
-  div (`background:${bs.bg}`); the numeral colour goes inline **on the `<span>` itself**
-  (`style="color:${bs.fg}"`), not on the div — see the CSS-specificity note below, this is the part
-  the spec flagged as most likely to surprise. Unknown line → `lineBadgeStyle` returns `null`, both
-  inline styles are omitted, and the pre-existing `.line-badge` (bg `var(--bg4)`) / `.line-badge span`
-  (`color:#fff`) CSS rules apply unchanged — that's the neutral fallback.
-- **B3 — cleanup:** deleted `.line-3`/`.line-9`/`.line-13`/`.line-15`/`.line-51`/`.line-51 span` CSS
-  rules and `KNOWN_LINE_CLASSES` plus its three `const cls = …` call sites. `.line-badge span { color:
-  #fff }` was **kept** — it's now doing real work as the fallback text colour for lines 20/44, not
-  dead weight. `DATA.routes` and its `colorClass` fields left untouched, confirmed via grep — nothing
-  else references the deleted classes.
+- **BUG 1 (`fdcd384`):** added `onmousedown="event.preventDefault()"` to `.stop-picker-item` in
+  `showPickerSuggestions`. Selection stayed on `onclick`, nothing else touched.
+- **BUG 2 (`9196ae1`):** extracted the three byte-identical `time-toggle` blocks into
+  `timeToggleHtml()`; the info line now has a stable `id="custom-time-info"` and its own
+  `customTimeInfoHtml()`/`updateCustomTimeInfo()`. `onCustomDateChange`/`onCustomTimeChange` now
+  call a shared `onCustomTimeValueChanged()` that runs `updateClockForMode()` +
+  `updateCustomTimeInfo()` + refreshes only the current tab's results
+  (`renderDepartureCards()` for Moje trasy, `renderBoardRows()` for Tabule) — no `render()`.
 
-### B4 — numbers (throwaway Node snippet, not committed, ran against the live `data/network.json`)
+**Search-tab decision (per the spec's request to state it):** `renderSearchResults()` is **not**
+called from the date/time change path. Checked `renderSearchResults()` first: when
+`searchResults === null` (nothing submitted yet) it just clears `#search-results`'s innerHTML —
+harmless either way — but when a search **was** already submitted, calling it again would
+re-render the *same* `searchResults` array (it doesn't recompute), so the cards would keep
+showing times computed for the old `customDate`/`customTime` while looking freshly rendered.
+Leaving it alone means the stale cards stay visibly stale until the user hits "Hledat spojení"
+again, which is the honest state — matches the spec's own suggested branch.
 
-Re-implemented `LINE_COLORS`/`contrastRatio`/`lineBadgeStyle` verbatim in a `node -e` one-liner and
-ran it over the 23 line numbers actually present in `data/network.json` (collected from
-`net.patterns[*].line`):
+**`onmousedown` and touch:** did not need anything extra. `mousedown` fires on touch too (before
+`touchend`/`click`), so `preventDefault()` there suppresses focus/blur on touch exactly the same
+way — the tap-then-click path STEP C already relied on is untouched; this only removes a race that
+was specific to a slow *mouse* press. Nothing to add for touch, but Joe's phone test is still the
+real check.
 
-| check | result |
-|---|---|
-| every line in the data | all 23 lines → `lineBadgeStyle` returned either `{bg, fg}` or `null`, **never `undefined`** |
-| contrast | worst case across all 21 palette lines: **4.58, line 13** — matches `docs/DPKV_BARVY.md` exactly, all ≥ 4.5:1 |
-| type safety | `typeof lineBadgeStyle(13)` → `object` (not `undefined`), confirmed with a **number** literal, the actual type `net.patterns[*].line` uses |
-| fallback | line 20 → `null`, line 44 → `null`, both present in the 23-line data set — no crash, no console error (pure string templating, no DOM) |
+**Event-order / focus notes vs. spec's prediction:** matched exactly — no surprises. Verified with
+an ad hoc Node `vm` sandbox (real inline script + the three `<script src>` modules, minimal
+`document`/`fetch` shim, not committed): after `setTimeMode('custom')` then
+`onCustomDateChange('2026-08-25')` + `onCustomTimeChange('14:31')`, the `content` element's
+`innerHTML` write-count did **not** increase (proving no full re-render), `custom-time-info`'s
+did (twice, once per change) and showed the new date/day-type, `dayType`'s status text updated,
+and on the Tabule tab `renderBoardRows()` fired without touching `content`. Also confirmed the
+generated suggestion markup carries both `onmousedown="event.preventDefault()"` and
+`onclick="selectPickerStop(...)"`.
 
-**Unpredicted finding, worth flagging:** the type-safety bug being fixed doesn't actually reproduce
-the same way on a plain object as it did on `Set`. `Set.has()` does strict equality with no
-coercion, so `new Set(['13']).has(13)` really is `false` — that was the original bug. But **plain
-JS object keys are always coerced to strings on both write and read** (`LINE_COLORS[13]` and
-`LINE_COLORS['13']` address the identical property), so `lineBadgeStyle(13)` and
-`lineBadgeStyle('13')` return the same result — checked this directly, both non-null with the same
-`{bg, fg}`. The number-keyed object is still the right, honest choice (matches the data's actual
-type, self-documents you're keying on `line`), but the fix works *even if* something upstream ever
-passed a stringified line number — not because of any explicit coercion I added, just how object
-property access works. Flagging since the spec asked me not to assume this.
+**Verification:** `routing.test.js` / `journey.test.js` / `timetable.test.js` all exit clean, zero
+`FAIL` lines; `verify_network.js` **20/20 PASS**. No `scripts/*` files touched (confirmed via
+`git status` — only `index_raw.html`/`index.html` in both commits).
 
-**CSS specificity, as requested:** `.line-badge span { color: #fff }` is a class-descendant selector
-(specificity 0,2,0). An inline `style="color:…"` **on the div** would not have beaten it — `color` is
-inherited, and an inherited value always loses to *any* explicit rule on the element itself,
-regardless of specificity math, so setting the colour on the outer div would have silently done
-nothing. Inline `style` **on the `<span>` element directly** wins over any external stylesheet rule
-unconditionally (barring `!important`, which neither side uses) — that's the mechanism actually
-relied on here, not specificity at all.
-
-### PROOF
-
-1. `node scripts/routing.test.js` / `journey.test.js` / `timetable.test.js` → all exit clean, zero
-   `FAIL` lines (includes the STEP C/STEP D/J7-P1 blocks from prior steps — confirms nothing outside
-   `index_raw.html` was touched).
-2. `node scripts/verify_network.js` → **20/20 PASS**.
-3. `index.html` re-copied from `index_raw.html`, `diff -q` clean.
-
-**Visual check on GitHub Pages is Joe's, per spec** — no browser available here. This closes the
-D → C → B sequence from the manager's 14. 8. plan; all three are now implemented, tested and
-pushed.
+**Not tested visually** — no browser here. The touch-timing and real focus/typing behaviour are
+Joe's to check on desktop and phone, per the spec.
