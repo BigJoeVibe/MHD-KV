@@ -925,9 +925,12 @@ function render() {
 }
 
 // ============================================================
-// DEPARTURES
+// TIME TOGGLE (shared by Moje trasy / Tabule / Hledat — UI-1b)
 // ============================================================
-function renderDepartures() {
+// The three tabs used a byte-identical inline copy of this block; a fix landing in only two of
+// the three was the exact drift STEP B's lineBadgeStyle refactor was meant to prevent, so the
+// same pattern applies here.
+function timeToggleHtml() {
   const vClass = useCustomTime ? ' violet' : '';
   let html = `<div class="time-toggle${vClass}">`;
   html += `<div class="time-toggle-header">`;
@@ -939,11 +942,30 @@ function renderDepartures() {
   html += `<input type="date" id="customDate" value="${customDate}" onchange="onCustomDateChange(this.value)">`;
   html += `<input type="time" id="customTime" value="${customTime}" onchange="onCustomTimeChange(this.value)">`;
   html += `</div>`;
-  if (useCustomTime && customDate && customTime) {
-    const sim = getNow();
-    html += `<div class="custom-time-info"><span class="badge">${getDayTypeLabel(getDayType(sim))}</span><span>${formatCzechDate(sim)}</span></div>`;
-  }
+  html += `<div class="custom-time-info" id="custom-time-info">${customTimeInfoHtml()}</div>`;
   html += `</div></div>`;
+  return html;
+}
+
+// Rendered unconditionally (empty string when there's nothing to show) so it has a stable id
+// that onCustomDateChange/onCustomTimeChange can refresh on its own, instead of re-rendering the
+// whole tab and destroying the `<input>` the user is mid-keystroke in (UI-1b).
+function customTimeInfoHtml() {
+  if (!(useCustomTime && customDate && customTime)) return '';
+  const sim = getNow();
+  return `<span class="badge">${getDayTypeLabel(getDayType(sim))}</span><span>${formatCzechDate(sim)}</span>`;
+}
+
+function updateCustomTimeInfo() {
+  const el = document.getElementById('custom-time-info');
+  if (el) el.innerHTML = customTimeInfoHtml();
+}
+
+// ============================================================
+// DEPARTURES
+// ============================================================
+function renderDepartures() {
+  let html = timeToggleHtml();
   html += `<div id="departure-cards"></div>`;
   document.getElementById('content').innerHTML = html;
   renderDepartureCards();
@@ -1168,21 +1190,7 @@ function renderBoard() {
     return;
   }
 
-  let html = `<div class="time-toggle${vClass}">`;
-  html += `<div class="time-toggle-header">`;
-  html += `<button class="time-toggle-btn ${!useCustomTime ? 'active-now' : ''}" onclick="setTimeMode('now')">Teď</button>`;
-  html += `<button class="time-toggle-btn ${useCustomTime ? 'active-custom' : ''}" onclick="setTimeMode('custom')">Jindy</button>`;
-  html += `</div>`;
-  html += `<div class="custom-time-picker ${useCustomTime ? 'visible' : ''}">`;
-  html += `<div class="custom-time-row">`;
-  html += `<input type="date" id="customDate" value="${customDate}" onchange="onCustomDateChange(this.value)">`;
-  html += `<input type="time" id="customTime" value="${customTime}" onchange="onCustomTimeChange(this.value)">`;
-  html += `</div>`;
-  if (useCustomTime && customDate && customTime) {
-    const sim = getNow();
-    html += `<div class="custom-time-info"><span class="badge">${getDayTypeLabel(getDayType(sim))}</span><span>${formatCzechDate(sim)}</span></div>`;
-  }
-  html += `</div></div>`;
+  let html = timeToggleHtml();
 
   html += `<div class="search-form${vClass}">`;
   html += `<div class="search-field"><label>Zastávka</label>${stopPickerHtml('board', boardStop, 'Zastávka…')}</div>`;
@@ -1250,21 +1258,7 @@ function renderSearch() {
   html += `<button class="search-loc-btn" disabled>📍 Moje poloha (brzy)</button>`;
   html += `</div>`;
 
-  html += `<div class="time-toggle${vClass}">`;
-  html += `<div class="time-toggle-header">`;
-  html += `<button class="time-toggle-btn ${!useCustomTime ? 'active-now' : ''}" onclick="setTimeMode('now')">Teď</button>`;
-  html += `<button class="time-toggle-btn ${useCustomTime ? 'active-custom' : ''}" onclick="setTimeMode('custom')">Jindy</button>`;
-  html += `</div>`;
-  html += `<div class="custom-time-picker ${useCustomTime ? 'visible' : ''}">`;
-  html += `<div class="custom-time-row">`;
-  html += `<input type="date" id="customDate" value="${customDate}" onchange="onCustomDateChange(this.value)">`;
-  html += `<input type="time" id="customTime" value="${customTime}" onchange="onCustomTimeChange(this.value)">`;
-  html += `</div>`;
-  if (useCustomTime && customDate && customTime) {
-    const sim = getNow();
-    html += `<div class="custom-time-info"><span class="badge">${getDayTypeLabel(getDayType(sim))}</span><span>${formatCzechDate(sim)}</span></div>`;
-  }
-  html += `</div></div>`;
+  html += timeToggleHtml();
 
   html += `<button class="search-submit" onclick="doSearch()">Hledat spojení</button>`;
   html += `<div id="search-results"></div>`;
@@ -1436,8 +1430,20 @@ function setTimeMode(mode) {
   updateModeClasses();
   render();
 }
-function onCustomDateChange(v) { customDate = v; render(); }
-function onCustomTimeChange(v) { customTime = v; render(); }
+function onCustomDateChange(v) { customDate = v; onCustomTimeValueChanged(); }
+function onCustomTimeChange(v) { customTime = v; onCustomTimeValueChanged(); }
+
+// Refreshes the clock, the info line, and the current tab's results — but never calls the full
+// render(), which would rebuild the `<input>` the user is (or just was) typing into and drop
+// focus/digits mid-entry (UI-1b). Hledat is deliberately left alone: it only (re)computes on its
+// submit button, so its results panel staying as-is until the user re-submits is correct, not a
+// bug — re-rendering it here would either show a stale search or wipe an unsubmitted form.
+function onCustomTimeValueChanged() {
+  updateClockForMode();
+  updateCustomTimeInfo();
+  if (currentTab === 'departures') renderDepartureCards();
+  else if (currentTab === 'board') renderBoardRows();
+}
 
 // ============================================================
 // TICK
