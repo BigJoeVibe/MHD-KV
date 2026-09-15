@@ -1,10 +1,10 @@
 {
-  "lastModified": "Sun, 13 Sep 2026 21:11:17 GMT",
-  "size": 98452742,
-  "updatedAt": "2026-09-14T08:46:37.652Z",
+  "lastModified": "Mon, 14 Sep 2026 21:12:26 GMT",
+  "size": 98367802,
+  "updatedAt": "2026-09-15T08:33:38.659Z",
   "counts": {
     "lines": 23,
     "stops": 160,
-    "trips": 10387
+    "trips": 10227
   }
 }
