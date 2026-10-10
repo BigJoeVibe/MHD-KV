@@ -12,11 +12,13 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
   (Nunito, JetBrains Mono) přes CDN. Žádný framework, žádný build step,
   žádné dependencies, žádný backend ani externí API.
 - **Repo (GitHub):** `BigJoeVibe/MHD-KV`, branch `main`
-- **Aktuální verze:** v0.1.0 (F1 komplet). Schéma: 0.x = vývojové/testovací
+- **Aktuální verze:** v0.2.0 (10. 10. 2026: nastavení, vlastní Moje trasy, odkazy DPKV). Schéma: 0.x = vývojové/testovací
   verze; 1.0.0 přijde, až appka pokryje širší cíl (rozhodnuto 17. 7. 2026).
 - **Stav (k 21. 8. 2026):** appka běží na GitHub Pages, git dělá Claude Code (executor).
   **10. 10. 2026 — FIX-DIRECT:** přímé spoje už nemaže Pareto filtr (Pareto jen pro přestupy), Moje trasy
   ukazují přestup jen když ušetří ≥ 3 min, Hledat okno 180 min / limit 20. Viz `TASK.md` → FIX-DIRECT.
+  **10. 10. 2026 — v0.2.0:** nastavení v appce, vlastní Moje trasy (v prohlížeči + Export/Import), odznak linky
+  = odkaz na dpkv.cz (⚠️ adresy obnovit při novém JŘ, nejdřív prosinec). Viz `TASK.md`.
   **Sekvence D → C → B i UI-1 hotové a ověřené Joem na Pages 21. 8.; další v pořadí UI-2** — viz předávka níže.
   **Jádro vyhledávání A→B je hotové a ověřené:** **J1** síťový model (`data/network.json`),
   **J2** routing (`routing.js`), **J3** časová vrstva (`timetable.js` + `journey.js`/`planJourney`),
@@ -250,6 +252,9 @@ MHDKV/
   `getUpcomingDepartures()` řeší midnight crossing:
   `if (nowMin >= 1080 && h < 7) totalMin += 1440`.
 - **Žádný backend, žádné externí API** — viz `docs/DECISIONS.md`.
+- **Uživatelská data jen v `localStorage`** (od 10. 10. 2026): `mhdkv.settings.v1` + `mhdkv.routes.v1`.
+  Přístup vždy přes `storageGet`/`storageSet` (try/catch), přenos mezi zařízeními = Export/Import.
+  Při změně tvaru dat zvedni verzi klíče (`.v2`) a starý převeď v `sanitizeGroups`/`sanitizeSettings`.
 - **Nový model (network.json): odjezdy/routing jsou SMĚROVÉ** — vždy „z A ke konečné/k B", ne „cokoli staví
   na zastávce" (jinak se mixují oba směry). Každý výsledek nese `headsign` (konečnou) = náhrada F1 legendy.
 - **„Na znamení" GAP** — GTFS příznak `pickup/drop_off_type` je v KV jen u linky 8; reálné (5, 19…) chybí.

@@ -417,6 +417,80 @@ Až po UI-1. Zadání, jak ho Joe formuloval:
 
 ---
 
+## 🟢 NASTAVENÍ + VLASTNÍ MOJE TRASY + ODKAZY DPKV — HOTOVO 10. 10. 2026 (čeká na Joeův test na Pages)
+
+**Zadání Joea (10. 10.):** (1) nastavení vyhledávání přímo v appce, (2) vlastní Moje trasy s exportem/
+importem, (3) proklik z čísla linky na stránku linky na dpkv.cz. Pořadí implementace nechal na managerovi.
+
+- **Odkazy DPKV:** klepnutí na odznak linky (Moje trasy, Tabule, Hledat) otevře stránku linky.
+  Tabulka `DPKV_LINE_URLS` (19 denních linek) ze stránky „Denní linky" uložené Joem 10. 10.;
+  51/52 → přehled nočních linek, 20/44 → zvláštní linky. ⚠️ **Adresy se můžou změnit s novým JŘ
+  (nejdřív prosinec)** — postup obnovy v `docs/DATA_FORMAT.md` → „Odkazy na DPKV".
+- **Nastavení** (tab Nastavení, uložené v prohlížeči): Hledat okno 1,5/3/4 h a limit 10/20/40;
+  Moje trasy výchozí režim přestupů (jen přímé / když ušetří čas / všechny), minimální úspora
+  1–15 min, počet spojů v kartě 4–10; nejkratší čas na přestup 0–5 min (obojí).
+- **Vlastní Moje trasy:** tlačítko „✎ Upravit Moje trasy" → editor skupin (název, ↑↓, smazání
+  s potvrzením) a tras (přidat přes výběr zastávek, ↑↓, ✕, **režim přestupů u každé trasy**).
+- **Uložení = `localStorage` v prohlížeči** (`mhdkv.settings.v1`, `mhdkv.routes.v1`). Každé zařízení
+  má vlastní kopii → **Export/Import** (JSON text) v Nastavení → Záloha a přenos, + „Vrátit zpět"
+  (jen do zavření stránky) a „Výchozí trasy". Zablokované úložiště appku nerozbije (ověřeno).
+- 📌 **Navazující nápady (nezadáno):** cloudová synchronizace tras (potřebuje server/účet — dosud
+  vědomě „no backend"); stabilní id zastávek pro uložené trasy (dnes se ukládá název — viz
+  „BUDOUCÍ — Vlastní stabilní id zastávek"; přejmenování zastávky ve zdroji by trasu „rozbilo",
+  appka pak ukáže „Dnes už nic nejede").
+
+---
+
+## 🔴 NÁLEZ MANAGERA 21. 8. — „Hledat u spousty dvojic nenabízí nic" (ověřeno měřením)
+
+> Převzato 10. 10. 2026 z neuložené lokální úpravy `TASK.md` (Joeův PC, poslední změna 25. 8.), aby se neztratilo.
+
+Joe hlásil, že ve 20:20 řada spojení nevrací žádné spoje „ani na ráno", zatímco u jiných se ranní
+spoje ukážou. **Ověřeno na vzorku 120 dvojic zastávek nad reálnými daty (`20260821`):**
+
+| čas dotazu | prázdných ze 120 |
+|---|---|
+| 8:00 | 44 |
+| 12:00 | 44 |
+| 20:20 | 49 |
+
+**Není to večerní jev** — skoro stejné je to v osm ráno. Rozpad 49 prázdných ve 20:20:
+
+| příčina | kolik | pozn. |
+|---|---|---|
+| **žádná trasa s max. 1 přestupem** | 26 | z toho **20 by šlo přes 2 přestupy** — `journey.js` umí 2 přestupy topologicky (H1b), ale časová vrstva je explicitně přeskakuje (otevřené TODO z Předávky 1) |
+| dnes tudy nejede vůbec nic | 18 | linka jede jen v pracovní dny/sezónně (např. 21 a 23 dnes nejedou vůbec) |
+| poslední spoj už dnes jel | 5 | např. Krále Jiřího → Dvory II, poslední v 19 h |
+| **zabily stropy 75 min / 40 min čekání** | **0** | stropy z J4-sort nejsou příčinou, ověřeno spuštěním bez nich |
+
+**Proč se „na některých ukážou ranní spoje":** `planJourney` má žebřík oken — 90 min → širší → **bez
+omezení**. Když v 90 min není nic, poslední pokus vrátí spoj třeba za pět hodin (typicky noční 51
+po půlnoci) a UI ho ukáže bez jediného slova, že je mimo okno. Dvojice bez trasy nevrátí nic ani tak.
+
+**Dva samostatné závěry:**
+1. **Funkční mezera:** appka reálně plánuje jen do 1 přestupu. To je ta „spousta spojení". Řešení =
+   dodělat časovou vrstvu pro 2 přestupy, pozor na výkon (~700 ms mezi hustými huby → opt-in
+   „další možnosti", ne výchozí dotaz).
+2. **Poctivost výstupu:** prázdný výsledek dnes vypadá stejně ve všech čtyřech případech. Uživatel
+   nepozná „sem se s jedním přestupem nedostaneš" od „dnes už nic nejede". Levná oprava, velký efekt.
+
+### Další nálezy z revize UI-2 (21. 8.)
+
+- **Enter nad otevřeným plným seznamem vybere první položku abecedy** (`Andělská Hora,Dolní obec`) —
+  `onPickerKeydown` bere `querySelector('.stop-picker-item')`, což u plného seznamu není „nejlepší
+  shoda", ale první řádek. Ověřeno v jsdom. [k dořešení]
+- **Plný seznam ukazuje duplicitní názvy lišící se velikostí písmene** — `Andělská Hora,dolní obec`
+  × `Andělská Hora,Dolní obec` stojí v seznamu vedle sebe (156 položek). Ve filtrovaném seznamu to
+  nebylo vidět. Souvisí s dávno známým nálezem o duplicitách ve zdroji. [k dořešení]
+- **Šipka ▾/▴ — nereprodukováno.** Joe hlásí, že zůstává „rozbalená". Prošel jsem v jsdom všech šest
+  cest (otevřít, zavřít druhým klikem, výběr řádku, klik mimo, Enter, Escape) v Hledat i v Tabuli —
+  ikona i třída se překlápí správně pokaždé. Čeká na upřesnění postupu / tvrdé obnovení stránky.
+- **Prodleva ~3 s při prvním použití** (Joe, nepotvrzeno u kterého tabu). `data/network.json` má
+  **593 kB** nekomprimovaně — první načtení a parsování na telefonu je nejpravděpodobnější vysvětlení.
+  Potřebuje repro. [k dořešení]
+
+---
+
 ## 🟢 FIX-DIRECT — HOTOVO 10. 10. 2026 (čeká na Joeův test na Pages)
 
 **Problém (Joe, pá 9. 10. 18:11):** Moje trasy nezobrazily přímé spoje 13 a 15 na Tržnici, místo nich

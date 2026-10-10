@@ -252,6 +252,8 @@ body {
   background: var(--bg4);
 }
 .line-badge span { color: #fff; }
+a.line-badge { text-decoration: none; cursor: pointer; }
+a.line-badge:active { filter: brightness(0.85); }
 
 .route-info { flex: 1; min-width: 0; }
 .route-info .from-to { font-size: 1.26rem; font-weight: 800; letter-spacing: 0.2px; }
@@ -542,6 +544,88 @@ body {
 .settings-item .label { flex: 1; font-size: 0.85rem; }
 .settings-item .value { font-size: 0.8rem; color: var(--text2); }
 
+/* Moje trasy editor + Nastavení controls (2026-10-10) */
+.edit-select {
+  max-width: 58%;
+  padding: 8px 28px 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--bg3);
+  color: var(--text);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238892b0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+.edit-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  background: var(--bg);
+  border: 1px solid var(--bg3);
+  color: var(--text);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+.edit-input:focus, .edit-select:focus, .edit-textarea:focus { outline: none; border-color: var(--blue1); }
+.edit-intro { font-size: 0.8rem; color: var(--text2); margin: 0 2px 12px; line-height: 1.5; }
+.edit-group-head { display: flex; align-items: center; gap: 6px; padding: 10px; border-bottom: 1px solid var(--bg3); }
+.edit-pair { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.edit-pair-row { display: flex; align-items: center; gap: 6px; }
+.edit-pair-row + .edit-pair-row { margin-top: 6px; }
+.edit-pair-name { flex: 1; min-width: 0; font-weight: 700; font-size: 0.9rem; }
+.edit-label { flex: 1; font-size: 0.75rem; color: var(--text2); }
+.edit-add { padding: 12px 14px 14px; }
+.edit-icon {
+  min-width: 36px; height: 36px;
+  padding: 0 8px;
+  background: var(--bg3);
+  border: 1px solid var(--bg4);
+  color: var(--text);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.edit-icon:disabled { opacity: 0.3; cursor: default; }
+.edit-icon.danger, .edit-btn.danger { background: rgba(233,69,96,0.15); border-color: var(--urgent); color: var(--urgent); }
+.edit-btn {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: var(--bg3);
+  border: 1px solid var(--bg4);
+  color: var(--blue3);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.edit-btn.wide { width: 100%; margin: 14px 0 0; }
+.settings-note { padding: 10px 14px; font-size: 0.75rem; color: var(--text2); line-height: 1.5; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 14px; }
+.settings-actions:last-child { margin-bottom: 14px; }
+.settings-actions .edit-btn { flex: 1; margin-top: 0; }
+.edit-textarea {
+  display: block;
+  width: calc(100% - 28px);
+  margin: 10px 14px;
+  min-height: 70px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--bg3);
+  color: var(--text);
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  resize: vertical;
+}
+
 /* Legenda v timetable */
 .legend { padding: 10px 14px; background: rgba(245,158,66,0.04); border-top: 1px solid var(--bg3); }
 .legend-item { font-size: 0.91rem; color: var(--text2); margin-bottom: 2px; }
@@ -781,18 +865,97 @@ let searchTo = '';
 let searchResults = null; // null = jeste nehledano
 let searchMessage = '';
 let searchNowMin = null; // nowMin pouzity pri poslednim hledani (pro hlasku "mimo okno")
-const SEARCH_WINDOW_MIN = 180; // FIX-DIRECT 2026-10-10: Hledat ma vlastni, sirsi okno (Joe: az 20 spoju); predava se do planJourney
-const SEARCH_LIMIT = 20;
-
-// J7-P1: "Moje trasy" — natvrdo zadane skupiny (cloud/localStorage az pozdeji).
-const ROUTE_GROUPS = [
-  {
-    name: "Domov–Centrum",
-    pairs: [["Krátká", "Tržnice"], ["Okružní", "Tržnice"]],
-  },
+let searchWindowUsed = 180; // okno pouzite pri poslednim hledani (z nastaveni)
+// ============================================================
+// USER SETTINGS + MOJE TRASY (2026-10-10, Joe) — saved in THIS browser (localStorage).
+// Phone and PC each keep their own copy; Export/Import in Nastavení moves them across
+// and doubles as a backup. Every storage access is wrapped — private mode / blocked
+// storage must never break the app, it just falls back to defaults for the session.
+// ============================================================
+const STORAGE_KEY_SETTINGS = 'mhdkv.settings.v1';
+const STORAGE_KEY_ROUTES = 'mhdkv.routes.v1';
+const DEFAULT_SETTINGS = {
+  searchWindowMin: 180, // Hledat: odjezdove okno (FIX-DIRECT 2026-10-10: 90 -> 180)
+  searchLimit: 20,      // Hledat: max vysledku
+  minTransfer: 0,       // min. cas na prestup (Hledat i Moje trasy), J4-sort-2 default 0
+  boardTransfers: 'gain', // Moje trasy: vychozi rezim prestupu (direct | gain | all)
+  boardMinGain: 3,      // Moje trasy: prestup jen kdyz usetri aspon tolik min (rezim gain)
+  boardLimit: 6         // Moje trasy: pocet spoju v karte
+};
+const SETTING_CHOICES = {
+  searchWindowMin: [90, 180, 240],
+  searchLimit: [10, 20, 40],
+  minTransfer: [0, 1, 2, 3, 4, 5],
+  boardTransfers: ['direct', 'gain', 'all'],
+  boardMinGain: [1, 2, 3, 5, 7, 10, 15],
+  boardLimit: [4, 6, 8, 10]
+};
+const TRANSFER_MODE_LABELS = {
+  default: 'Podle nastavení',
+  direct: 'Jen přímé',
+  gain: 'Když ušetří čas',
+  all: 'Všechny'
+};
+const DEFAULT_ROUTE_GROUPS = [
+  { name: 'Domov–Centrum', pairs: [
+    { from: 'Krátká', to: 'Tržnice', transfers: 'default' },
+    { from: 'Okružní', to: 'Tržnice', transfers: 'default' }
+  ] }
 ];
+
+let storageOk = true;
+function storageGet(key) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+  catch (e) { return null; }
+}
+function storageSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); storageOk = true; }
+  catch (e) { storageOk = false; }
+  return storageOk;
+}
+
+function sanitizeSettings(raw) {
+  const out = { ...DEFAULT_SETTINGS };
+  if (raw && typeof raw === 'object') {
+    for (const k in SETTING_CHOICES) if (SETTING_CHOICES[k].includes(raw[k])) out[k] = raw[k];
+  }
+  return out;
+}
+
+// Accepts both the stored/exported shape ({from,to,transfers}) and the old hardcoded
+// [from, to] pairs. Returns null for anything that is not an array (= use defaults).
+function sanitizeGroups(raw) {
+  if (!Array.isArray(raw)) return null;
+  const groups = [];
+  for (const g of raw.slice(0, 30)) {
+    if (!g || typeof g !== 'object') continue;
+    const name = String(g.name || '').trim().slice(0, 40) || 'Trasy';
+    const pairs = [];
+    for (const p of (Array.isArray(g.pairs) ? g.pairs : []).slice(0, 30)) {
+      let from, to, transfers = 'default';
+      if (Array.isArray(p)) [from, to] = p;
+      else if (p && typeof p === 'object') ({ from, to, transfers } = p);
+      from = String(from || '').trim().slice(0, 60);
+      to = String(to || '').trim().slice(0, 60);
+      if (!from || !to) continue;
+      if (!(transfers in TRANSFER_MODE_LABELS)) transfers = 'default';
+      pairs.push({ from, to, transfers });
+    }
+    groups.push({ name, pairs });
+  }
+  return groups;
+}
+
+function defaultRouteGroups() { return JSON.parse(JSON.stringify(DEFAULT_ROUTE_GROUPS)); }
+
+let settings = sanitizeSettings(storageGet(STORAGE_KEY_SETTINGS));
+let routeGroups = sanitizeGroups(storageGet(STORAGE_KEY_ROUTES)) || defaultRouteGroups();
+
+function saveSettings() { storageSet(STORAGE_KEY_SETTINGS, settings); boardCache.clear(); }
+function saveRoutes() { storageSet(STORAGE_KEY_ROUTES, routeGroups); boardCache.clear(); }
+
 let routeGroupReversed = {}; // groupIndex -> bool (Tam/Zpět)
-const boardCache = new Map(); // "gi|reversed|from|to|date|nowMin" -> planBoard() rows, viz 2c
+const boardCache = new Map(); // "mode|from|to|date|nowMin" -> planBoard() rows, viz 2c; cleared on any settings/routes change
 
 // J7-P2: "Tabule" — vybrana zastavka, jen pro session (localStorage az s cloud ukladanim).
 let boardStop = 'Krátká';
@@ -802,7 +965,7 @@ fetch('data/network.json')
   .then(net => {
     NET = net;
     netStatus = 'ready';
-    if (currentTab === 'search' || currentTab === 'departures') render();
+    if (currentTab === 'search' || currentTab === 'departures' || currentTab === 'settings') render();
   })
   .catch(() => {
     netStatus = 'error';
@@ -991,6 +1154,11 @@ function updateCustomTimeInfo() {
 // DEPARTURES
 // ============================================================
 function renderDepartures() {
+  if (routesEditMode) {
+    document.getElementById('content').innerHTML = `<div id="route-editor"></div>`;
+    renderRouteEditor();
+    return;
+  }
   let html = timeToggleHtml();
   html += `<div id="departure-cards"></div>`;
   document.getElementById('content').innerHTML = html;
@@ -1004,17 +1172,27 @@ function toggleRouteGroup(gi) {
   renderDepartureCards();
 }
 
-function getBoardRows(gi, reversed, from, to, date, nowMin) {
-  const key = `${gi}|${reversed}|${from}|${to}|${date}|${nowMin}`;
+function effectiveTransferMode(pair) {
+  return pair.transfers && pair.transfers !== 'default' ? pair.transfers : settings.boardTransfers;
+}
+
+function getBoardRows(mode, from, to, date, nowMin) {
+  const key = `${mode}|${from}|${to}|${date}|${nowMin}`;
   if (boardCache.has(key)) return boardCache.get(key);
-  const rows = window.MHDJourney.planBoard(NET, from, to, { date, nowMin });
+  const rows = window.MHDJourney.planBoard(NET, from, to, {
+    date, nowMin,
+    transfers: mode,
+    minGain: settings.boardMinGain,
+    minTransfer: settings.minTransfer,
+    limit: settings.boardLimit
+  });
   boardCache.set(key, rows);
   return rows;
 }
 
 function renderDepartureCards() {
   const el = document.getElementById('departure-cards');
-  if (!el) return;
+  if (!el || routesEditMode) return;
 
   if (netStatus === 'loading') {
     el.innerHTML = `<div class="search-loading">Načítám síť…</div>`;
@@ -1031,24 +1209,34 @@ function renderDepartureCards() {
   const vClass = useCustomTime ? ' violet' : '';
   let html = '';
 
-  ROUTE_GROUPS.forEach((group, gi) => {
+  if (routeGroups.length === 0) {
+    html += `<div class="no-more">Zatím tu nemáš žádné trasy.</div>`;
+  }
+
+  routeGroups.forEach((group, gi) => {
     const reversed = !!routeGroupReversed[gi];
     html += `<div style="display:flex;align-items:center;gap:12px;margin:${gi === 0 ? '0' : '20px'} 0 8px">`;
     html += `<div class="time-toggle-header" style="width:auto;border-radius:8px;overflow:hidden">`;
     html += `<button class="time-toggle-btn ${!reversed ? 'active-now' : ''}" onclick="toggleRouteGroup(${gi})" style="padding:6px 14px">Tam</button>`;
     html += `<button class="time-toggle-btn ${reversed ? 'active-custom' : ''}" onclick="toggleRouteGroup(${gi})" style="padding:6px 14px">Zpět</button>`;
     html += `</div>`;
-    html += `<div style="font-weight:800;font-size:1rem;color:var(--text)">${group.name}</div>`;
+    html += `<div style="font-weight:800;font-size:1rem;color:var(--text)">${escapeAttr(group.name)}</div>`;
     html += `</div>`;
 
-    group.pairs.forEach(([a, b]) => {
-      const from = reversed ? b : a;
-      const to = reversed ? a : b;
-      const rows = getBoardRows(gi, reversed, from, to, date, nowMin);
+    if (group.pairs.length === 0) {
+      html += `<div class="no-more">Skupina je prázdná — přidej trasu přes „Upravit Moje trasy".</div>`;
+    }
+    group.pairs.forEach((pair) => {
+      const from = reversed ? pair.to : pair.from;
+      const to = reversed ? pair.from : pair.to;
+      const mode = effectiveTransferMode(pair);
+      const rows = getBoardRows(mode, from, to, date, nowMin);
+      const modeNote = mode === 'direct' ? 'jen přímé spoje' : mode === 'all' ? 'všechny přestupy' : '';
 
       html += `<div class="route-card${vClass}">`;
       html += `<div class="route-header" style="cursor:default">`;
-      html += `<div class="route-info"><div class="from-to">${from} → ${to}</div></div>`;
+      html += `<div class="route-info"><div class="from-to">${escapeAttr(from)} → ${escapeAttr(to)}</div>` +
+        (modeNote ? `<div class="travel-time">${modeNote}</div>` : '') + `</div>`;
       html += `</div>`;
       html += `<div class="departures-list">`;
       if (rows.length === 0) {
@@ -1061,10 +1249,7 @@ function renderDepartureCards() {
           html += `<div style="display:flex;align-items:center;gap:8px">`;
           row.legs.forEach((leg, li) => {
             if (li > 0) html += `<span class="arrow-sep">→</span>`;
-            const bs = lineBadgeStyle(leg.line);
-            const badgeStyle = bs ? `min-width:34px;height:34px;font-size:0.85rem;border-radius:8px;background:${bs.bg}` : 'min-width:34px;height:34px;font-size:0.85rem;border-radius:8px';
-            const spanStyle = bs ? ` style="color:${bs.fg}"` : '';
-            html += `<div class="line-badge" style="${badgeStyle}"><span${spanStyle}>${leg.line}</span></div>`;
+            html += lineBadgeHtml(leg.line, 'min-width:34px;height:34px;font-size:0.85rem;border-radius:8px');
           });
           html += `<div class="dep-time" style="min-width:0">${fmtJourneyTime(row.depMin)} → ${fmtJourneyTime(row.arrMin)}</div>`;
           html += `<div class="dep-arrival" style="margin-left:0">${row.totalMin} min</div>`;
@@ -1080,7 +1265,147 @@ function renderDepartureCards() {
     });
   });
 
+  html += `<button class="edit-btn wide" onclick="openRouteEditor()">✎ Upravit Moje trasy</button>`;
   el.innerHTML = html;
+}
+
+// ============================================================
+// MOJE TRASY — EDITOR (2026-10-10, Joe: vlastni trasy)
+// ============================================================
+let routesEditMode = false;
+let pendingDeleteGroup = null; // gi waiting for the second "Opravdu smazat?" tap
+const editDraft = {};          // picker fieldId -> typed text (new pair form per group)
+const editError = {};          // gi -> message under that group's add form
+
+function openRouteEditor() { routesEditMode = true; pendingDeleteGroup = null; render(); window.scrollTo(0, 0); }
+function closeRouteEditor() { routesEditMode = false; routeGroupReversed = {}; render(); }
+
+// Pickers in the editor are created per group, so their PICKER_FIELDS entries are too.
+function ensureEditPicker(fieldId) {
+  if (!PICKER_FIELDS[fieldId]) {
+    PICKER_FIELDS[fieldId] = {
+      get: () => editDraft[fieldId] || '',
+      set: (v) => { editDraft[fieldId] = v; },
+      onCommit: () => {}
+    };
+  }
+  return editDraft[fieldId] || '';
+}
+
+function transferModeSelectHtml(value, onchange) {
+  let html = `<select class="edit-select" onchange="${onchange}">`;
+  for (const k of Object.keys(TRANSFER_MODE_LABELS)) {
+    html += `<option value="${k}"${k === value ? ' selected' : ''}>${TRANSFER_MODE_LABELS[k]}</option>`;
+  }
+  return html + `</select>`;
+}
+
+function renderRouteEditor() {
+  const el = document.getElementById('route-editor');
+  if (!el) return;
+  if (netStatus !== 'ready') {
+    el.innerHTML = `<div class="search-loading">Načítám síť…</div>`;
+    return;
+  }
+  let html = `<div class="edit-intro">Trasy se ukládají v tomhle prohlížeči. Do jiného zařízení je přeneseš ` +
+    `přes <b>Nastavení → Záloha a přenos</b>.</div>`;
+  if (!storageOk) html += `<div class="search-error">Prohlížeč nedovolil uložení — změny platí jen do zavření stránky.</div>`;
+
+  routeGroups.forEach((group, gi) => {
+    html += `<div class="settings-section">`;
+    html += `<div class="edit-group-head">`;
+    html += `<input class="edit-input" value="${escapeAttr(group.name)}" maxlength="40" aria-label="Název skupiny" onchange="renameGroup(${gi}, this.value)">`;
+    html += `<button class="edit-icon" onclick="moveGroup(${gi}, -1)" ${gi === 0 ? 'disabled' : ''} aria-label="Posunout nahoru">↑</button>`;
+    html += `<button class="edit-icon" onclick="moveGroup(${gi}, 1)" ${gi === routeGroups.length - 1 ? 'disabled' : ''} aria-label="Posunout dolů">↓</button>`;
+    html += pendingDeleteGroup === gi
+      ? `<button class="edit-icon danger wide" onclick="deleteGroup(${gi})">Opravdu smazat?</button>`
+      : `<button class="edit-icon" onclick="askDeleteGroup(${gi})" aria-label="Smazat skupinu">✕</button>`;
+    html += `</div>`;
+
+    group.pairs.forEach((pair, pi) => {
+      html += `<div class="edit-pair">`;
+      html += `<div class="edit-pair-row">`;
+      html += `<div class="edit-pair-name">${escapeAttr(pair.from)} → ${escapeAttr(pair.to)}</div>`;
+      html += `<button class="edit-icon" onclick="movePair(${gi}, ${pi}, -1)" ${pi === 0 ? 'disabled' : ''} aria-label="Posunout nahoru">↑</button>`;
+      html += `<button class="edit-icon" onclick="movePair(${gi}, ${pi}, 1)" ${pi === group.pairs.length - 1 ? 'disabled' : ''} aria-label="Posunout dolů">↓</button>`;
+      html += `<button class="edit-icon" onclick="deletePair(${gi}, ${pi})" aria-label="Smazat trasu">✕</button>`;
+      html += `</div>`;
+      html += `<div class="edit-pair-row"><span class="edit-label">Přestupy:</span>` +
+        transferModeSelectHtml(pair.transfers, `setPairMode(${gi}, ${pi}, this.value)`) + `</div>`;
+      html += `</div>`;
+    });
+
+    const fFrom = `newFrom_${gi}`, fTo = `newTo_${gi}`;
+    html += `<div class="edit-add">`;
+    html += `<div class="search-field"><label>Odkud</label>${stopPickerHtml(fFrom, ensureEditPicker(fFrom), 'Zastávka…')}</div>`;
+    html += `<div class="search-field" style="margin-top:8px"><label>Kam</label>${stopPickerHtml(fTo, ensureEditPicker(fTo), 'Zastávka…')}</div>`;
+    if (editError[gi]) html += `<div class="search-error" style="padding:8px 0 0">${editError[gi]}</div>`;
+    html += `<button class="edit-btn" onclick="addPair(${gi})">+ Přidat trasu</button>`;
+    html += `</div>`;
+    html += `</div>`;
+  });
+
+  html += `<button class="edit-btn wide" onclick="addGroup()">+ Nová skupina</button>`;
+  html += `<button class="search-submit" style="margin-top:10px" onclick="closeRouteEditor()">Hotovo</button>`;
+  el.innerHTML = html;
+}
+
+function renameGroup(gi, value) {
+  routeGroups[gi].name = String(value).trim().slice(0, 40) || 'Trasy';
+  saveRoutes();
+}
+function moveGroup(gi, d) {
+  const j = gi + d;
+  if (j < 0 || j >= routeGroups.length) return;
+  [routeGroups[gi], routeGroups[j]] = [routeGroups[j], routeGroups[gi]];
+  pendingDeleteGroup = null;
+  saveRoutes(); renderRouteEditor();
+}
+function askDeleteGroup(gi) { pendingDeleteGroup = gi; renderRouteEditor(); }
+function deleteGroup(gi) {
+  routeGroups.splice(gi, 1);
+  pendingDeleteGroup = null;
+  saveRoutes(); renderRouteEditor();
+}
+function addGroup() {
+  routeGroups.push({ name: 'Nová skupina', pairs: [] });
+  pendingDeleteGroup = null;
+  saveRoutes(); renderRouteEditor();
+}
+function movePair(gi, pi, d) {
+  const pairs = routeGroups[gi].pairs, j = pi + d;
+  if (j < 0 || j >= pairs.length) return;
+  [pairs[pi], pairs[j]] = [pairs[j], pairs[pi]];
+  saveRoutes(); renderRouteEditor();
+}
+function deletePair(gi, pi) {
+  routeGroups[gi].pairs.splice(pi, 1);
+  saveRoutes(); renderRouteEditor();
+}
+function setPairMode(gi, pi, mode) {
+  if (!(mode in TRANSFER_MODE_LABELS)) return;
+  routeGroups[gi].pairs[pi].transfers = mode;
+  saveRoutes();
+}
+function addPair(gi) {
+  const fFrom = `newFrom_${gi}`, fTo = `newTo_${gi}`;
+  const rawFrom = (editDraft[fFrom] || '').trim(), rawTo = (editDraft[fTo] || '').trim();
+  const idFrom = rawFrom ? window.MHDRouting.resolveStopId(NET, rawFrom) : null;
+  const idTo = rawTo ? window.MHDRouting.resolveStopId(NET, rawTo) : null;
+  if (!idFrom || !idTo) {
+    editError[gi] = 'Zastávku neznám. Vyber ji ze seznamu.';
+  } else {
+    const from = stopDisplayName(NET.stops[idFrom].n), to = stopDisplayName(NET.stops[idTo].n);
+    if (from === to) {
+      editError[gi] = 'Odkud a Kam musí být různé zastávky.';
+    } else {
+      routeGroups[gi].pairs.push({ from, to, transfers: 'default' });
+      editDraft[fFrom] = ''; editDraft[fTo] = '';
+      editError[gi] = '';
+      saveRoutes();
+    }
+  }
+  renderRouteEditor();
 }
 
 function stopDisplayName(name) { return name.replace(/^Karlovy Vary,/, ''); }
@@ -1302,12 +1627,9 @@ function renderBoardRows() {
     rows.forEach((row, i) => {
       const isNext = i === 0;
       const diff = row.depMin - nowMin;
-      const bs = lineBadgeStyle(row.line);
-      const badgeStyle = bs ? `margin-left:10px;min-width:38px;height:38px;font-size:0.9rem;border-radius:8px;background:${bs.bg}` : 'margin-left:10px;min-width:38px;height:38px;font-size:0.9rem;border-radius:8px';
-      const spanStyle = bs ? ` style="color:${bs.fg}"` : '';
       html += `<div class="departure-row${isNext ? ' next' + vClass : ''}">`;
       html += `<div class="dep-time">${fmtJourneyTime(row.depMin)}</div>`;
-      html += `<div class="line-badge" style="${badgeStyle}"><span${spanStyle}>${row.line}</span></div>`;
+      html += lineBadgeHtml(row.line, 'margin-left:10px;min-width:38px;height:38px;font-size:0.9rem;border-radius:8px');
       html += `<div style="flex:1;min-width:0;margin-left:10px;font-size:0.85rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">→ ${stopDisplayName(row.headsign)}</div>`;
       html += `<div class="dep-countdown ${countdownClass(diff)}">${formatCountdown(diff)}</div>`;
       html += `</div>`;
@@ -1399,6 +1721,44 @@ function lineBadgeStyle(line) {
   return { bg, fg };
 }
 
+// DPKV line pages (Joe 2026-10-10) — tap on a line badge opens the line's page on dpkv.cz.
+// Source: saved copy of https://www.dpkv.cz/cz/jizdni-rady/denni-linky/ (2026-10-10).
+// ⚠️ URLs may change with a new DPKV timetable (earliest expected: December) — then refresh
+// this table, see docs/DATA_FORMAT.md → "Odkazy na DPKV". Lines not on the day-line page
+// fall back to their overview page (night 51/52, special 20/44), anything else to day lines.
+const DPKV_LINE_URLS = {
+  1: 'https://www.dpkv.cz/syslines/59/6/19/1/',   2: 'https://www.dpkv.cz/syslines/59/6/20/2/',
+  3: 'https://www.dpkv.cz/syslines/59/6/21/3/',   4: 'https://www.dpkv.cz/syslines/59/6/22/4/',
+  5: 'https://www.dpkv.cz/syslines/59/6/23/5/',   6: 'https://www.dpkv.cz/syslines/59/6/24/6/',
+  7: 'https://www.dpkv.cz/syslines/59/6/25/7/',   8: 'https://www.dpkv.cz/syslines/59/6/26/8/',
+  9: 'https://www.dpkv.cz/syslines/59/6/27/9/',  11: 'https://www.dpkv.cz/syslines/59/6/152/11/',
+  12: 'https://www.dpkv.cz/syslines/59/6/28/12/', 13: 'https://www.dpkv.cz/syslines/59/6/29/13/',
+  15: 'https://www.dpkv.cz/syslines/59/6/30/15/', 16: 'https://www.dpkv.cz/syslines/59/6/31/16/',
+  17: 'https://www.dpkv.cz/syslines/59/6/32/17/', 19: 'https://www.dpkv.cz/syslines/59/6/33/19/',
+  21: 'https://www.dpkv.cz/syslines/59/6/34/21/', 22: 'https://www.dpkv.cz/syslines/59/6/35/22/',
+  23: 'https://www.dpkv.cz/syslines/59/6/36/23/'
+};
+const DPKV_FALLBACK_URLS = {
+  51: 'https://www.dpkv.cz/cz/jizdni-rady/nocni-linky/',
+  52: 'https://www.dpkv.cz/cz/jizdni-rady/nocni-linky/',
+  20: 'https://www.dpkv.cz/cz/jizdni-rady/zvlastni-linky/',
+  44: 'https://www.dpkv.cz/cz/jizdni-rady/zvlastni-linky/'
+};
+function dpkvLineUrl(line) {
+  return DPKV_LINE_URLS[line] || DPKV_FALLBACK_URLS[line] || 'https://www.dpkv.cz/cz/jizdni-rady/denni-linky/';
+}
+
+// One line badge for all three tabs: DPKV colours + link to the line's DPKV page.
+// sizeStyle = per-tab size/margin (inline, as before).
+function lineBadgeHtml(line, sizeStyle) {
+  const bs = lineBadgeStyle(line);
+  const style = sizeStyle + (bs ? `;background:${bs.bg}` : '');
+  const spanStyle = bs ? ` style="color:${bs.fg}"` : '';
+  return `<a class="line-badge" href="${dpkvLineUrl(line)}" target="_blank" rel="noopener" ` +
+    `aria-label="Linka ${line} na dpkv.cz" title="Linka ${line} — jízdní řád na dpkv.cz" style="${style}">` +
+    `<span${spanStyle}>${line}</span></a>`;
+}
+
 function fmtJourneyTime(totalMin) {
   const m = ((totalMin % 1440) + 1440) % 1440;
   return formatTime(Math.floor(m / 60), m % 60);
@@ -1423,7 +1783,13 @@ function doSearch() {
   const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
-  searchResults = window.MHDJourney.planJourney(NET, from, to, { date, nowMin, limit: SEARCH_LIMIT, windowMin: SEARCH_WINDOW_MIN });
+  searchResults = window.MHDJourney.planJourney(NET, from, to, {
+    date, nowMin,
+    limit: settings.searchLimit,
+    windowMin: settings.searchWindowMin,
+    minTransfer: settings.minTransfer
+  });
+  searchWindowUsed = settings.searchWindowMin;
   searchNowMin = nowMin;
   searchMessage = searchResults.length === 0 ? 'Žádné spojení v daném čase.' : '';
   render();
@@ -1440,7 +1806,7 @@ function renderSearchResults() {
 
   const vClass = useCustomTime ? ' violet' : '';
   let html = '';
-  if (searchNowMin != null && searchResults[0].depMin > searchNowMin + SEARCH_WINDOW_MIN) {
+  if (searchNowMin != null && searchResults[0].depMin > searchNowMin + searchWindowUsed) {
     html += `<div class="search-empty">Nejbližší spoj až v ${fmtJourneyTime(searchResults[0].depMin)}.</div>`;
   }
   for (const it of searchResults) {
@@ -1451,10 +1817,7 @@ function renderSearchResults() {
     html += `<div class="journey-legs">`;
     it.legs.forEach((leg, i) => {
       if (i > 0) html += `<span class="arrow-sep">→</span>`;
-      const bs = lineBadgeStyle(leg.line);
-      const badgeStyle = bs ? `min-width:34px;height:34px;font-size:0.85rem;border-radius:8px;background:${bs.bg}` : 'min-width:34px;height:34px;font-size:0.85rem;border-radius:8px';
-      const spanStyle = bs ? ` style="color:${bs.fg}"` : '';
-      html += `<div class="line-badge" style="${badgeStyle}"><span${spanStyle}>${leg.line}</span></div>`;
+      html += lineBadgeHtml(leg.line, 'min-width:34px;height:34px;font-size:0.85rem;border-radius:8px');
     });
     html += `</div>`;
     if (it.transfers > 0) {
@@ -1487,14 +1850,150 @@ function transferInfoLine(it) {
 // ============================================================
 // SETTINGS
 // ============================================================
+let settingsMessage = '';      // feedback line in "Záloha a přenos"
+let importUndo = null;         // { groups, settings } before the last import / reset (this session only)
+let pendingResetRoutes = false;
+
+function settingSelectHtml(key, label, fmt) {
+  let html = `<div class="settings-item"><div class="label">${label}</div><select class="edit-select" onchange="setSetting('${key}', this.value)">`;
+  for (const v of SETTING_CHOICES[key]) {
+    html += `<option value="${v}"${v === settings[key] ? ' selected' : ''}>${fmt(v)}</option>`;
+  }
+  return html + `</select></div>`;
+}
+
+function setSetting(key, raw) {
+  const v = typeof DEFAULT_SETTINGS[key] === 'number' ? Number(raw) : raw;
+  if (!SETTING_CHOICES[key].includes(v)) return;
+  settings[key] = v;
+  saveSettings();
+  if (!storageOk) renderSettings();
+}
+
 function renderSettings() {
-  let html = `<div class="settings-section"><div class="settings-title">Verze dat</div>`;
+  const hm = (m) => m % 60 === 0 ? `${m / 60} h` : `${Math.floor(m / 60)},${(m % 60) / 6} h`;
+  let html = '';
+  if (!storageOk) html += `<div class="search-error">Prohlížeč nedovolil uložení — změny platí jen do zavření stránky.</div>`;
+
+  html += `<div class="settings-section"><div class="settings-title">Hledat</div>`;
+  html += settingSelectHtml('searchWindowMin', 'Hledat odjezdy dopředu', hm);
+  html += settingSelectHtml('searchLimit', 'Nejvýš výsledků', (v) => `${v}`);
+  html += `</div>`;
+
+  html += `<div class="settings-section"><div class="settings-title">Moje trasy</div>`;
+  html += settingSelectHtml('boardTransfers', 'Přestupy (výchozí pro trasy)', (v) => TRANSFER_MODE_LABELS[v]);
+  html += settingSelectHtml('boardMinGain', 'Přestup musí ušetřit aspoň', (v) => `${v} min`);
+  html += settingSelectHtml('boardLimit', 'Spojů v kartě', (v) => `${v}`);
+  html += `<div class="settings-note">Každá trasa může mít vlastní nastavení přestupů — v Moje trasy → Upravit.</div>`;
+  html += `</div>`;
+
+  html += `<div class="settings-section"><div class="settings-title">Přestupy (Hledat i Moje trasy)</div>`;
+  html += settingSelectHtml('minTransfer', 'Nejkratší čas na přestup', (v) => v === 0 ? '0 min (i navazující bus)' : `${v} min`);
+  html += `</div>`;
+
+  html += `<div class="settings-section"><div class="settings-title">Záloha a přenos</div>`;
+  html += `<div class="settings-note">Moje trasy a nastavení jsou uložené jen v tomhle prohlížeči. ` +
+    `Export vytvoří text, který si pošli (e-mail, zpráva) a na druhém zařízení ho vlož do Importu.</div>`;
+  html += `<div class="settings-actions">`;
+  html += `<button class="edit-btn" onclick="exportData()">Exportovat</button>`;
+  html += `<button class="edit-btn" onclick="copyExport()">Kopírovat</button>`;
+  html += `</div>`;
+  html += `<textarea id="exportBox" class="edit-textarea" readonly placeholder="Sem se vypíše export…"></textarea>`;
+  html += `<textarea id="importBox" class="edit-textarea" placeholder="Sem vlož text z exportu…"></textarea>`;
+  html += `<div class="settings-actions">`;
+  html += `<button class="edit-btn" onclick="importData()">Importovat</button>`;
+  if (importUndo) html += `<button class="edit-btn" onclick="undoImport()">Vrátit zpět</button>`;
+  html += pendingResetRoutes
+    ? `<button class="edit-btn danger" onclick="resetRoutes()">Opravdu obnovit?</button>`
+    : `<button class="edit-btn" onclick="askResetRoutes()">Výchozí trasy</button>`;
+  html += `</div>`;
+  if (settingsMessage) html += `<div class="settings-note" style="color:var(--blue3)">${settingsMessage}</div>`;
+  html += `</div>`;
+
+  const generated = NET && NET.meta && NET.meta.generated
+    ? NET.meta.generated.split('-').reverse().map(Number).join('. ') : '…';
+  html += `<div class="settings-section"><div class="settings-title">Verze dat</div>`;
   html += `<div style="padding:14px;font-size:0.8rem;color:var(--text2);line-height:1.7">`;
-  html += `Data sestavena: <strong style="color:var(--text)">12.5.2026</strong><br>`;
-  html += `Zdroj: <a href="https://www.dpkv.cz" target="_blank" style="color:var(--blue3)">dpkv.cz ↗</a>`;
+  html += `Jízdní řády aktualizované: <strong style="color:var(--text)">${generated}</strong><br>`;
+  html += `Zdroj: CIS JŘ (JrUtil GTFS) · <a href="https://www.dpkv.cz/cz/jizdni-rady/denni-linky/" target="_blank" rel="noopener" style="color:var(--blue3)">linky na dpkv.cz ↗</a><br>`;
+  html += `Tip: klepnutím na číslo linky otevřeš její jízdní řád na dpkv.cz.`;
   html += `</div></div>`;
 
   document.getElementById('content').innerHTML = html;
+}
+
+function czPlural(n, one, few, many) {
+  return `${n} ${n === 1 ? one : n >= 2 && n <= 4 ? few : many}`;
+}
+
+function exportPayload() {
+  return JSON.stringify({ app: 'mhdkv', v: 1, routes: routeGroups, settings });
+}
+function exportData() {
+  const box = document.getElementById('exportBox');
+  if (box) { box.value = exportPayload(); box.focus(); box.select(); }
+}
+function copyExport() {
+  const text = exportPayload();
+  const box = document.getElementById('exportBox');
+  if (box) box.value = text;
+  const done = (ok) => { settingsMessage = ok ? 'Export zkopírovaný do schránky.' : 'Zkopíruj text z pole ručně.'; renderSettingsKeepBoxes(); };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => done(true), () => done(false));
+      return;
+    }
+  } catch (e) { /* fall through */ }
+  if (box) { box.select(); try { done(document.execCommand('copy')); return; } catch (e) { /* ignore */ } }
+  done(false);
+}
+// Re-render Nastavení without losing what is typed in the two text boxes.
+function renderSettingsKeepBoxes() {
+  const ex = document.getElementById('exportBox'), im = document.getElementById('importBox');
+  const exV = ex ? ex.value : '', imV = im ? im.value : '';
+  renderSettings();
+  const ex2 = document.getElementById('exportBox'), im2 = document.getElementById('importBox');
+  if (ex2) ex2.value = exV;
+  if (im2) im2.value = imV;
+}
+function importData() {
+  const box = document.getElementById('importBox');
+  const text = box ? box.value.trim() : '';
+  let data = null;
+  try { data = JSON.parse(text); } catch (e) { data = null; }
+  const groups = data && data.app === 'mhdkv' ? sanitizeGroups(data.routes) : null;
+  if (!groups) {
+    settingsMessage = 'Tohle není export z Jedeme MHD — nic jsem nezměnil.';
+    renderSettingsKeepBoxes();
+    return;
+  }
+  importUndo = { groups: JSON.parse(JSON.stringify(routeGroups)), settings: { ...settings } };
+  routeGroups = groups;
+  if (data.settings) settings = sanitizeSettings(data.settings);
+  saveRoutes(); saveSettings();
+  pendingResetRoutes = false;
+  const nPairs = groups.reduce((n, g) => n + g.pairs.length, 0);
+  settingsMessage = `Načteno: ${czPlural(groups.length, 'skupina', 'skupiny', 'skupin')}, ${czPlural(nPairs, 'trasa', 'trasy', 'tras')}.`;
+  if (box) box.value = '';
+  renderSettings();
+}
+function undoImport() {
+  if (!importUndo) return;
+  routeGroups = importUndo.groups;
+  settings = importUndo.settings;
+  importUndo = null;
+  saveRoutes(); saveSettings();
+  settingsMessage = 'Vráceno do stavu před poslední změnou.';
+  renderSettingsKeepBoxes();
+}
+function askResetRoutes() { pendingResetRoutes = true; renderSettingsKeepBoxes(); }
+function resetRoutes() {
+  importUndo = { groups: JSON.parse(JSON.stringify(routeGroups)), settings: { ...settings } };
+  routeGroups = defaultRouteGroups();
+  pendingResetRoutes = false;
+  saveRoutes();
+  settingsMessage = 'Moje trasy obnovené na výchozí (Domov–Centrum).';
+  renderSettingsKeepBoxes();
 }
 
 // ============================================================

@@ -7,6 +7,25 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-10-10 (2) — v0.2.0 (Nastavení v appce, vlastní Moje trasy, odkazy na DPKV)
+
+- **Odkazy DPKV:** odznak linky je nově odkaz na stránku linky na dpkv.cz (všechny 3 taby, nový společný
+  `lineBadgeHtml()` místo tří kopií kódu). Tabulka `DPKV_LINE_URLS` ze stránky „Denní linky" (19 linek),
+  51/52 a 20/44 vedou na přehledy nočních / zvláštních linek.
+- **Nastavení (tab Nastavení):** Hledat — okno a limit; Moje trasy — výchozí režim přestupů, minimální
+  úspora, počet spojů v kartě; nejkratší čas na přestup. Uloženo v `localStorage`, vše obalené `try/catch`.
+  Sekce „Verze dat" nově ukazuje skutečné datum `network.json` (dřív natvrdo 12. 5. 2026).
+- **Vlastní Moje trasy:** editor skupin a tras (`renderRouteEditor`), režim přestupů u každé trasy,
+  Export/Import + Vrátit zpět + Výchozí trasy. `ROUTE_GROUPS` (natvrdo) nahrazeno `routeGroups`
+  z prohlížeče, výchozí = Domov–Centrum jako dřív.
+- **`scripts/journey.js` — `planBoard(opts.transfers)`:** `'gain'` (výchozí, beze změny chování),
+  `'direct'` (jen přímé; když přímý neexistuje, ukáže přestupy, aby karta nebyla prázdná), `'all'`
+  (bez pravidel 3+4). `opts.minTransfer` se předává do `planJourney`.
+- **Ověřeno:** nový blok testů SETTINGS v `journey.test.js` (7 kontrol); proklikáno v headless Chromiu
+  jako mobil: přidání trasy (i chybná zastávka), uložení po obnovení stránky, limit v Hledat, export →
+  import na „čistém zařízení" → Vrátit zpět, prohlížeč se zablokovaným úložištěm — 0 JS chyb.
+  Verze **0.1.0 → 0.2.0** (nové funkce).
+
 ## 2026-10-10 — v0.1.0 (FIX-DIRECT: přímé spoje už nic nesmaže)
 
 - **Nález (Joe, pá 9. 10. 18:11, Okružní → Tržnice):** v „Moje trasy" chyběly přímé spoje

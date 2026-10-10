@@ -332,12 +332,20 @@ function planJourney(net, A, B, opts = {}) {
 // board (not a one-off search): identical-time rows collapse to the fewest-
 // transfer one, transfer rows that are a pointless detour around an existing
 // direct get dropped, sorted purely by departure.
+//
+// SETTINGS (2026-10-10, Joe): opts.transfers picks how transfers are treated per
+// favourite route — 'gain' (default, rules 3+4), 'direct' (only direct rides; if
+// there is no direct at all in the window, transfers are shown so the card is
+// not empty), 'all' (rules 3+4 off — edge cases: late evening, city outskirts).
+// opts.minTransfer is passed through to planJourney (default 0).
 function planBoard(net, A, B, opts = {}) {
   const { date, nowMin } = opts;
   const maxDetour = opts.maxDetour != null ? opts.maxDetour : 10;
   const limit = opts.limit != null ? opts.limit : 6;
+  const mode = opts.transfers === "direct" || opts.transfers === "all" ? opts.transfers : "gain";
+  const minTransfer = opts.minTransfer != null ? opts.minTransfer : 0;
 
-  let rows = planJourney(net, A, B, { date, nowMin, limit: 40, maxTransfers: 1 });
+  let rows = planJourney(net, A, B, { date, nowMin, limit: 40, maxTransfers: 1, minTransfer });
 
   // Rule 2: rows sharing (depMin, arrMin) — e.g. "15" and "15→12 @Pivovar" both
   // 10:14 → 10:26 — are the same ride with a pointless option to change buses.
@@ -354,6 +362,15 @@ function planBoard(net, A, B, opts = {}) {
   // best direct ride. When there is no direct at all (e.g. Krátká → Horní
   // nádraží), keep every transfer row — otherwise the card would render empty.
   const directRows = rows.filter((r) => r.transfers === 0);
+  if (mode === "direct") {
+    if (directRows.length > 0) rows = directRows;
+    rows.sort((a, b) => a.depMin - b.depMin);
+    return rows.slice(0, limit);
+  }
+  if (mode === "all") {
+    rows.sort((a, b) => a.depMin - b.depMin);
+    return rows.slice(0, limit);
+  }
   if (directRows.length > 0) {
     const bestDirect = Math.min(...directRows.map((r) => r.totalMin));
     rows = rows.filter((r) => r.transfers === 0 || r.totalMin <= bestDirect + maxDetour);

@@ -15,15 +15,16 @@ Není potřeba build ani instalace.
 
 ## Použití
 
-Tři taby: **Odjezdy** (nejbližší spoje), **Jízdní řády** (celé tabulky),
-**Nastavení**. Přepínač **Teď** (živě od aktuálního času) × **Jindy**
-(zvolený čas). Optimalizováno pro vertikální mobil, jen tmavý motiv.
+Čtyři taby: **Moje trasy** (vlastní oblíbené trasy, upravíš tlačítkem „Upravit Moje trasy"),
+**Tabule** (všechno, co jede ze zastávky), **Hledat** (spojení A → B) a **Nastavení**
+(vyhledávání, přestupy, záloha a přenos tras mezi zařízeními). Přepínač **Teď** × **Jindy**.
+Klepnutím na číslo linky otevřeš její jízdní řád na dpkv.cz. Optimalizováno pro mobil, tmavý motiv.
 
 ## Verze
 
-Aktuální: **v0.1.0** (F1 komplet). Schéma verzí a plán fází viz `changelog.md`,
+Aktuální: **v0.2.0**. Schéma verzí a plán fází viz `changelog.md`,
 `TASK.md` a `docs/ROADMAP.md`.
 
 ## Autor
 
-Osobní projekt (Big Joe). Data linek ručně přepsaná z podkladů DPKV.
+Osobní projekt (Big Joe). Data: CIS JŘ (JrUtil GTFS), denně obnovovaná přes GitHub Actions.

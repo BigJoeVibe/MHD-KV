@@ -39,3 +39,8 @@ data_raw/
 # Pomocné soubory jednorázového git setupu (necommitovat)
 _setup_git.bat
 _git_setup_log.txt
+
+# Ulozene stranky dpkv.cz (podklad pro DPKV_LINE_URLS, necommitovat)
+*DPKV.html
+*DPKV_files/
+*.bundle

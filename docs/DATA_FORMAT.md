@@ -1,5 +1,28 @@
 # DATA_FORMAT — struktura dat v appce
 
+> ⚠️ **Většina tohoto souboru popisuje starý model F1 (`DATA.routes`), který appka od J7 nepoužívá**
+> (běží na `data/network.json`). Platné jsou sekce „Odkazy na DPKV" a „Uživatelská data" hned níže.
+
+## Odkazy na DPKV (od 10. 10. 2026)
+
+- `index_raw.html` → `DPKV_LINE_URLS` (linka → stránka linky) + `DPKV_FALLBACK_URLS` (51/52 noční,
+  20/44 zvláštní). Neznámá linka → `https://www.dpkv.cz/cz/jizdni-rady/denni-linky/`.
+- Zdroj: stránka „Denní linky" na dpkv.cz (uložil Joe 10. 10. 2026). Tvar adresy:
+  `https://www.dpkv.cz/syslines/59/6/<id>/<linka>/` — `<id>` je interní číslo DPKV.
+- ⚠️ **Při novém jízdním řádu (nejdřív prosinec 2026) zkontrolovat.** Postup: Joe uloží stránku
+  „Denní linky" (Ctrl+S → „Webová stránka, pouze HTML") do složky projektu, manager z ní vytáhne
+  odkazy `syslines` a přepíše tabulku. Web dpkv.cz automatické stahování blokuje (robots).
+
+## Uživatelská data v prohlížeči (od 10. 10. 2026)
+
+- `localStorage['mhdkv.settings.v1']` = `{searchWindowMin, searchLimit, minTransfer, boardTransfers,
+  boardMinGain, boardLimit}` — povolené hodnoty v `SETTING_CHOICES`, cokoli jiného → výchozí.
+- `localStorage['mhdkv.routes.v1']` = `[{name, pairs: [{from, to, transfers}]}]`, `transfers` ∈
+  `default | direct | gain | all`. Zastávky se ukládají **názvem** (kanonický, bez „Karlovy Vary,").
+- Export = `{"app":"mhdkv","v":1,"routes":[…],"settings":{…}}`.
+
+---
+
 **POVINNÉ ČTENÍ před jakoukoli editací `DATA.routes`.** Pojmenování typů dne je matoucí a snadno způsobí bug.
 
 ---

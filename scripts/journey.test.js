@@ -462,3 +462,28 @@ for (const [A, B] of FD_PAIRS) {
 console.log((fixDirectOk ? "  OK   " : "  FAIL ") + `invariant: všech ${fdChecked} přímých spojů v okně je ve výsledcích (${FD_PAIRS.length} dvojic × ${FD_SLOTS.length} časů)`);
 
 console.log(fixDirectOk ? "\nOK: FIX-DIRECT — všechny scénáře a invarianty prošly" : "\nFAIL: FIX-DIRECT — některý scénář nebo invariant selhal (viz výše)");
+
+// ============================================================
+// SETTINGS (2026-10-10): planBoard transfer modes per favourite route.
+// ============================================================
+console.log("\n--- SETTINGS: režimy přestupů v planBoard ---");
+let modesOk = true;
+const MODE_Q = { date: "20261009", nowMin: 18 * 60 + 11 };
+const mDirect = planBoard(net, "Okružní", "Tržnice", { ...MODE_Q, transfers: "direct" });
+const mGain = planBoard(net, "Okružní", "Tržnice", { ...MODE_Q, transfers: "gain" });
+const mAll = planBoard(net, "Okružní", "Tržnice", { ...MODE_Q, transfers: "all", limit: 40 });
+const mDefault = planBoard(net, "Okružní", "Tržnice", MODE_Q);
+const chk = (ok, label) => { console.log((ok ? "  OK   " : "  FAIL ") + label); if (!ok) modesOk = false; };
+chk(mDirect.length > 0 && mDirect.every((r) => r.transfers === 0), `direct: jen přímé (${mDirect.length} řádků)`);
+chk(JSON.stringify(mDefault) === JSON.stringify(mGain), "výchozí režim = gain");
+chk(mAll.some((r) => r.transfers > 0), `all: obsahuje i přestupy (${mAll.filter((r) => r.transfers > 0).length})`);
+chk(mAll.filter((r) => r.transfers === 0).length >= mGain.filter((r) => r.transfers === 0).length, "all: neztratí žádný přímý");
+// direct mode with no direct at all must not render an empty card (falls back to transfers)
+const mNoDirect = planBoard(net, "Krátká", "Horní nádraží", { date: "20260805", nowMin: 10 * 60, transfers: "direct" });
+chk(mNoDirect.length > 0 && mNoDirect.every((r) => r.transfers === 1), `direct bez přímého spoje: ukáže přestupy (${mNoDirect.length})`);
+// minTransfer passes through
+const mMin3 = planBoard(net, "Okružní", "Tržnice", { ...MODE_Q, transfers: "all", limit: 40, minTransfer: 3 });
+chk(mMin3.every((r) => r.transfers === 0 || r.waitMin >= 3), "minTransfer 3: žádný přestup s čekáním < 3 min");
+// limit
+chk(planBoard(net, "Okružní", "Tržnice", { ...MODE_Q, limit: 4 }).length === 4, "limit 4 → 4 řádky");
+console.log(modesOk ? "\nOK: SETTINGS — režimy přestupů prošly" : "\nFAIL: SETTINGS — některý režim selhal (viz výše)");
