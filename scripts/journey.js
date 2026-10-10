@@ -230,7 +230,23 @@ function buildItineraries(net, variants, dateStr, nowMin, minTransfer, maxDep) {
 // pri shode), pak projizdi skupiny stejneho depMin a sleduje nejlepsi arrMin
 // zprava (od nejpozdejsiho odjezdu). Skupina se stejnym depMin i arrMin (ruzne
 // linky) je legitimni alternativa a zustava cela.
+//
+// FIX-DIRECT (2026-10-10, Joe): a transfer must NEVER remove a direct ride.
+// Real case (Fri 2026-10-09 18:11, Okruzni -> Trznice): direct 15 18:11->18:23 and
+// direct 13 19:10->19:23 were wiped by "15->22" arriving 1 min earlier with a 0-min
+// change. Same day, direct 13 19:10->19:23 was then wiped by direct 15 19:11->19:23
+// (direct vs direct). Joe: every direct line between A and B must be visible.
+// So directs are NEVER filtered here (window + caps still apply upstream);
+// transfers are still filtered against everything (direct or transfer).
+// Dominance is transitive, so running the plain filter over ALL rows and keeping
+// only its transfers is exact.
 function paretoFilter(itineraries) {
+  const directs = itineraries.filter((it) => it.transfers === 0);
+  const keptTransfers = paretoCore(itineraries).filter((it) => it.transfers > 0);
+  return directs.concat(keptTransfers);
+}
+
+function paretoCore(itineraries) {
   const sorted = itineraries.slice().sort((a, b) => (b.depMin !== a.depMin ? b.depMin - a.depMin : a.arrMin - b.arrMin));
   const out = [];
   let minArr = Infinity;
@@ -342,6 +358,20 @@ function planBoard(net, A, B, opts = {}) {
     const bestDirect = Math.min(...directRows.map((r) => r.totalMin));
     rows = rows.filter((r) => r.transfers === 0 || r.totalMin <= bestDirect + maxDetour);
   }
+
+  // Rule 4 (FIX-DIRECT, 2026-10-10, Joe: "Moje trasy = mainly direct rides"):
+  // a transfer row stays only if it gets you there at least `minGain` minutes
+  // before the best direct you could still catch (any direct departing at the
+  // same time or later). "15->22" 18:11->18:22 next to direct "15" 18:11->18:23
+  // saves 1 min with a 0-min change -> dropped. No later direct -> keep.
+  const minGain = opts.minGain != null ? opts.minGain : 3;
+  const directsNow = rows.filter((r) => r.transfers === 0);
+  rows = rows.filter((r) => {
+    if (r.transfers === 0) return true;
+    let bestArr = Infinity;
+    for (const d of directsNow) if (d.depMin >= r.depMin && d.arrMin < bestArr) bestArr = d.arrMin;
+    return bestArr === Infinity || r.arrMin <= bestArr - minGain;
+  });
 
   rows.sort((a, b) => a.depMin - b.depMin);
 

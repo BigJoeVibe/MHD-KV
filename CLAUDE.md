@@ -15,6 +15,8 @@ projektu. Backlog je v `TASK.md`, historie v `changelog.md`.
 - **Aktuální verze:** v0.1.0 (F1 komplet). Schéma: 0.x = vývojové/testovací
   verze; 1.0.0 přijde, až appka pokryje širší cíl (rozhodnuto 17. 7. 2026).
 - **Stav (k 21. 8. 2026):** appka běží na GitHub Pages, git dělá Claude Code (executor).
+  **10. 10. 2026 — FIX-DIRECT:** přímé spoje už nemaže Pareto filtr (Pareto jen pro přestupy), Moje trasy
+  ukazují přestup jen když ušetří ≥ 3 min, Hledat okno 180 min / limit 20. Viz `TASK.md` → FIX-DIRECT.
   **Sekvence D → C → B i UI-1 hotové a ověřené Joem na Pages 21. 8.; další v pořadí UI-2** — viz předávka níže.
   **Jádro vyhledávání A→B je hotové a ověřené:** **J1** síťový model (`data/network.json`),
   **J2** routing (`routing.js`), **J3** časová vrstva (`timetable.js` + `journey.js`/`planJourney`),

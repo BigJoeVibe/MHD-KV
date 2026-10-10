@@ -781,7 +781,8 @@ let searchTo = '';
 let searchResults = null; // null = jeste nehledano
 let searchMessage = '';
 let searchNowMin = null; // nowMin pouzity pri poslednim hledani (pro hlasku "mimo okno")
-const SEARCH_WINDOW_MIN = 90; // musi sedet s defaultem windowMin v journey.js
+const SEARCH_WINDOW_MIN = 180; // FIX-DIRECT 2026-10-10: Hledat ma vlastni, sirsi okno (Joe: az 20 spoju); predava se do planJourney
+const SEARCH_LIMIT = 20;
 
 // J7-P1: "Moje trasy" — natvrdo zadane skupiny (cloud/localStorage az pozdeji).
 const ROUTE_GROUPS = [
@@ -1422,7 +1423,7 @@ function doSearch() {
   const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
-  searchResults = window.MHDJourney.planJourney(NET, from, to, { date, nowMin, limit: 8 });
+  searchResults = window.MHDJourney.planJourney(NET, from, to, { date, nowMin, limit: SEARCH_LIMIT, windowMin: SEARCH_WINDOW_MIN });
   searchNowMin = nowMin;
   searchMessage = searchResults.length === 0 ? 'Žádné spojení v daném čase.' : '';
   render();

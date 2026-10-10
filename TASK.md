@@ -417,6 +417,22 @@ Až po UI-1. Zadání, jak ho Joe formuloval:
 
 ---
 
+## 🟢 FIX-DIRECT — HOTOVO 10. 10. 2026 (čeká na Joeův test na Pages)
+
+**Problém (Joe, pá 9. 10. 18:11):** Moje trasy nezobrazily přímé spoje 13 a 15 na Tržnici, místo nich
+přestup `15→22` (čekání 0 min, o 1 min rychlejší). Příčina: Pareto filtr (J4-sort-2) mazal přímé spoje.
+**Rozhodnutí Joea (10. 10.):** přímý spoj nesmí smazat nic; v Moje trasách hlavně přímé; Hledat klidně
+až 20 spojů. Detail v `changelog.md` 2026-10-10.
+
+- ⚠️ **PŘEKONÁVÁ** J4-sort-2 „Pareto filtr" v části přímých spojů — Pareto teď platí **jen pro přestupy**.
+- ⚠️ **PŘEKONÁVÁ** odjezdové okno 90 min **pro tab Hledat** → 180 min + limit 20. Moje trasy dál 90 min.
+- Parametry k doladění po testu: `minGain` 3 min (Moje trasy), `SEARCH_WINDOW_MIN` 180, `SEARCH_LIMIT` 20.
+- 📌 **`routing.test.js` — křehký test na snímek dat:** STEP C/D čekají natvrdo 1296 variant, po obnově
+  dat je 1280 → 4× FAIL (exit 0, guard nedotčen). Stejná lekce jako J8-hotfix: přepsat na tolerantní
+  kontrolu (např. „exact == loose" a „přímých ≥ 1"), ne na pevné číslo. Nezadáno.
+
+---
+
 ## NEDOŘEŠENÉ / OTEVŘENÉ BODY (rizika)
 
 | Téma | Co chybí / riziko | Stav |

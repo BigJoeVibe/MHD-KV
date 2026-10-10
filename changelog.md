@@ -7,6 +7,29 @@ Backlog byl přesunut do `TASK.md`.
 
 ---
 
+## 2026-10-10 — v0.1.0 (FIX-DIRECT: přímé spoje už nic nesmaže)
+
+- **Nález (Joe, pá 9. 10. 18:11, Okružní → Tržnice):** v „Moje trasy" chyběly přímé spoje
+  **15 18:11 → 18:23**, **13 19:10 → 19:23** a **15 19:11 → 19:23** (u Krátké 15 19:10). Data je měla,
+  vyhodil je Pareto filtr v `journey.js`: přestup `15→22` s čekáním 0 min dorazil o 1 min dřív, a 13 v 19:10
+  „zastínila" přímá 15 v 19:11 se stejným příjezdem. Pravidlo `planBoard` „při shodě vyhrává přímý" se
+  spouštělo až po filtru, takže nemělo co zachránit. Totéž postihovalo i směr zpět a tab Hledat.
+- **`scripts/journey.js` — `paretoFilter`:** přímé spoje se **nefiltrují vůbec** (okno a stropy platí dál),
+  přestupy se dál filtrují proti všemu. **`planBoard` (Moje trasy) — nové pravidlo 4:** přestup se ukáže,
+  jen když dorazí aspoň o **3 min** (`opts.minGain`) dřív než nejlepší přímý, který ještě stihneš; když
+  žádný přímý není, zůstává. (Joeovo zadání: verze 2 + 3 — v Moje trasách hlavně přímé.)
+- **`index_raw.html`/`index.html` — Hledat:** `limit 8 → 20` a vlastní odjezdové okno **180 min**
+  (`SEARCH_WINDOW_MIN`, předává se do `planJourney`; default 90 v jádru beze změny). Pátek 18:11 Okružní →
+  Tržnice: dřív 4–5 karet, teď 16 (11 přímých).
+- **Testy:** `journey.test.js` nový blok FIX-DIRECT — Joeův případ v Hledat i Moje trasy, žádný zbytečný
+  přestup v Moje trasy, a datově nezávislý invariant „každý přímý spoj v okně je ve výsledcích"
+  (5 dvojic × 4 časy, 72 přímých). Ověřeno, že na starém kódu blok **selže** (10× FAIL). Pareto invariant
+  nově kontroluje jen přestupy. Ostatní scénáře beze změny výstupu; `verify_network.js` 20/20.
+  📌 `routing.test.js` má 4 FAIL **už před touto změnou** — natvrdo počet variant 1296 ze starého snímku
+  dat (dnes 1280), exit 0. Viz TASK.md.
+- **Ověřeno v prohlížeči** (headless Chromium, hodiny nastavené na 9. 10. 18:11): Moje trasy ukazují
+  15 18:11 TEĎ i 13 19:10, Hledat 16 výsledků, žádná JS chyba.
+
 ## 2026-08-22 — v0.1.0 (UI-2: "show all stops" button on the shared picker)
 
 - **`index_raw.html` — new toggle button in `stopPickerHtml()`**, shared by `Odkud`/`Kam` (Hledat) and

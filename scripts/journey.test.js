@@ -141,9 +141,12 @@ function checkFirst(label, results, expect) {
 
 // J4-sort-2: Pareto invariant — zadny vysledek nesmi byt dominovan jinym (odjezd
 // stejny/pozdejsi A prijezd drivejsi = strictne horsi, nesmi prezit filtr).
+// FIX-DIRECT (2026-10-10): directs are exempt from Pareto by design (every direct
+// line must stay visible), so the invariant only checks transfer rows.
 function checkParetoInvariant(label, results) {
   let ok = true;
   for (const r of results) {
+    if (r.transfers === 0) continue;
     for (const o of results) {
       if (o === r) continue;
       if (o.depMin >= r.depMin && o.arrMin < r.arrMin) {
@@ -395,3 +398,67 @@ if (!noDirectOk) j7p1AllOk = false;
 checkNoDupTimeKeys("no direct exists", boardNoDirect);
 
 console.log(j7p1AllOk ? "\nOK: J7-P1 (perf + planBoard) — všechny scénáře a invarianty prošly" : "\nFAIL: J7-P1 (perf + planBoard) — některý scénář nebo invariant selhal (viz výše)");
+
+// ============================================================
+// FIX-DIRECT (2026-10-10): a transfer (or another direct) must never hide a
+// direct ride. Joe's real case: Fri 2026-10-09 18:11, Okruzni -> Trznice — direct
+// 15 18:11->18:23, 13 19:10->19:23 and 15 19:11->19:23 were missing, because
+// "15->22" arrived 1 min earlier (0-min change) and 15 19:11 shadowed 13 19:10.
+// ============================================================
+console.log("\n--- FIX-DIRECT: přímé spoje se nesmí ztratit ---");
+let fixDirectOk = true;
+const fdLine = (it) => it.legs.map((l) => l.line).join(">");
+
+// (a) Joe's case — fixed date, checked on both Hledat and Moje trasy.
+const FD_DATE = "20261009";
+const FD_NOW = 18 * 60 + 11;
+const fdExpect = [
+  { dep: 18 * 60 + 11, arr: 18 * 60 + 23, line: "15" },
+  { dep: 19 * 60 + 10, arr: 19 * 60 + 23, line: "13" },
+  { dep: 19 * 60 + 11, arr: 19 * 60 + 23, line: "15" },
+];
+const fdSearch = planJourney(net, "Okružní", "Tržnice", { date: FD_DATE, nowMin: FD_NOW, limit: 20, windowMin: 180 });
+const fdBoard = planBoard(net, "Okružní", "Tržnice", { date: FD_DATE, nowMin: FD_NOW });
+for (const [label, rows] of [["Hledat", fdSearch], ["Moje trasy", fdBoard]]) {
+  for (const e of fdExpect) {
+    const hit = rows.some((r) => r.transfers === 0 && r.depMin === e.dep && r.arrMin === e.arr && fdLine(r) === e.line);
+    console.log((hit ? "  OK   " : "  FAIL ") + `${label} (Okružní→Tržnice, pá 9.10. 18:11): přímo ${e.line} ${fmt(e.dep)} → ${fmt(e.arr)}`);
+    if (!hit) fixDirectOk = false;
+  }
+}
+
+// (b) Moje trasy must not show a pointless transfer that saves < 3 min vs a direct
+// you could still catch (here "15->22" 18:11->18:22 next to direct 15 18:11->18:23).
+const fdPointless = fdBoard.filter((r) => {
+  if (r.transfers === 0) return false;
+  const later = fdBoard.filter((d) => d.transfers === 0 && d.depMin >= r.depMin);
+  return later.length > 0 && r.arrMin > Math.min(...later.map((d) => d.arrMin)) - 3;
+});
+console.log((fdPointless.length === 0 ? "  OK   " : "  FAIL ") + `Moje trasy: žádný přestup, co ušetří < 3 min oproti přímému (${fdPointless.length})`);
+if (fdPointless.length > 0) fixDirectOk = false;
+console.log(`  Moje trasy 9.10. 18:11: ` + fdBoard.map(fmtItinerary).join(" | "));
+
+// (c) Data-independent invariant: every direct ride inside the window (after caps)
+// is present in planJourney's output — across pairs, days and times.
+const FD_PAIRS = [["Krátká", "Tržnice"], ["Okružní", "Tržnice"], ["Tržnice", "Krátká"], ["Tržnice", "Okružní"], ["Lázně I", "Parkoviště KOME"]];
+const FD_SLOTS = [["20261009", 18 * 60 + 11], ["20260805", 7 * 60 + 30], ["20260809", 14 * 60], ["20260805", 23 * 60 + 44]];
+let fdChecked = 0;
+for (const [A, B] of FD_PAIRS) {
+  for (const [date, nowMin] of FD_SLOTS) {
+    const variants = routingSearch(net, resolveStopId(net, A), resolveStopId(net, B), { maxTransfers: 1 });
+    let all = buildItineraries(net, variants, date, nowMin, 0, nowMin + 90);
+    all = applyCaps(mergeDuplicates(all), 75, 40);
+    const res = planJourney(net, A, B, { date, nowMin, limit: 1000 });
+    for (const d of all.filter((it) => it.transfers === 0)) {
+      fdChecked++;
+      const hit = res.some((r) => r.transfers === 0 && r.depMin === d.depMin && r.arrMin === d.arrMin && fdLine(r) === fdLine(d));
+      if (!hit) {
+        fixDirectOk = false;
+        console.log(`  FAIL ${A}→${B} ${date} ${fmt(nowMin)}: chybí přímý ${fmtItinerary(d)}`);
+      }
+    }
+  }
+}
+console.log((fixDirectOk ? "  OK   " : "  FAIL ") + `invariant: všech ${fdChecked} přímých spojů v okně je ve výsledcích (${FD_PAIRS.length} dvojic × ${FD_SLOTS.length} časů)`);
+
+console.log(fixDirectOk ? "\nOK: FIX-DIRECT — všechny scénáře a invarianty prošly" : "\nFAIL: FIX-DIRECT — některý scénář nebo invariant selhal (viz výše)");
