@@ -106,7 +106,7 @@ function extractorArgs(extractor, zipPath, member) {
 function extractText(extractor, zipPath, member, maxBuffer) {
   const r = spawnSync(extractor, extractorArgs(extractor, zipPath, member), {
     encoding: "utf8",
-    maxBuffer: maxBuffer || 50 * 1024 * 1024,
+    maxBuffer: maxBuffer || 250 * 1024 * 1024,
   });
   if (r.error) throw r.error;
   if (!r.stdout) throw new Error(`Extrakce '${member}' selhala (prazdny vystup). stderr: ${r.stderr || ""}`);
